@@ -8,19 +8,28 @@ interface TransactionFormProps {
 
 export default function TransactionForm({ onSuccess }: TransactionFormProps) {
   const [ticker, setTicker] = useState('');
-  const [name, setName] = useState('');
+  const [industry, setIndustry] = useState('Technology');
   const [instrumentType, setInstrumentType] = useState('ETF');
+  const [regions, setRegions] = useState<string[]>([]);
   const [type, setType] = useState<'BUY' | 'SELL'>('BUY');
   const [cashAmount, setCashAmount] = useState('');
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const handleRegionChange = (region: string, checked: boolean) => {
+    if (checked) {
+      setRegions([...regions, region]);
+    } else {
+      setRegions(regions.filter((r) => r !== region));
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setStatus(null);
 
-    if (!ticker || !name || !instrumentType || !cashAmount) {
-      setStatus({ type: 'error', message: 'Please fill out all fields.' });
+    if (!ticker || !industry || !instrumentType || regions.length === 0 || !cashAmount) {
+      setStatus({ type: 'error', message: 'Please fill out all fields and select at least one region.' });
       return;
     }
 
@@ -32,8 +41,10 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ticker: ticker.toUpperCase(),
-          name: name || ticker.toUpperCase(),
+          unitPrice: parseFloat(cashAmount),
+          industry,
           instrumentType,
+          regions,
           type,
           cashAmount: parseFloat(cashAmount),
         }),
@@ -44,10 +55,11 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
       if (response.ok) {
         setStatus({
           type: 'success',
-          message: `Recorded ${type} order for ${ticker.toUpperCase()} successfully!`,
+          message: `Recorded ${type} order successfully!`,
         });
         setTicker('');
-        setName('');
+        setIndustry('Technology');
+        setRegions([]);
         setCashAmount('');
         if (onSuccess) {
           onSuccess();
@@ -191,32 +203,33 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
               display: 'block',
               fontSize: '13px',
               fontWeight: 500,
-              marginBottom: '8px',
+              marginBottom: '10px',
               color: 'var(--text-secondary)',
             }}
           >
-            Instrument Name
+            Allocation Type
           </label>
-          <input
-            type="text"
-            placeholder="e.g. S&P 500 UCITS"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            style={{
-              width: '100%',
-              padding: '12px 14px',
-              borderRadius: '8px',
-              border: '1px solid #1F1F23',
-              backgroundColor: 'var(--bg-input)',
-              color: 'var(--text-primary)',
-              fontSize: '14px',
-              outline: 'none',
-              transition: 'border-color 0.2s',
-            }}
-            onFocus={(e) => (e.target.style.borderColor = 'var(--accent-primary)')}
-            onBlur={(e) => (e.target.style.borderColor = '#1F1F23')}
-          />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px 16px' }}>
+            {['Technology', 'Industrial', 'Financial', 'Equity', 'Defense', 'Energy', 'End Products', 'Resource', 'Property'].map((typeOption) => (
+              <label key={typeOption} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="allocationType"
+                  value={typeOption}
+                  checked={industry === typeOption}
+                  onChange={(e) => setIndustry(e.target.value)}
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    backgroundColor: 'var(--bg-input)',
+                    cursor: 'pointer',
+                    accentColor: 'var(--accent-primary)',
+                  }}
+                />
+                {typeOption}
+              </label>
+            ))}
+          </div>
         </div>
 
         <div>
@@ -264,6 +277,41 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
               display: 'block',
               fontSize: '13px',
               fontWeight: 500,
+              marginBottom: '10px',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            Regional Allocation
+          </label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {['USA', 'EU', 'Asia', 'Emerging Markets', 'Global'].map((region) => (
+              <label key={region} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={regions.includes(region)}
+                  onChange={(e) => handleRegionChange(region, e.target.checked)}
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '4px',
+                    border: '1px solid #1F1F23',
+                    backgroundColor: 'var(--bg-input)',
+                    cursor: 'pointer',
+                    accentColor: 'var(--accent-primary)',
+                  }}
+                />
+                {region}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label
+            style={{
+              display: 'block',
+              fontSize: '13px',
+              fontWeight: 500,
               marginBottom: '8px',
               color: 'var(--text-secondary)',
             }}
@@ -271,7 +319,9 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
             Amount Invested (EUR)
           </label>
           <input
-            type="number"
+            type="text"
+            inputMode="decimal"
+            pattern="[0-9]*\.?[0-9]*"
             placeholder="0.00"
             value={cashAmount}
             onChange={(e) => setCashAmount(e.target.value)}

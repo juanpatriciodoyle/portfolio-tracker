@@ -25,6 +25,22 @@ model Asset {
   name              String
   currentPrice      Float
   currency          String             
+  description       String?
+  return1d          Float?
+  return1w          Float?
+  return1m          Float?
+  return3m          Float?
+  returnYtd         Float?
+  return6m          Float?
+  return1y          Float?
+  return3y          Float?
+  return5y          Float?
+  roe               Float?
+  operatingMargin   Float?
+  debtToAsset       Float?
+  unitPrice         Float              @default(1.0)
+  industry          String             @default("Technology")
+  regions           String[]
   allocations       AssetAllocation[]
   regionalExposures RegionalExposure[]
   positions         Position[]

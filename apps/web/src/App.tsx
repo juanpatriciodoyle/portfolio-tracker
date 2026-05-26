@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, LayoutDashboard, Wallet, Percent, LogOut, ChevronUp, ChevronDown } from 'lucide-react';
 import TransactionForm from './components/TransactionForm';
 import SideDrawer from './components/SideDrawer';
@@ -27,6 +27,26 @@ function App() {
     setCashRatio(cash);
     setNetWorth(worth);
   };
+
+  const fetchStats = async () => {
+    try {
+      const res = await fetch('/api/portfolio/stats');
+      if (res.ok) {
+        const data = await res.json();
+        setRoi30d(data.roi30d);
+        setCashRatio(data.cashRatio);
+        setNetWorth(data.netWorth);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchStats();
+    }
+  }, [user]);
 
   const handleLogout = () => {
     setUser(null);
@@ -502,7 +522,7 @@ function App() {
       </div>
 
       <SideDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)}>
-        <TransactionForm onSuccess={() => setIsDrawerOpen(false)} />
+        <TransactionForm onSuccess={() => { setIsDrawerOpen(false); fetchStats(); }} />
       </SideDrawer>
     </div>
   );

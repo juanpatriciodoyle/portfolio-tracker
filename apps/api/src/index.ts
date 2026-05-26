@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import { db } from './lib/db';
+import { fetchFinancialData } from './lib/financialFetcher';
 
 dotenv.config();
 
@@ -35,6 +36,56 @@ async function seedAdmin() {
 
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date() });
+});
+
+app.get('/api/portfolio/stats', async (req: Request, res: Response) => {
+  try {
+    const positions = await db.position.findMany({
+      include: {
+        asset: {
+          include: {
+            allocations: true,
+          },
+        },
+      },
+    });
+
+    if (positions.length === 0) {
+      return res.json({
+        netWorth: 124500,
+        roi30d: 5.8,
+        cashRatio: 15,
+      });
+    }
+
+    let totalWorth = 0;
+    let cashWorth = 0;
+    let weightedRoiSum = 0;
+
+    for (const pos of positions) {
+      const value = Math.abs(pos.quantity);
+      totalWorth += value;
+
+      const isCash = pos.asset.allocations.some(a => a.instrumentType === 'Cash');
+      if (isCash) {
+        cashWorth += value;
+      }
+
+      const roi = pos.asset.return1m || 0;
+      weightedRoiSum += roi * value;
+    }
+
+    const roi30d = totalWorth > 0 ? (weightedRoiSum / totalWorth) : 0;
+    const cashRatio = totalWorth > 0 ? Math.round((cashWorth / totalWorth) * 100) : 0;
+
+    return res.json({
+      netWorth: totalWorth,
+      roi30d,
+      cashRatio,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Internal server error calculating portfolio stats.' });
+  }
 });
 
 app.post('/api/auth/signin', async (req: Request, res: Response) => {
@@ -154,21 +205,56 @@ app.post('/api/auth/recover', async (req: Request, res: Response) => {
 
 app.post('/api/transactions', async (req: Request, res: Response) => {
   try {
-    const { ticker, name, instrumentType, type, cashAmount, userId } = req.body;
+    const { ticker, unitPrice, industry, regions, instrumentType, type, cashAmount, userId } = req.body;
 
-    if (!ticker || !instrumentType || !type || !cashAmount) {
+    if (!ticker || unitPrice === undefined || !industry || !instrumentType || !regions || !type || !cashAmount) {
       return res.status(400).json({ error: 'Missing required transaction fields.' });
     }
 
+    const financialData = await fetchFinancialData(ticker, instrumentType);
+
     const asset = await db.asset.upsert({
       where: { ticker },
-      update: {},
+      update: {
+        description: financialData.description,
+        return1d: financialData.return1d,
+        return1w: financialData.return1w,
+        return1m: financialData.return1m,
+        return3m: financialData.return3m,
+        returnYtd: financialData.returnYtd,
+        return6m: financialData.return6m,
+        return1y: financialData.return1y,
+        return3y: financialData.return3y,
+        return5y: financialData.return5y,
+        roe: financialData.roe,
+        operatingMargin: financialData.operatingMargin,
+        debtToAsset: financialData.debtToAsset,
+        unitPrice: parseFloat(unitPrice),
+        industry,
+        regions,
+      },
       create: {
         ticker,
         isin: `TEMP-${ticker}`,
-        name: name || ticker,
-        currentPrice: 1.0,
+        name: ticker,
+        currentPrice: parseFloat(unitPrice),
         currency: 'EUR',
+        description: financialData.description,
+        return1d: financialData.return1d,
+        return1w: financialData.return1w,
+        return1m: financialData.return1m,
+        return3m: financialData.return3m,
+        returnYtd: financialData.returnYtd,
+        return6m: financialData.return6m,
+        return1y: financialData.return1y,
+        return3y: financialData.return3y,
+        return5y: financialData.return5y,
+        roe: financialData.roe,
+        operatingMargin: financialData.operatingMargin,
+        debtToAsset: financialData.debtToAsset,
+        unitPrice: parseFloat(unitPrice),
+        industry,
+        regions,
         allocations: {
           create: {
             instrumentType,
@@ -181,8 +267,8 @@ app.post('/api/transactions', async (req: Request, res: Response) => {
     const position = await db.position.create({
       data: {
         assetId: asset.id,
-        quantity: type === 'BUY' ? cashAmount : -cashAmount,
-        avgPrice: 1.0,
+        quantity: type === 'BUY' ? parseFloat(cashAmount) : -parseFloat(cashAmount),
+        avgPrice: parseFloat(unitPrice),
         userId: userId || null,
       },
     });
