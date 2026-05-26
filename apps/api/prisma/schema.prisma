@@ -1,0 +1,49 @@
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://portfolio_user:portfolio_secure_password@127.0.0.1:5432/portfolio_tracker_db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+model Asset {
+  id                String             @id @default(uuid())
+  ticker            String             @unique
+  isin              String             @unique
+  name              String
+  currentPrice      Float
+  currency          String             
+  allocations       AssetAllocation[]
+  regionalExposures RegionalExposure[]
+  positions         Position[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model AssetAllocation {
+  id             String   @id @default(uuid())
+  assetId        String
+  asset          Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  instrumentType String   
+  percentage     Float    
+}
+
+model RegionalExposure {
+  id         String   @id @default(uuid())
+  assetId    String
+  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  region     String   
+  percentage Float    
+}
+
+model Position {
+  id         String   @id @default(uuid())
+  assetId    String
+  asset      Asset    @relation(fields: [assetId], references: [id])
+  quantity   Float
+  avgPrice   Float    
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
