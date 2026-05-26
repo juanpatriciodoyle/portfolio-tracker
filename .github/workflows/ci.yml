@@ -27,14 +27,17 @@ jobs:
         npm ci
 
     - name: Validate Prisma Schema
-      run: |
-        cd apps/api
-        npx prisma validate
+      working-directory: apps/api
+      run: npx prisma validate
+      env:
+        DATABASE_URL: "postgresql://mock_user:mock_pass@localhost:5432/mock_db"
 
     - name: Build TypeScript Backend
       run: |
         cd apps/api
         npm run build
+      env:
+        DATABASE_URL: "postgresql://mock_user:mock_pass@localhost:5432/mock_db"
 
   audit-and-build-frontend:
     runs-on: ubuntu-latest
@@ -59,3 +62,5 @@ jobs:
       run: |
         cd apps/web
         npm run build
+      env:
+        DATABASE_URL: "postgresql://mock_user:mock_pass@localhost:5432/mock_db"
