@@ -8,6 +8,16 @@ generator client {
   binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
 }
 
+model User {
+  id              String     @id @default(uuid())
+  email           String     @unique
+  passwordHash    String
+  twoFactorSecret String?
+  positions       Position[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
 model Asset {
   id                String             @id @default(uuid())
   ticker            String             @unique
@@ -44,6 +54,8 @@ model Position {
   asset      Asset    @relation(fields: [assetId], references: [id])
   quantity   Float
   avgPrice   Float    
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
