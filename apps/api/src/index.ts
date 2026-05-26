@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
-import { prisma } from './lib/db';
+import { db } from './lib/db';
 
 dotenv.config();
 
@@ -21,7 +21,7 @@ app.post('/api/transactions', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Missing required transaction fields.' });
         }
 
-        const asset = await prisma.asset.upsert({
+        const asset = await db.asset.upsert({
             where: { ticker },
             update: {},
             create: {
@@ -39,7 +39,7 @@ app.post('/api/transactions', async (req: Request, res: Response) => {
             }
         });
 
-        const position = await prisma.position.create({
+        const position = await db.position.create({
             data: {
                 assetId: asset.id,
                 quantity: type === 'BUY' ? cashAmount : -cashAmount, // Tracking raw cash value flows
