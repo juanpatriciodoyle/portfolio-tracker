@@ -207,63 +207,85 @@ app.post('/api/transactions', async (req: Request, res: Response) => {
   try {
     const { ticker, unitPrice, industry, regions, instrumentType, type, cashAmount, userId } = req.body;
 
+    // Validate incoming types cleanly
     if (!ticker || unitPrice === undefined || !industry || !instrumentType || !regions || !type || !cashAmount) {
       return res.status(400).json({ error: 'Missing required transaction fields.' });
     }
 
-    const financialData = await fetchFinancialData(ticker, instrumentType);
+    const formattedTicker = ticker.toUpperCase();
 
-    const asset = await db.asset.upsert({
-      where: { ticker },
-      update: {
-        description: financialData.description,
-        return1d: financialData.return1d,
-        return1w: financialData.return1w,
-        return1m: financialData.return1m,
-        return3m: financialData.return3m,
-        returnYtd: financialData.returnYtd,
-        return6m: financialData.return6m,
-        return1y: financialData.return1y,
-        return3y: financialData.return3y,
-        return5y: financialData.return5y,
-        roe: financialData.roe,
-        operatingMargin: financialData.operatingMargin,
-        debtToAsset: financialData.debtToAsset,
-        unitPrice: parseFloat(unitPrice),
-        industry,
-        regions,
-      },
-      create: {
-        ticker,
-        isin: `TEMP-${ticker}`,
-        name: ticker,
-        currentPrice: parseFloat(unitPrice),
-        currency: 'EUR',
-        description: financialData.description,
-        return1d: financialData.return1d,
-        return1w: financialData.return1w,
-        return1m: financialData.return1m,
-        return3m: financialData.return3m,
-        returnYtd: financialData.returnYtd,
-        return6m: financialData.return6m,
-        return1y: financialData.return1y,
-        return3y: financialData.return3y,
-        return5y: financialData.return5y,
-        roe: financialData.roe,
-        operatingMargin: financialData.operatingMargin,
-        debtToAsset: financialData.debtToAsset,
-        unitPrice: parseFloat(unitPrice),
-        industry,
-        regions,
-        allocations: {
-          create: {
-            instrumentType,
-            percentage: 100.0,
-          },
-        },
-      },
+    // Fetch financial metrics safely from your helper service
+    let financialData: any = {};
+    try {
+      financialData = await fetchFinancialData(formattedTicker, instrumentType);
+    } catch (fetchErr) {
+      console.warn(`Could not fetch live metrics for ${formattedTicker}, using defaults.`);
+    }
+
+    // 1. Look up if the asset already exists to prevent unique index blocks
+    let asset = await db.asset.findUnique({
+      where: { ticker: formattedTicker }
     });
 
+    if (asset) {
+      // If it exists, update it cleanly without touching the unique ISIN or creating duplicate arrays
+      asset = await db.asset.update({
+        where: { ticker: formattedTicker },
+        data: {
+          description: financialData?.description || asset.description,
+          return1d: financialData?.return1d ?? asset.return1d,
+          return1w: financialData?.return1w ?? asset.return1w,
+          return1m: financialData?.return1m ?? asset.return1m,
+          return3m: financialData?.return3m ?? asset.return3m,
+          returnYtd: financialData?.returnYtd ?? asset.returnYtd,
+          return6m: financialData?.return6m ?? asset.return6m,
+          return1y: financialData?.return1y ?? asset.return1y,
+          return3y: financialData?.return3y ?? asset.return3y,
+          return5y: financialData?.return5y ?? asset.return5y,
+          roe: financialData?.roe ?? asset.roe,
+          operatingMargin: financialData?.operatingMargin ?? asset.operatingMargin,
+          debtToAsset: financialData?.debtToAsset ?? asset.debtToAsset,
+          unitPrice: parseFloat(unitPrice),
+          industry,
+          regions: { set: regions }, // Safe PostgreSQL array update structure
+        }
+      });
+    } else {
+      // If it doesn't exist, create it completely from scratch with a guaranteed unique ISIN
+      asset = await db.asset.create({
+        data: {
+          ticker: formattedTicker,
+          isin: `TEMP-${formattedTicker}-${Date.now()}`, // Timestamp guarantees it never hits unique constraints
+          name: formattedTicker,
+          currentPrice: parseFloat(unitPrice),
+          currency: 'EUR',
+          description: financialData?.description || 'Manual Asset Entry',
+          return1d: financialData?.return1d || 0,
+          return1w: financialData?.return1w || 0,
+          return1m: financialData?.return1m || 0,
+          return3m: financialData?.return3m || 0,
+          returnYtd: financialData?.returnYtd || 0,
+          return6m: financialData?.return6m || 0,
+          return1y: financialData?.return1y || 0,
+          return3y: financialData?.return3y || 0,
+          return5y: financialData?.return5y || 0,
+          roe: financialData?.roe || 0,
+          operatingMargin: financialData?.operatingMargin || 0,
+          debtToAsset: financialData?.debtToAsset || 0,
+          unitPrice: parseFloat(unitPrice),
+          industry,
+          regions: regions, // Native array assign during a plain record create
+          allocations: {
+            create: {
+              instrumentType,
+              percentage: 100.0,
+            },
+          },
+        },
+      });
+    }
+
+    // 2. Log the trade position entry linked to the healthy asset instance row
     const position = await db.position.create({
       data: {
         assetId: asset.id,
@@ -275,11 +297,11 @@ app.post('/api/transactions', async (req: Request, res: Response) => {
 
     return res.status(201).json({
       success: true,
-      message: `Successfully recorded ${type} order for ${ticker}`,
+      message: `Successfully recorded ${type} order for ${formattedTicker}`,
       data: position,
     });
   } catch (error) {
-    console.error('Transaction processing error:', error);
+    console.error('Core transaction processing failure details:', error);
     return res.status(500).json({ error: 'Internal server error processing transaction.' });
   }
 });
