@@ -23,7 +23,7 @@ describe('TransactionForm Autocomplete & Keyboard Controls', () => {
       { symbol: 'VUAA.L', name: 'Vanguard S&P 500 UCITS ETF USD', assetClass: 'ETF', sector: 'General Market' },
     ];
 
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => mockSearchResults,
     });
@@ -45,7 +45,7 @@ describe('TransactionForm Autocomplete & Keyboard Controls', () => {
       { symbol: 'SAN.MC', name: 'Banco Santander, S.A.', assetClass: 'Stock', sector: 'Financials' },
     ];
 
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => mockSearchResults,
     });
@@ -71,7 +71,7 @@ describe('TransactionForm Autocomplete & Keyboard Controls', () => {
       { symbol: 'AMZN', name: 'Amazon.com Inc.', assetClass: 'Stock', sector: 'Consumer' },
     ];
 
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => mockSearchResults,
     });
