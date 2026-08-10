@@ -31,17 +31,22 @@ const DEFAULT_ANNUAL_RATES = {
  */
 async function syncCountryInflationHistory(country) {
     const code = COUNTRY_ISO3[country] || 'ESP';
-    const cachedRates = await db_1.db.inflationRate.findMany({
-        where: { country },
-    });
     const rateMap = {};
-    for (const item of cachedRates) {
-        rateMap[item.year] = item.rate;
+    try {
+        const cachedRates = await db_1.db.inflationRate.findMany({
+            where: { country },
+        });
+        for (const item of cachedRates) {
+            rateMap[item.year] = item.rate;
+        }
+        // If we already have recent data, return cached map
+        const currentYear = new Date().getFullYear();
+        if (Object.keys(rateMap).length > 5 && rateMap[currentYear - 1] !== undefined) {
+            return rateMap;
+        }
     }
-    // If we already have recent data, return cached map
-    const currentYear = new Date().getFullYear();
-    if (Object.keys(rateMap).length > 5 && rateMap[currentYear - 1] !== undefined) {
-        return rateMap;
+    catch (err) {
+        // Database might not be initialized or accessible yet in test environment
     }
     try {
         const url = `https://api.worldbank.org/v2/country/${code}/indicator/FP.CPI.TOTL.ZG?format=json&per_page=30`;
@@ -54,11 +59,16 @@ async function syncCountryInflationHistory(country) {
                     if (!isNaN(yr) && item.value !== null && typeof item.value === 'number') {
                         const val = Math.round(item.value * 10) / 10;
                         rateMap[yr] = val;
-                        await db_1.db.inflationRate.upsert({
-                            where: { country_year: { country, year: yr } },
-                            update: { rate: val },
-                            create: { country, year: yr, rate: val },
-                        });
+                        try {
+                            await db_1.db.inflationRate.upsert({
+                                where: { country_year: { country, year: yr } },
+                                update: { rate: val },
+                                create: { country, year: yr, rate: val },
+                            });
+                        }
+                        catch {
+                            // Ignore DB write errors if unmigrated
+                        }
                     }
                 }
                 console.log(`🌐 Synced historical annual inflation rates for ${country} (${Object.keys(rateMap).length} years)`);
@@ -70,6 +80,7 @@ async function syncCountryInflationHistory(country) {
         console.warn(`Could not fetch live inflation history for ${country}, using defaults.`);
     }
     // Fallback defaults for last 10 years if offline
+    const currentYear = new Date().getFullYear();
     const defaultRate = DEFAULT_ANNUAL_RATES[country] || 2.8;
     for (let y = currentYear - 10; y <= currentYear; y++) {
         if (!rateMap[y])

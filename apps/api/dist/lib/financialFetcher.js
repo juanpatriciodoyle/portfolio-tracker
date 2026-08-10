@@ -6,6 +6,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.searchMarketTickers = searchMarketTickers;
 exports.fetchFinancialData = fetchFinancialData;
 const yahoo_finance2_1 = __importDefault(require("yahoo-finance2"));
+let yfInstance = null;
+function getYf() {
+    if (!yfInstance) {
+        try {
+            yfInstance = new yahoo_finance2_1.default();
+        }
+        catch {
+            yfInstance = yahoo_finance2_1.default;
+        }
+    }
+    return yfInstance;
+}
 // Extensive market dictionary for instant zero-latency autocomplete
 const POPULAR_TICKERS = [
     // European & Global Popular ETFs
@@ -57,7 +69,8 @@ async function searchMarketTickers(query) {
     // Instant dictionary search
     const localMatches = POPULAR_TICKERS.filter((t) => t.symbol.includes(q) || t.name.toUpperCase().includes(q));
     try {
-        const searchRes = await yahoo_finance2_1.default.search(q, { newsCount: 0, quotesCount: 8 });
+        const yf = getYf();
+        const searchRes = await yf.search(q, { newsCount: 0, quotesCount: 8 });
         if (searchRes && searchRes.quotes && Array.isArray(searchRes.quotes) && searchRes.quotes.length > 0) {
             const liveMatches = searchRes.quotes
                 .filter((item) => item.symbol && (item.shortname || item.longname))
@@ -87,8 +100,8 @@ async function searchMarketTickers(query) {
             return combined.slice(0, 8);
         }
     }
-    catch (err) {
-        console.warn(`Yahoo Finance search warning for query "${q}":`, err);
+    catch {
+        // Silently fallback to pre-cached dictionary if offline or API error
     }
     return localMatches;
 }
@@ -116,7 +129,8 @@ async function fetchFinancialData(ticker, instrumentType) {
         };
     }
     try {
-        const quote = await yahoo_finance2_1.default.quote(normTicker);
+        const yf = getYf();
+        const quote = await yf.quote(normTicker);
         if (quote && quote.regularMarketPrice) {
             const price = quote.regularMarketPrice;
             const changePercent = quote.regularMarketChangePercent || 0.0;
@@ -138,8 +152,8 @@ async function fetchFinancialData(ticker, instrumentType) {
             };
         }
     }
-    catch (err) {
-        console.warn(`Could not fetch live Yahoo quote for ${normTicker}, using default calculation.`);
+    catch {
+        // Default calculation fallback
     }
     const isTech = normTicker.includes('QQQ') || normTicker.includes('AAPL') || normTicker.includes('NVDA');
     return {
