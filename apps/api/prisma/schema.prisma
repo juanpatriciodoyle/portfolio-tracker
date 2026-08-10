@@ -8,70 +8,91 @@ generator client {
   binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
 }
 
+enum TransactionType {
+  BOUGHT
+  SOLD
+  DEPOSIT
+  WITHDRAWAL
+}
+
 model User {
-  id              String     @id @default(uuid())
-  email           String     @unique
-  passwordHash    String
-  twoFactorSecret String?
-  positions       Position[]
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
-}
-
-model Asset {
-  id                String             @id @default(uuid())
-  ticker            String             @unique
-  isin              String             @unique
-  name              String
-  currentPrice      Float
-  currency          String             
-  description       String?
-  return1d          Float?
-  return1w          Float?
-  return1m          Float?
-  return3m          Float?
-  returnYtd         Float?
-  return6m          Float?
-  return1y          Float?
-  return3y          Float?
-  return5y          Float?
-  roe               Float?
-  operatingMargin   Float?
-  debtToAsset       Float?
-  unitPrice         Float              @default(1.0)
-  industry          String             @default("Technology")
-  regions           String[]
-  allocations       AssetAllocation[]
-  regionalExposures RegionalExposure[]
-  positions         Position[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-}
-
-model AssetAllocation {
-  id             String   @id @default(uuid())
-  assetId        String
-  asset          Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  instrumentType String   
-  percentage     Float    
-}
-
-model RegionalExposure {
-  id         String   @id @default(uuid())
-  assetId    String
-  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  region     String   
-  percentage Float    
+  id                  String          @id @default(uuid())
+  userHash            String?         @unique
+  email               String?         @unique
+  name                String?
+  avatarUrl           String?
+  googleId            String?         @unique
+  passkeyCredentialId String?         @unique
+  passkeyPublicKey    String?
+  passkeyCounter      Int             @default(0)
+  cashBalance         Float           @default(0.0)
+  country             String          @default("Spain")
+  baseCurrency        String          @default("EUR")
+  annualInflationRate Float           @default(2.8)
+  positions           Position[]
+  transactions        Transaction[]
+  realizedGains       RealizedGain[]
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 }
 
 model Position {
-  id         String   @id @default(uuid())
-  assetId    String
-  asset      Asset    @relation(fields: [assetId], references: [id])
-  quantity   Float
-  avgPrice   Float    
-  userId     String?
-  user       User?    @relation(fields: [userId], references: [id])
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id             String   @id @default(uuid())
+  symbol         String   @default("CASH")
+  name           String   @default("Cash")
+  assetClass     String   @default("Cash")
+  region         String   @default("Global")
+  sector         String   @default("Financials")
+  quantity       Float    @default(0.0)
+  investedAmount Float    @default(0.0)
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  userId      String?
+  user        User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        TransactionType
+  symbol      String
+  name        String?
+  assetClass  String          @default("Stock")
+  region      String          @default("Europe")
+  sector      String          @default("Technology")
+  quantity    Float           @default(1.0)
+  amount      Float
+  fee         Float           @default(0.0)
+  totalAmount Float
+  currency    String          @default("EUR")
+  notes       String?
+  date        DateTime        @default(now())
+  createdAt   DateTime        @default(now())
+}
+
+model RealizedGain {
+  id                 String   @id @default(uuid())
+  userId             String?
+  user               User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol             String
+  assetClass         String   @default("Stock")
+  region             String   @default("Europe")
+  sector             String   @default("Technology")
+  investedAmount     Float
+  returnedAmount     Float
+  realizedPnl        Float
+  realizedPnlPercent Float
+  date               DateTime @default(now())
+  createdAt          DateTime @default(now())
+}
+
+model InflationRate {
+  id        String   @id @default(uuid())
+  country   String
+  year      Int
+  rate      Float
+  createdAt DateTime @default(now())
+
+  @@unique([country, year])
 }

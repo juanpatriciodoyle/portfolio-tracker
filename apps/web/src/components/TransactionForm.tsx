@@ -1,26 +1,97 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { FormEvent } from 'react';
-import { DollarSign, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { DollarSign, ArrowUpRight, ArrowDownLeft, PlusCircle, MinusCircle, Calendar, Search } from 'lucide-react';
 
 interface TransactionFormProps {
   onSuccess?: () => void;
 }
 
+interface SearchItem {
+  symbol: string;
+  name: string;
+  assetClass: string;
+  sector: string;
+}
+
 export default function TransactionForm({ onSuccess }: TransactionFormProps) {
-  const [ticker, setTicker] = useState('');
-  const [industry, setIndustry] = useState('Technology');
-  const [instrumentType, setInstrumentType] = useState('ETF');
-  const [regions, setRegions] = useState<string[]>([]);
-  const [type, setType] = useState<'BUY' | 'SELL'>('BUY');
-  const [cashAmount, setCashAmount] = useState('');
+  const [type, setType] = useState<'BOUGHT' | 'SOLD' | 'DEPOSIT' | 'WITHDRAWAL'>('BOUGHT');
+  const [symbol, setSymbol] = useState('');
+  const [name, setName] = useState('');
+  const [quantity, setQuantity] = useState('1');
+  const [amount, setAmount] = useState('');
+  const [fee, setFee] = useState('0');
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [assetClass, setAssetClass] = useState('Stock');
+  const [sector, setSector] = useState('Technology');
+  const [region, setRegion] = useState('Europe');
+
+  // Autocomplete state
+  const [searchResults, setSearchResults] = useState<SearchItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleRegionChange = (region: string, checked: boolean) => {
-    if (checked) {
-      setRegions([...regions, region]);
-    } else {
-      setRegions(regions.filter((r) => r !== region));
+  // Trigger market autocomplete search when user types 3+ characters
+  useEffect(() => {
+    if (isCompleted || symbol.trim().length < 3) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      setHighlightedIndex(-1);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(`/api/market/search?q=${encodeURIComponent(symbol)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data);
+          setShowDropdown(data.length > 0 && !isCompleted);
+          setHighlightedIndex(data.length > 0 ? 0 : -1);
+        }
+      } catch (err) {
+        console.error('Failed to search market tickers:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [symbol, isCompleted]);
+
+  const handleSelectSearchResult = (item: SearchItem) => {
+    setSymbol(item.symbol);
+    setName(item.name);
+    if (item.assetClass) setAssetClass(item.assetClass);
+    if (item.sector) setSector(item.sector);
+    setIsCompleted(true);
+    setShowDropdown(false);
+    setSearchResults([]);
+    setHighlightedIndex(-1);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showDropdown || searchResults.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev < searchResults.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : searchResults.length - 1));
+    } else if (e.key === 'Enter') {
+      if (highlightedIndex >= 0 && highlightedIndex < searchResults.length) {
+        e.preventDefault();
+        handleSelectSearchResult(searchResults[highlightedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setShowDropdown(false);
     }
   };
 
@@ -28,8 +99,14 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
     e.preventDefault();
     setStatus(null);
 
-    if (!ticker || !industry || !instrumentType || regions.length === 0 || !cashAmount) {
-      setStatus({ type: 'error', message: 'Please fill out all fields and select at least one region.' });
+    const isCashOp = type === 'DEPOSIT' || type === 'WITHDRAWAL';
+    if (!isCashOp && (!symbol || !amount)) {
+      setStatus({ type: 'error', message: 'Please enter Instrument Symbol and Amount.' });
+      return;
+    }
+
+    if (isCashOp && !amount) {
+      setStatus({ type: 'error', message: 'Please enter the cash amount.' });
       return;
     }
 
@@ -40,13 +117,17 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ticker: ticker.toUpperCase(),
-          unitPrice: parseFloat(cashAmount),
-          industry,
-          instrumentType,
-          regions,
           type,
-          cashAmount: parseFloat(cashAmount),
+          symbol: isCashOp ? 'CASH' : symbol.toUpperCase(),
+          name: name || (isCashOp ? 'Cash Operation' : symbol.toUpperCase()),
+          quantity: isCashOp ? 1.0 : parseFloat(quantity || '1'),
+          amount: parseFloat(amount),
+          fee: parseFloat(fee || '0'),
+          date: date ? new Date(date).toISOString() : new Date().toISOString(),
+          assetClass: isCashOp ? 'Cash' : assetClass,
+          sector: isCashOp ? 'Financials' : sector,
+          region: isCashOp ? 'Global' : region,
+          currency: 'EUR',
         }),
       });
 
@@ -55,12 +136,13 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
       if (response.ok) {
         setStatus({
           type: 'success',
-          message: `Recorded ${type} order successfully!`,
+          message: `Recorded transaction successfully!`,
         });
-        setTicker('');
-        setIndustry('Technology');
-        setRegions([]);
-        setCashAmount('');
+        setSymbol('');
+        setName('');
+        setQuantity('1');
+        setAmount('');
+        setFee('0');
         if (onSuccess) {
           onSuccess();
         }
@@ -74,14 +156,16 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
     }
   };
 
+  const isCashOp = type === 'DEPOSIT' || type === 'WITHDRAWAL';
+
   return (
     <div style={{ fontFamily: 'inherit' }}>
       <h2
         style={{
           fontSize: '22px',
-          fontWeight: 600,
+          fontWeight: 700,
           color: 'var(--text-primary)',
-          marginBottom: '24px',
+          marginBottom: '20px',
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
@@ -96,299 +180,354 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
             width: '36px',
             height: '36px',
             borderRadius: '8px',
-            backgroundColor: 'rgba(0, 102, 255, 0.1)',
+            backgroundColor: 'rgba(37, 99, 235, 0.15)',
             color: 'var(--accent-primary)',
           }}
         >
           <DollarSign size={20} />
         </div>
-        Record Transaction
+        Log Transaction
       </h2>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {/* Transaction Type Selector */}
         <div
           style={{
-            display: 'flex',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
             borderRadius: '8px',
-            backgroundColor: '#121214',
-            border: '1px solid #1F1F23',
+            backgroundColor: '#000000',
+            border: '1px solid #1E1E22',
             padding: '4px',
+            gap: '4px',
           }}
         >
           <button
             type="button"
-            onClick={() => setType('BUY')}
+            onClick={() => setType('BOUGHT')}
             style={{
-              flex: 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '6px',
-              padding: '10px 12px',
+              gap: '4px',
+              padding: '9px 4px',
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
               fontWeight: 600,
-              fontSize: '14px',
-              backgroundColor: type === 'BUY' ? 'var(--color-success)' : 'transparent',
-              color: type === 'BUY' ? '#FFFFFF' : 'var(--text-secondary)',
-              transition: 'all 0.2s ease',
-              boxShadow: type === 'BUY' ? '0 0 12px rgba(16, 185, 129, 0.3)' : 'none',
+              fontSize: '12px',
+              backgroundColor: type === 'BOUGHT' ? 'var(--color-success)' : 'transparent',
+              color: type === 'BOUGHT' ? '#FFFFFF' : 'var(--text-secondary)',
             }}
           >
-            <ArrowUpRight size={16} /> Bought
+            <ArrowUpRight size={14} /> Bought
           </button>
+
           <button
             type="button"
-            onClick={() => setType('SELL')}
+            onClick={() => setType('SOLD')}
             style={{
-              flex: 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '6px',
-              padding: '10px 12px',
+              gap: '4px',
+              padding: '9px 4px',
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
               fontWeight: 600,
-              fontSize: '14px',
-              backgroundColor: type === 'SELL' ? 'var(--color-danger)' : 'transparent',
-              color: type === 'SELL' ? '#FFFFFF' : 'var(--text-secondary)',
-              transition: 'all 0.2s ease',
-              boxShadow: type === 'SELL' ? '0 0 12px rgba(239, 68, 68, 0.3)' : 'none',
+              fontSize: '12px',
+              backgroundColor: type === 'SOLD' ? 'var(--color-danger)' : 'transparent',
+              color: type === 'SOLD' ? '#FFFFFF' : 'var(--text-secondary)',
             }}
           >
-            <ArrowDownLeft size={16} /> Sold
+            <ArrowDownLeft size={14} /> Sold
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setType('DEPOSIT')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              padding: '9px 4px',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '12px',
+              backgroundColor: type === 'DEPOSIT' ? '#854D0E' : 'transparent',
+              color: type === 'DEPOSIT' ? '#FFFFFF' : 'var(--text-secondary)',
+            }}
+          >
+            <PlusCircle size={14} /> Deposit
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setType('WITHDRAWAL')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              padding: '9px 4px',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '12px',
+              backgroundColor: type === 'WITHDRAWAL' ? '#F59E0B' : 'transparent',
+              color: type === 'WITHDRAWAL' ? '#FFFFFF' : 'var(--text-secondary)',
+            }}
+          >
+            <MinusCircle size={14} /> Withdraw
           </button>
         </div>
 
+        {/* Dynamic Fields */}
+        {!isCashOp ? (
+          <>
+            {/* Ticker Search Field with Autocomplete */}
+            <div style={{ position: 'relative' }} ref={searchContainerRef}>
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Search size={14} /> Instrument Ticker / Symbol (Type 3+ letters)</span>
+                {isSearching && <span style={{ fontSize: '11px', color: '#60A5FA' }}>Searching live market...</span>}
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. SAN.MC, AAPL, NVDA, BTC-USD"
+                value={symbol}
+                onChange={(e) => {
+                  setSymbol(e.target.value);
+                  setIsCompleted(false);
+                }}
+                onKeyDown={handleKeyDown}
+                required
+                style={inputStyle}
+              />
+
+              {/* Autocomplete Dropdown List */}
+              {showDropdown && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    zIndex: 50,
+                    marginTop: '4px',
+                    backgroundColor: '#18181B',
+                    border: '1px solid #27272A',
+                    borderRadius: '8px',
+                    maxHeight: '180px',
+                    overflowY: 'auto',
+                    boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                  }}
+                >
+                  {searchResults.map((item, idx) => (
+                    <div
+                      key={item.symbol}
+                      onClick={() => handleSelectSearchResult(item)}
+                      onMouseEnter={() => setHighlightedIndex(idx)}
+                      style={{
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #27272A',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontSize: '13px',
+                        backgroundColor: idx === highlightedIndex ? '#2563EB' : 'transparent',
+                        color: idx === highlightedIndex ? '#FFFFFF' : 'inherit',
+                      }}
+                    >
+                      <div>
+                        <span style={{ fontWeight: 700, color: '#F4F4F5' }}>{item.symbol}</span>
+                        <span style={{ color: '#A1A1AA', marginLeft: '8px', fontSize: '12px' }}>{item.name}</span>
+                      </div>
+                      <span style={{ fontSize: '11px', color: '#10B981', backgroundColor: '#064E3B', padding: '2px 6px', borderRadius: '4px' }}>
+                        {item.assetClass}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Quantity Field (Decimal / Float) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
+                  Quantity (Shares / Units)
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="e.g. 10.5 or 0.025"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  required
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
+                  Total Money {type === 'BOUGHT' ? 'Invested' : 'Received'} (€)
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="e.g. 1500.00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  required
+                  style={inputStyle}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
+                  Asset Class
+                </label>
+                <select value={assetClass} onChange={(e) => setAssetClass(e.target.value)} style={inputStyle}>
+                  <option value="Stock">Stock</option>
+                  <option value="ETF">ETF</option>
+                  <option value="Crypto">Crypto</option>
+                  <option value="Bond">Bond</option>
+                  <option value="Real Estate">Real Estate</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
+                  Sector
+                </label>
+                <select value={sector} onChange={(e) => setSector(e.target.value)} style={inputStyle}>
+                  <option value="Technology">Technology</option>
+                  <option value="Financials">Financials</option>
+                  <option value="Healthcare">Healthcare</option>
+                  <option value="Energy">Energy</option>
+                  <option value="Industrials">Industrials</option>
+                  <option value="Consumer">Consumer</option>
+                  <option value="Crypto">Crypto</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
+                Region / Geography
+              </label>
+              <select value={region} onChange={(e) => setRegion(e.target.value)} style={inputStyle}>
+                <option value="Spain">Spain</option>
+                <option value="Europe">Europe</option>
+                <option value="North America">North America</option>
+                <option value="Asia-Pacific">Asia-Pacific</option>
+                <option value="LatAm">LatAm</option>
+                <option value="Global">Global</option>
+              </select>
+            </div>
+          </>
+        ) : (
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
+              Cash Amount (€)
+            </label>
+            <input
+              type="number"
+              step="any"
+              placeholder="e.g. 5000.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              required
+              style={inputStyle}
+            />
+          </div>
+        )}
+
+        {/* Date Field Moved Above Broker Fee */}
         <div>
-          <label
-            style={{
-              display: 'block',
-              fontSize: '13px',
-              fontWeight: 500,
-              marginBottom: '8px',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            Instrument Ticker
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
+            <Calendar size={14} /> Transaction Date (Past or Present)
           </label>
           <input
-            type="text"
-            placeholder="e.g. VUAA.DE"
-            value={ticker}
-            onChange={(e) => setTicker(e.target.value)}
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
             required
-            style={{
-              width: '100%',
-              padding: '12px 14px',
-              borderRadius: '8px',
-              border: '1px solid #1F1F23',
-              backgroundColor: 'var(--bg-input)',
-              color: 'var(--text-primary)',
-              fontSize: '14px',
-              outline: 'none',
-              transition: 'border-color 0.2s',
-            }}
-            onFocus={(e) => (e.target.style.borderColor = 'var(--accent-primary)')}
-            onBlur={(e) => (e.target.style.borderColor = '#1F1F23')}
+            style={inputStyle}
           />
         </div>
 
+        {/* Broker Fee Field */}
         <div>
-          <label
-            style={{
-              display: 'block',
-              fontSize: '13px',
-              fontWeight: 500,
-              marginBottom: '10px',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            Allocation Type
-          </label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px 16px' }}>
-            {['Technology', 'Industrial', 'Financial', 'Equity', 'Defense', 'Energy', 'End Products', 'Resource', 'Property'].map((typeOption) => (
-              <label key={typeOption} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: 'var(--text-primary)', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="allocationType"
-                  value={typeOption}
-                  checked={industry === typeOption}
-                  onChange={(e) => setIndustry(e.target.value)}
-                  style={{
-                    width: '18px',
-                    height: '18px',
-                    backgroundColor: 'var(--bg-input)',
-                    cursor: 'pointer',
-                    accentColor: 'var(--accent-primary)',
-                  }}
-                />
-                {typeOption}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label
-            style={{
-              display: 'block',
-              fontSize: '13px',
-              fontWeight: 500,
-              marginBottom: '8px',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            Asset Class
-          </label>
-          <select
-            value={instrumentType}
-            onChange={(e) => setInstrumentType(e.target.value)}
-            required
-            style={{
-              width: '100%',
-              padding: '12px 14px',
-              borderRadius: '8px',
-              border: '1px solid #1F1F23',
-              backgroundColor: 'var(--bg-input)',
-              color: 'var(--text-primary)',
-              fontSize: '14px',
-              outline: 'none',
-              cursor: 'pointer',
-              appearance: 'none',
-              backgroundImage: 'url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%238E8E93\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E")',
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'right 14px center',
-              backgroundSize: '16px',
-            }}
-          >
-            <option value="ETF">ETF</option>
-            <option value="Stock">Stock</option>
-            <option value="Cash">Cash / Money Market</option>
-          </select>
-        </div>
-
-        <div>
-          <label
-            style={{
-              display: 'block',
-              fontSize: '13px',
-              fontWeight: 500,
-              marginBottom: '10px',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            Regional Allocation
-          </label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {['USA', 'EU', 'Asia', 'Emerging Markets', 'Global'].map((region) => (
-              <label key={region} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: 'var(--text-primary)', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={regions.includes(region)}
-                  onChange={(e) => handleRegionChange(region, e.target.checked)}
-                  style={{
-                    width: '18px',
-                    height: '18px',
-                    borderRadius: '4px',
-                    border: '1px solid #1F1F23',
-                    backgroundColor: 'var(--bg-input)',
-                    cursor: 'pointer',
-                    accentColor: 'var(--accent-primary)',
-                  }}
-                />
-                {region}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label
-            style={{
-              display: 'block',
-              fontSize: '13px',
-              fontWeight: 500,
-              marginBottom: '8px',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            Amount Invested (EUR)
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
+            Broker Fee (€)
           </label>
           <input
-            type="text"
-            inputMode="decimal"
-            pattern="[0-9]*\.?[0-9]*"
+            type="number"
+            step="any"
             placeholder="0.00"
-            value={cashAmount}
-            onChange={(e) => setCashAmount(e.target.value)}
-            required
-            style={{
-              width: '100%',
-              padding: '12px 14px',
-              borderRadius: '8px',
-              border: '1px solid #1F1F23',
-              backgroundColor: 'var(--bg-input)',
-              color: 'var(--text-primary)',
-              fontSize: '14px',
-              outline: 'none',
-              transition: 'border-color 0.2s',
-            }}
-            onFocus={(e) => (e.target.style.borderColor = 'var(--accent-primary)')}
-            onBlur={(e) => (e.target.style.borderColor = '#1F1F23')}
+            value={fee}
+            onChange={(e) => setFee(e.target.value)}
+            style={inputStyle}
           />
         </div>
-
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          style={{
-            width: '100%',
-            padding: '14px',
-            borderRadius: '8px',
-            border: 'none',
-            backgroundColor: 'var(--accent-primary)',
-            color: '#FFFFFF',
-            fontWeight: 600,
-            fontSize: '14px',
-            cursor: 'pointer',
-            marginTop: '12px',
-            transition: 'all 0.2s ease',
-            boxShadow: '0 4px 12px rgba(0, 102, 255, 0.3)',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#1A75FF';
-            e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 102, 255, 0.4)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'var(--accent-primary)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 102, 255, 0.3)';
-          }}
-        >
-          {isSubmitting ? 'Saving...' : 'Save Transaction'}
-        </button>
 
         {status && (
           <div
             style={{
-              padding: '12px',
+              padding: '10px 14px',
               borderRadius: '8px',
-              fontSize: '14px',
-              textAlign: 'center',
+              fontSize: '13px',
               fontWeight: 500,
-              marginTop: '8px',
-              border: status.type === 'success' ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(239, 68, 68, 0.2)',
-              backgroundColor: status.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              backgroundColor: status.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)',
               color: status.type === 'success' ? 'var(--color-success)' : 'var(--color-danger)',
+              border: status.type === 'success' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(244, 63, 94, 0.3)',
             }}
           >
             {status.message}
           </div>
         )}
+
+        {/* Primary Blue Confirm Button */}
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          style={{
+            marginTop: '8px',
+            padding: '12px',
+            borderRadius: '8px',
+            border: 'none',
+            backgroundColor: 'var(--accent-primary)',
+            color: '#FFFFFF',
+            fontWeight: 700,
+            fontSize: '14px',
+            cursor: isSubmitting ? 'not-allowed' : 'pointer',
+            opacity: isSubmitting ? 0.7 : 1,
+            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+          }}
+        >
+          {isSubmitting ? 'Confirming...' : 'Confirm'}
+        </button>
       </form>
     </div>
   );
 }
+
+const inputStyle = {
+  width: '100%',
+  padding: '10px 12px',
+  borderRadius: '8px',
+  border: '1px solid #1E1E22',
+  backgroundColor: 'var(--bg-input)',
+  color: 'var(--text-primary)',
+  fontSize: '14px',
+  outline: 'none',
+};
