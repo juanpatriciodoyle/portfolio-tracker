@@ -22,16 +22,22 @@ jobs:
           cache: 'npm'
           cache-dependency-path: apps/api/package-lock.json
 
-      - name: Install Backend Dependencies & Push DB Schema
+      - name: Install Backend Dependencies & Generate Prisma Client
         run: |
           cd apps/api
           npm ci || npm install
-          npx prisma db push
+          npx prisma generate
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/portfolio_tracker_db?schema=public"
 
       - name: Run Backend Tests (Jest)
         run: |
           cd apps/api
           npm test
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/portfolio_tracker_db?schema=public"
+          JWT_SECRET: "ci_jwt_secret_key"
+          USER_HASH_SALT: "ci_hash_salt"
 
       - name: Build Backend TypeScript
         run: |
