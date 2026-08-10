@@ -496,7 +496,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
           </div>
         )}
 
-        {/* Primary Blue Confirm Button */}
+        {/* Primary Wealth Brass Confirm Button */}
         <button
           type="submit"
           disabled={isSubmitting}
@@ -505,13 +505,13 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
             padding: '12px',
             borderRadius: '8px',
             border: 'none',
-            backgroundColor: 'var(--accent-primary)',
-            color: '#FFFFFF',
+            backgroundColor: 'var(--wealth-brass)',
+            color: '#0B0C0E',
             fontWeight: 700,
             fontSize: '14px',
             cursor: isSubmitting ? 'not-allowed' : 'pointer',
             opacity: isSubmitting ? 0.7 : 1,
-            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+            boxShadow: '0 4px 14px rgba(197, 160, 89, 0.3)',
           }}
         >
           {isSubmitting ? 'Confirming...' : 'Confirm'}
@@ -525,7 +525,7 @@ const inputStyle = {
   width: '100%',
   padding: '10px 12px',
   borderRadius: '8px',
-  border: '1px solid #1E1E22',
+  border: '1px solid var(--border-color)',
   backgroundColor: 'var(--bg-input)',
   color: 'var(--text-primary)',
   fontSize: '14px',

@@ -1,23 +1,58 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-:root {
-  --bg-canvas: #000000;
-  --bg-card: #0B0B0C;
-  --bg-input: #161618;
-  --border-card: 1px solid #1E1E22;
+:root, :root[data-theme="dark"] {
+  /* Shared Brand & Accent Tokens */
+  --wealth-brass: #C5A059;   /* Brushed Brass (Shared primary metallic accent) */
+  --wealth-pewter: #64748B;  /* Muted Pewter (Shared secondary text / metadata) */
+  --wealth-garnet: #E11D48;  /* Muted Garnet (Shared expense / negative cash flow) */
 
-  --accent-primary: #2563eb;
-  --accent-hover: #1d4ed8;
+  /* Dark Theme Specifics */
+  --bg-canvas: #0B0C0E;      /* Deep Obsidian */
+  --bg-surface: #13151A;     /* Dark Titanium */
+  --bg-card: #13151A;        /* Dark Titanium Surface */
+  --bg-card-inner: #1A1D24;  /* Muted Charcoal */
+  --bg-input: #1A1D24;       /* Muted Charcoal */
+  --border-color: #2A2D35;   /* Hairline Slate */
+  --text-primary: #F1F5F9;   /* Crisp Platinum */
+  --text-secondary: #64748B; /* Muted Pewter */
+  --color-jade: #34D399;     /* Desaturated Jade (Income) */
 
-  --text-primary: #ffffff;
-  --text-secondary: #9ca3af;
+  --color-success: var(--color-jade);
+  --color-danger: var(--wealth-garnet);
 
-  --color-success: #10b981;
-  --color-danger: #f43f5e;
-  --color-deposit: #854d0e;
+  --btn-primary-bg: #C5A059;
+  --btn-primary-text: #0B0C0E;
 
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   color-scheme: dark;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+}
+
+:root[data-theme="light"] {
+  /* Shared Brand & Accent Tokens */
+  --wealth-brass: #C5A059;
+  --wealth-pewter: #64748B;
+  --wealth-garnet: #E11D48;
+
+  /* Light Theme Specifics */
+  --bg-canvas: #F8F9FA;      /* Alabaster Canvas */
+  --bg-surface: #FFFFFF;     /* Pure Marble Surface */
+  --bg-card: #FFFFFF;        /* Pure Marble Card */
+  --bg-card-inner: #F1F5F9;  /* Parchment Inner Card */
+  --bg-input: #EDF2F7;       /* Light Input */
+  --border-color: #E2E8F0;   /* Hairline Parchment */
+  --text-primary: #0B0C0E;   /* Obsidian Ink */
+  --text-secondary: #64748B; /* Muted Pewter */
+  --color-jade: #059669;     /* Deep Jade (Income) */
+
+  --color-success: var(--color-jade);
+  --color-danger: var(--wealth-garnet);
+
+  --btn-primary-bg: #13151A;
+  --btn-primary-text: #FFFFFF;
+
+  color-scheme: light;
   background-color: var(--bg-canvas);
   color: var(--text-primary);
 }
@@ -30,6 +65,7 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 #root {

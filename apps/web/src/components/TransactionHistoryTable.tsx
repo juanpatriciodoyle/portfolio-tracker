@@ -130,7 +130,7 @@ export default function TransactionHistoryTable() {
               style={{
                 padding: '8px 12px 8px 34px',
                 borderRadius: '8px',
-                border: '1px solid #1E1E22',
+                border: '1px solid var(--border-color)',
                 backgroundColor: 'var(--bg-input)',
                 color: 'var(--text-primary)',
                 fontSize: '13px',
@@ -149,7 +149,7 @@ export default function TransactionHistoryTable() {
               style={{
                 padding: '8px 12px 8px 30px',
                 borderRadius: '8px',
-                border: '1px solid #1E1E22',
+                border: '1px solid var(--border-color)',
                 backgroundColor: 'var(--bg-input)',
                 color: 'var(--text-primary)',
                 fontSize: '13px',
@@ -177,7 +177,7 @@ export default function TransactionHistoryTable() {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1E1E22', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 <th style={{ padding: '10px 14px' }}>Date</th>
                 <th style={{ padding: '10px 14px' }}>Action</th>
                 <th style={{ padding: '10px 14px' }}>Symbol</th>
@@ -189,7 +189,7 @@ export default function TransactionHistoryTable() {
             </thead>
             <tbody>
               {filtered.map((tx) => (
-                <tr key={tx.id} style={{ borderBottom: '1px solid #1E1E22' }}>
+                <tr key={tx.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                   <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                     {new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                   </td>
