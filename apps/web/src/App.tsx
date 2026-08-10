@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, LogOut, Lock, Lightbulb, LightbulbOff } from 'lucide-react';
+import { Plus, LogOut, Lock } from 'lucide-react';
 import TransactionForm from './components/TransactionForm';
 import SideDrawer from './components/SideDrawer';
 import LoginModal from './components/LoginModal';
@@ -76,16 +76,6 @@ function App() {
   const [isRealInflationMode, setIsRealInflationMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'regions' | 'sectors' | 'assetClasses'>('regions');
   const [tableKey, setTableKey] = useState(0);
-
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    const saved = localStorage.getItem('theme');
-    return (saved === 'light' ? 'light' : 'dark') as 'dark' | 'light';
-  });
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
 
   const [stats, setStats] = useState<StatsData>({
     netWorth: 0,
@@ -165,12 +155,6 @@ function App() {
   }
 
   // Active ROI and Profit Euros based on toggle state
-  // Value coloring helper: render neutral 0 in primary text color, non-zero positive in jade, negative in garnet
-  const getValueColor = (val: number) => {
-    if (val === 0) return 'var(--text-primary)';
-    return val > 0 ? 'var(--color-jade)' : 'var(--wealth-garnet)';
-  };
-
   const activeProfitEuros = isRealInflationMode ? stats.realProfitEuros : stats.totalProfit;
   const activeRoiPercent = isRealInflationMode ? stats.realRoiPercent : stats.allTimeRoiPercent;
 
@@ -183,114 +167,79 @@ function App() {
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '16px 40px',
-          borderBottom: '1px solid var(--border-color)',
-          backgroundColor: 'var(--bg-surface)',
+          borderBottom: '1px solid #1E1E22',
+          backgroundColor: 'var(--bg-card)',
           position: 'sticky',
           top: 0,
           zIndex: 10,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.5px', color: 'var(--text-primary)' }}>Portfolio Tracker</span>
+          <span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.5px', color: '#F4F4F5' }}>Portfolio Tracker</span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Header Pill: Inflation Adjustment */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          {/* Single Press Button for Inflation Adjustment */}
           <button
             onClick={() => setIsRealInflationMode(!isRealInflationMode)}
             style={{
-              border: isRealInflationMode ? '1px solid rgba(197, 160, 89, 0.4)' : '1px solid var(--border-color)',
+              border: isRealInflationMode ? '1px solid #F4F4F5' : '1px solid #27272A',
               borderRadius: '8px',
               padding: '8px 14px',
-              fontSize: '12px',
+              fontSize: '13px',
               fontWeight: 600,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              backgroundColor: 'var(--bg-surface)',
-              color: isRealInflationMode ? '#C5A059' : 'var(--text-secondary)',
-              transition: 'all 0.2s ease',
+              backgroundColor: isRealInflationMode ? '#27272A' : '#161618',
+              color: isRealInflationMode ? '#FFFFFF' : 'var(--text-secondary)',
             }}
           >
             <span>{isRealInflationMode ? 'Inflation Adjusted 🛡️' : 'Adjust for Inflation? 🎈'}</span>
           </button>
 
-          {/* Header Pill: Resident Country Selector */}
+          {/* Resident Country Selector */}
           <button
             onClick={() => setIsInflationModalOpen(true)}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-color)',
+              backgroundColor: '#161618',
+              border: '1px solid #27272A',
               borderRadius: '8px',
               padding: '8px 12px',
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'var(--text-secondary)',
+              fontSize: '13px',
+              color: '#F4F4F5',
               cursor: 'pointer',
             }}
           >
             <span>🇪🇸 {stats.country}</span>
           </button>
 
-          {/* Primary Log Transaction CTA Button (Refactored Spec) */}
+          {/* Primary Log Transaction Button (Energetic Blue) */}
           <button
             onClick={() => setIsDrawerOpen(true)}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid rgba(197, 160, 89, 0.4)',
-              color: '#C5A059',
+              backgroundColor: '#2563EB',
+              color: '#FFFFFF',
+              border: 'none',
               borderRadius: '8px',
-              padding: '8px 16px',
-              fontSize: '13px',
+              padding: '9px 16px',
+              fontSize: '14px',
               fontWeight: 600,
               cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#C5A059';
-              e.currentTarget.style.color = theme === 'dark' ? '#0B0C0E' : '#FFFFFF';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--bg-surface)';
-              e.currentTarget.style.color = '#C5A059';
+              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
             }}
           >
             <Plus size={16} /> Log Transaction
           </button>
 
-          {/* Light Bulb Theme Toggle Button (Icon only, turned on in dark mode, off in light mode) */}
-          <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
-            aria-label={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '36px',
-              height: '36px',
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            {theme === 'dark' ? (
-              <Lightbulb size={18} fill="#C5A059" color="#C5A059" />
-            ) : (
-              <LightbulbOff size={18} color="#64748B" />
-            )}
-          </button>
-
-          {/* Logout Button */}
+          {/* Logout */}
           <button
             onClick={handleLogout}
             style={{
@@ -299,10 +248,10 @@ function App() {
               justifyContent: 'center',
               width: '36px',
               height: '36px',
-              backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-color)',
+              backgroundColor: '#161618',
+              border: '1px solid #27272A',
               borderRadius: '8px',
-              color: 'var(--text-secondary)',
+              color: '#A1A1AA',
               cursor: 'pointer',
             }}
           >
@@ -315,12 +264,12 @@ function App() {
       <main style={{ flex: 1, padding: '36px 40px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
         <div style={{ maxWidth: '1200px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '28px' }}>
           <div>
-            <h1 style={{ fontSize: '28px', fontWeight: 700, margin: 0, letterSpacing: '-0.5px', color: 'var(--text-primary)' }}>
+            <h1 style={{ fontSize: '28px', fontWeight: 700, margin: 0, letterSpacing: '-0.5px', color: '#F4F4F5' }}>
               How's the day going, {getGreetingName()}? 👋
             </h1>
           </div>
 
-          {/* Metric Overview Cards */}
+          {/* Metric Overview Cards (Merged into 3 Cards) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '16px' }}>
             {/* Card 1: Net Worth */}
             <div style={cardStyle}>
@@ -328,7 +277,7 @@ function App() {
                 <span>Net Worth</span>
               </div>
               <div style={cardValueStyle}>€{stats.netWorth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>
                 Cash: €{stats.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
@@ -338,36 +287,35 @@ function App() {
               <div style={cardHeaderStyle}>
                 <span>Profit from Sold Assets</span>
               </div>
-              <div style={{ ...cardValueStyle, color: getValueColor(stats.soldProfit) }}>
-                {stats.soldProfit > 0 ? '+' : ''}€{stats.soldProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <div style={{ ...cardValueStyle, color: stats.soldProfit >= 0 ? '#10B981' : '#F43F5E' }}>
+                {stats.soldProfit >= 0 ? '+' : ''}€{stats.soldProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+              <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>
                 Total earnings locked from closed trades
               </div>
             </div>
 
-            {/* Card 3: All-Time Return */}
+            {/* Card 3: All-Time Return (Merged dynamic single card) */}
             <div style={cardStyle}>
               <div style={cardHeaderStyle}>
                 <span>All-Time Return</span>
               </div>
-              <div style={{ ...cardValueStyle, color: getValueColor(activeProfitEuros) }}>
-                {activeProfitEuros > 0 ? '+' : ''}€{activeProfitEuros.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <div style={{ ...cardValueStyle, color: activeProfitEuros >= 0 ? '#10B981' : '#F43F5E' }}>
+                {activeProfitEuros >= 0 ? '+' : ''}€{activeProfitEuros.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                Return: {activeRoiPercent > 0 ? '+' : ''}{activeRoiPercent.toFixed(2)}% {isRealInflationMode ? `(${stats.country} inflation adj.)` : '(standard)'}
+              <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>
+                Return: {activeRoiPercent >= 0 ? '+' : ''}{activeRoiPercent.toFixed(2)}% {isRealInflationMode ? `(${stats.country} inflation adj.)` : '(standard)'}
               </div>
             </div>
           </div>
 
           {/* Allocation & Geographic Distribution */}
-          <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '14px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '14px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
+          <div style={{ backgroundColor: 'var(--bg-card)', border: 'var(--border-card)', borderRadius: '14px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1E1E22', paddingBottom: '14px' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#F4F4F5' }}>
                 Asset & Regional Allocation
               </h3>
-              {/* Segmented Control Container */}
-              <div style={{ backgroundColor: 'var(--bg-canvas)', border: '1px solid var(--border-color)', padding: '4px', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <div style={{ display: 'flex', gap: '6px' }}>
                 {(['regions', 'sectors', 'assetClasses'] as const).map((tab) => (
                   <button
                     key={tab}
@@ -375,14 +323,13 @@ function App() {
                     style={{
                       padding: '6px 12px',
                       borderRadius: '6px',
+                      border: '1px solid #27272A',
                       fontSize: '12px',
-                      fontWeight: activeTab === tab ? 600 : 500,
+                      fontWeight: 600,
                       cursor: 'pointer',
                       textTransform: 'capitalize',
-                      backgroundColor: activeTab === tab ? 'var(--bg-surface)' : 'transparent',
-                      color: activeTab === tab ? '#C5A059' : 'var(--text-secondary)',
-                      border: activeTab === tab ? '1px solid rgba(197, 160, 89, 0.4)' : '1px solid transparent',
-                      transition: 'all 0.15s ease',
+                      backgroundColor: activeTab === tab ? '#F4F4F5' : '#161618',
+                      color: activeTab === tab ? '#000000' : '#A1A1AA',
                     }}
                   >
                     {tab === 'assetClasses' ? 'Asset Classes' : tab}
@@ -393,24 +340,24 @@ function App() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {stats.breakdowns[activeTab].length === 0 ? (
-                <div style={{ color: 'var(--text-secondary)', fontSize: '13px', padding: '12px 0', textAlign: 'center' }}>
+                <div style={{ color: '#A1A1AA', fontSize: '13px', padding: '12px 0', textAlign: 'center' }}>
                   No allocation data logged yet. Click <strong>Log Transaction</strong> to start.
                 </div>
               ) : (
                 stats.breakdowns[activeTab].map((item) => (
                   <div key={item.name} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 500 }}>
-                      <span style={{ color: 'var(--text-primary)' }}>{item.name}</span>
-                      <span style={{ color: 'var(--text-secondary)' }}>
+                      <span style={{ color: '#F4F4F5' }}>{item.name}</span>
+                      <span style={{ color: '#A1A1AA' }}>
                         €{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} ({item.percentage}%)
                       </span>
                     </div>
-                    <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--bg-card-inner)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ width: '100%', height: '6px', backgroundColor: '#1E1E22', borderRadius: '3px', overflow: 'hidden' }}>
                       <div
                         style={{
                           height: '100%',
                           width: `${Math.min(item.percentage, 100)}%`,
-                          backgroundColor: 'var(--wealth-brass)',
+                          backgroundColor: '#E4E4E7',
                           borderRadius: '3px',
                           transition: 'width 0.4s ease',
                         }}
@@ -424,14 +371,14 @@ function App() {
 
           {/* Open Active Positions */}
           {stats.positions.length > 0 && (
-            <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '14px', padding: '20px' }}>
-              <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
+            <div style={{ backgroundColor: 'var(--bg-card)', border: 'var(--border-card)', borderRadius: '14px', padding: '20px' }}>
+              <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600, color: '#F4F4F5' }}>
                 Active Open Investments ({stats.positions.length})
               </h3>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
                   <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase' }}>
+                    <tr style={{ borderBottom: '1px solid #1E1E22', color: '#A1A1AA', fontSize: '11px', textTransform: 'uppercase' }}>
                       <th style={{ padding: '10px 14px' }}>Symbol</th>
                       <th style={{ padding: '10px 14px' }}>Asset Class</th>
                       <th style={{ padding: '10px 14px' }}>Region / Sector</th>
@@ -440,11 +387,11 @@ function App() {
                   </thead>
                   <tbody>
                     {stats.positions.map((pos) => (
-                      <tr key={pos.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                        <td style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--text-primary)' }}>{pos.symbol}</td>
-                        <td style={{ padding: '12px 14px', color: 'var(--text-secondary)' }}>{pos.assetClass}</td>
-                        <td style={{ padding: '12px 14px', color: 'var(--text-secondary)' }}>{pos.region} • {pos.sector}</td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      <tr key={pos.id} style={{ borderBottom: '1px solid #1E1E22' }}>
+                        <td style={{ padding: '12px 14px', fontWeight: 600, color: '#F4F4F5' }}>{pos.symbol}</td>
+                        <td style={{ padding: '12px 14px', color: '#A1A1AA' }}>{pos.assetClass}</td>
+                        <td style={{ padding: '12px 14px', color: '#A1A1AA' }}>{pos.region} • {pos.sector}</td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#F4F4F5' }}>
                           €{pos.investedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
@@ -457,14 +404,14 @@ function App() {
 
           {/* Sold Assets Profit Table */}
           {stats.soldAssets.length > 0 && (
-            <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '14px', padding: '20px' }}>
-              <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Lock size={16} color="var(--color-jade)" /> Profit from Sold Assets ({stats.soldAssets.length})
+            <div style={{ backgroundColor: 'var(--bg-card)', border: 'var(--border-card)', borderRadius: '14px', padding: '20px' }}>
+              <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600, color: '#F4F4F5', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Lock size={16} color="#10B981" /> Profit from Sold Assets ({stats.soldAssets.length})
               </h3>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
                   <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '11px', textTransform: 'uppercase' }}>
+                    <tr style={{ borderBottom: '1px solid #1E1E22', color: '#A1A1AA', fontSize: '11px', textTransform: 'uppercase' }}>
                       <th style={{ padding: '10px 14px' }}>Date Sold</th>
                       <th style={{ padding: '10px 14px' }}>Symbol</th>
                       <th style={{ padding: '10px 14px', textAlign: 'right' }}>Money Invested</th>
@@ -476,24 +423,24 @@ function App() {
                   </thead>
                   <tbody>
                     {stats.soldAssets.map((gain) => (
-                      <tr key={gain.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                        <td style={{ padding: '12px 14px', color: 'var(--text-secondary)' }}>
+                      <tr key={gain.id} style={{ borderBottom: '1px solid #1E1E22' }}>
+                        <td style={{ padding: '12px 14px', color: '#A1A1AA' }}>
                           {new Date(gain.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                         </td>
-                        <td style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--text-primary)' }}>{gain.symbol}</td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', color: 'var(--text-secondary)' }}>
+                        <td style={{ padding: '12px 14px', fontWeight: 600, color: '#F4F4F5' }}>{gain.symbol}</td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', color: '#A1A1AA' }}>
                           €{gain.investedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', color: 'var(--text-primary)' }}>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', color: '#F4F4F5' }}>
                           €{gain.returnedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: gain.soldProfit >= 0 ? 'var(--color-jade)' : 'var(--wealth-garnet)' }}>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: gain.soldProfit >= 0 ? '#10B981' : '#F43F5E' }}>
                           {gain.soldProfit >= 0 ? '+' : ''}€{gain.soldProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({gain.soldProfitPercent.toFixed(1)}%)
                         </td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', color: 'var(--text-secondary)' }}>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', color: '#A1A1AA' }}>
                           {gain.holdingInflationPercent.toFixed(1)}%
                         </td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: gain.realProfitEuros >= 0 ? 'var(--color-jade)' : 'var(--wealth-garnet)' }}>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: gain.realProfitEuros >= 0 ? '#10B981' : '#F43F5E' }}>
                           {gain.realProfitEuros >= 0 ? '+' : ''}€{gain.realProfitEuros.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
@@ -532,7 +479,7 @@ function App() {
 
 const cardStyle = {
   backgroundColor: 'var(--bg-card)',
-  border: '1px solid var(--border-color)',
+  border: 'var(--border-card)',
   borderRadius: '14px',
   padding: '20px',
   display: 'flex',
@@ -546,7 +493,7 @@ const cardHeaderStyle = {
   justifyContent: 'space-between',
   fontSize: '12px',
   fontWeight: 600,
-  color: 'var(--text-secondary)',
+  color: '#A1A1AA',
   textTransform: 'uppercase' as const,
   letterSpacing: '0.5px',
 };
@@ -554,7 +501,7 @@ const cardHeaderStyle = {
 const cardValueStyle = {
   fontSize: '24px',
   fontWeight: 700,
-  color: 'var(--text-primary)',
+  color: '#F4F4F5',
   letterSpacing: '-0.5px',
   marginTop: '10px',
 };
