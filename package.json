@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "turn-on": "open -a Docker && echo 'Starting Docker Desktop, please wait...' && until docker info > /dev/null 2>&1; do sleep 1; done && docker compose up -d && (cd apps/api && npx prisma db push && npm run dev &) && (cd apps/web && npm run dev)"
+    "turn-on": "open -a Docker && echo 'Starting Docker Desktop, please wait...' && until docker info > /dev/null 2>&1; do sleep 1; done && docker compose up -d && (cd apps/api && npx prisma db push && npm run dev &) && (cd apps/web && npm run dev)",
+    "turn-off": "(docker compose stop 2>/dev/null || true) && (lsof -ti:3001,5173 | xargs kill -9 2>/dev/null || true) && (osascript -e 'quit app \"Docker\"' 2>/dev/null || true) && echo '✅ Everything has been stopped and Docker Desktop quit successfully.'"
   }
 }
