@@ -42,10 +42,14 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
 
         const data = await res.json();
         if (res.ok && data.success) {
-          if (data.token) {
-            localStorage.setItem('auth_token', data.token);
-          }
-          localStorage.setItem('auth_user_email', googleUser.email);
+          try {
+            if (data.token) {
+              localStorage.setItem('auth_token', data.token);
+            }
+            if (googleUser.email) {
+              localStorage.setItem('auth_user_email', googleUser.email);
+            }
+          } catch (_) {}
           onSuccess(data.user);
         } else {
           setError(data.error || 'Google Sign-In failed.');
@@ -70,7 +74,10 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
     setIsLoading(true);
     setError(null);
 
-    const storedEmail = localStorage.getItem('auth_user_email') || 'juan@portfolio.local';
+    let storedEmail = 'juan@portfolio.local';
+    try {
+      storedEmail = localStorage.getItem('auth_user_email') || 'juan@portfolio.local';
+    } catch (_) {}
 
     try {
       // 1. Get WebAuthn options from server
@@ -105,9 +112,11 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
 
       const verifyData = await verifyRes.json();
       if (verifyRes.ok && verifyData.success) {
-        if (verifyData.token) {
-          localStorage.setItem('auth_token', verifyData.token);
-        }
+        try {
+          if (verifyData.token) {
+            localStorage.setItem('auth_token', verifyData.token);
+          }
+        } catch (_) {}
         onSuccess(verifyData.user);
       } else {
         setError(verifyData.error || 'Passkey verification failed.');
@@ -123,15 +132,48 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
     }
   };
 
+  const handleDemoSignIn = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/auth/demo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const demoUser = {
+          ...data.user,
+          name: 'Joe',
+        };
+        try {
+          if (data.token) {
+            localStorage.setItem('auth_token', data.token);
+          }
+          if (demoUser.email) {
+            localStorage.setItem('auth_user_email', demoUser.email);
+          }
+          localStorage.setItem('auth_user', JSON.stringify(demoUser));
+        } catch (_) {}
+        onSuccess(demoUser);
+      } else {
+        setError(data.error || 'Failed to initialize demo portfolio.');
+      }
+    } catch (err) {
+      setError('Could not connect to authentication server.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div
       style={{
         position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: '#000000',
+        inset: 0,
+        backgroundColor: 'var(--bg-canvas)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -143,18 +185,18 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
         style={{
           width: '100%',
           maxWidth: '420px',
-          backgroundColor: '#0B0B0C',
-          border: '1px solid #1E1E22',
+          backgroundColor: 'var(--bg-card)',
+          border: 'var(--border-card)',
           borderRadius: '16px',
           padding: '36px',
           boxShadow: '0 24px 48px rgba(0, 0, 0, 0.8)',
           textAlign: 'center',
         }}
       >
-        <h2 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 6px 0', color: '#F4F4F5' }}>
+        <h2 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 6px 0', color: 'var(--text-heading)' }}>
           Portfolio Tracker
         </h2>
-        <p style={{ color: '#A1A1AA', fontSize: '14px', margin: '0 0 28px 0' }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: '0 0 28px 0' }}>
           Passwordless & Biometric Authentication
         </p>
 
@@ -163,9 +205,9 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
             style={{
               padding: '10px 14px',
               borderRadius: '8px',
-              backgroundColor: 'rgba(244, 63, 94, 0.15)',
-              color: '#F43F5E',
-              border: '1px solid rgba(244, 63, 94, 0.3)',
+              backgroundColor: 'var(--color-loss-bg)',
+              color: 'var(--text-heading)',
+              border: '1px solid var(--color-loss-glow)',
               fontSize: '13px',
               marginBottom: '20px',
               textAlign: 'left',
@@ -184,9 +226,9 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
               width: '100%',
               padding: '14px',
               borderRadius: '10px',
-              border: '1px solid #27272A',
-              backgroundColor: '#161618',
-              color: '#F4F4F5',
+              border: '1px solid var(--border-subtle-color)',
+              backgroundColor: 'var(--bg-input)',
+              color: 'var(--text-heading)',
               fontSize: '14px',
               fontWeight: 600,
               cursor: 'pointer',
@@ -225,9 +267,9 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
               width: '100%',
               padding: '14px',
               borderRadius: '10px',
-              border: '1px solid #27272A',
-              backgroundColor: '#161618',
-              color: '#F4F4F5',
+              border: '1px solid var(--border-subtle-color)',
+              backgroundColor: 'var(--bg-input)',
+              color: 'var(--text-heading)',
               fontSize: '14px',
               fontWeight: 600,
               cursor: 'pointer',
@@ -237,15 +279,83 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
               gap: '10px',
             }}
           >
-            <KeyRound size={18} color="#10B981" />
+            <KeyRound size={18} color="var(--color-profit)" />
             Continue with Passkey / Touch ID
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '24px', fontSize: '12px', color: '#71717A' }}>
-          <ShieldCheck size={14} color="#10B981" /> Zero passwords stored. Encrypted session.
+        {/* Third Box: Sneak Peek Demo Account */}
+        <div
+          style={{
+            marginTop: '20px',
+            paddingTop: '20px',
+            borderTop: '1px solid var(--border-divider)',
+            textAlign: 'center',
+          }}
+        >
+          <p
+            style={{
+              fontSize: '12px',
+              color: 'var(--text-muted)',
+              margin: '0 0 12px 0',
+              lineHeight: 1.45,
+            }}
+          >
+            Explore a demo portfolio with multi-year performance charts, asset allocations, and live analytics.
+          </p>
+
+          <button
+            type="button"
+            onClick={handleDemoSignIn}
+            disabled={isLoading}
+            style={{
+              width: '100%',
+              padding: '14px',
+              borderRadius: '10px',
+              border: '1px solid var(--accent-primary)',
+              background: 'linear-gradient(135deg, var(--accent-blue-subtle), rgba(59, 130, 246, 0.06))',
+              color: 'var(--text-accent)',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background =
+                'linear-gradient(135deg, rgba(37, 99, 235, 0.28), rgba(59, 130, 246, 0.16))';
+              e.currentTarget.style.borderColor = 'var(--accent-blue-light)';
+              e.currentTarget.style.color = 'var(--text-accent-hover)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background =
+                'linear-gradient(135deg, var(--accent-blue-subtle), rgba(59, 130, 246, 0.06))';
+              e.currentTarget.style.borderColor = 'var(--accent-primary)';
+              e.currentTarget.style.color = 'var(--text-accent)';
+            }}
+          >
+            <span>👀</span> Would you like to take a sneak peek?
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            marginTop: '22px',
+            fontSize: '12px',
+            color: 'var(--text-muted)',
+          }}
+        >
+          <ShieldCheck size={14} color="var(--color-profit)" /> Zero passwords stored. Encrypted session.
         </div>
       </div>
     </div>
   );
 }
+

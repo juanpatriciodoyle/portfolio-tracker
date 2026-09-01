@@ -140,29 +140,37 @@ export const PerformanceAnalysisGrid: React.FC<PerformanceAnalysisGridProps> = (
           <div className="metric-tile">
             <dt className="metric-tile__label">
               <span>Portfolio performance</span>
-              <button
-                type="button"
-                className="metric-tile__help-button"
-                onClick={() => toggleTooltip('performance')}
-                aria-label="Learn about Portfolio performance"
+              <div
+                className="metric-tile__help-wrapper"
+                onMouseEnter={() => setActiveTooltip('performance')}
+                onMouseLeave={() => setActiveTooltip(null)}
               >
-                <HelpCircle size={15} />
-              </button>
-              {activeTooltip === 'performance' && (
-                <div className="metric-tile__popover">
-                  <div className="metric-tile__popover-header">
-                    <span>Portfolio Performance</span>
-                    <button type="button" onClick={() => setActiveTooltip(null)}>
-                      <X size={13} />
-                    </button>
+                <button
+                  type="button"
+                  className="metric-tile__help-button"
+                  onClick={() => toggleTooltip('performance')}
+                  onFocus={() => setActiveTooltip('performance')}
+                  onBlur={() => setActiveTooltip(null)}
+                  aria-label="Learn about Portfolio performance"
+                >
+                  <HelpCircle size={15} />
+                </button>
+                {activeTooltip === 'performance' && (
+                  <div className="metric-tile__popover" role="tooltip">
+                    <div className="metric-tile__popover-header">
+                      <span>Portfolio Performance</span>
+                      <button type="button" onClick={() => setActiveTooltip(null)}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <p>
+                      Time-weighted return shows how the portfolio performed independently of the size and timing of
+                      external deposits and withdrawals. It includes changes in investment value, income, and recorded
+                      costs.
+                    </p>
                   </div>
-                  <p>
-                    Time-weighted return shows how the portfolio performed independently of the size and timing of
-                    external deposits and withdrawals. It includes changes in investment value, income, and recorded
-                    costs.
-                  </p>
-                </div>
-              )}
+                )}
+              </div>
             </dt>
             <dd className="metric-tile__value">
               <div className="metric-tile__stack">
@@ -188,28 +196,36 @@ export const PerformanceAnalysisGrid: React.FC<PerformanceAnalysisGridProps> = (
           <div className="metric-tile">
             <dt className="metric-tile__label">
               <span>Volatility</span>
-              <button
-                type="button"
-                className="metric-tile__help-button"
-                onClick={() => toggleTooltip('volatility')}
-                aria-label="Learn about Volatility"
+              <div
+                className="metric-tile__help-wrapper"
+                onMouseEnter={() => setActiveTooltip('volatility')}
+                onMouseLeave={() => setActiveTooltip(null)}
               >
-                <HelpCircle size={15} />
-              </button>
-              {activeTooltip === 'volatility' && (
-                <div className="metric-tile__popover">
-                  <div className="metric-tile__popover-header">
-                    <span>Volatility</span>
-                    <button type="button" onClick={() => setActiveTooltip(null)}>
-                      <X size={13} />
-                    </button>
+                <button
+                  type="button"
+                  className="metric-tile__help-button"
+                  onClick={() => toggleTooltip('volatility')}
+                  onFocus={() => setActiveTooltip('volatility')}
+                  onBlur={() => setActiveTooltip(null)}
+                  aria-label="Learn about Volatility"
+                >
+                  <HelpCircle size={15} />
+                </button>
+                {activeTooltip === 'volatility' && (
+                  <div className="metric-tile__popover" role="tooltip">
+                    <div className="metric-tile__popover-header">
+                      <span>Volatility</span>
+                      <button type="button" onClick={() => setActiveTooltip(null)}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <p>
+                      The annualized standard deviation of the portfolio’s daily returns. Higher volatility means returns
+                      varied more widely over time.
+                    </p>
                   </div>
-                  <p>
-                    The annualized standard deviation of the portfolio’s daily returns. Higher volatility means returns
-                    varied more widely over time.
-                  </p>
-                </div>
-              )}
+                )}
+              </div>
             </dt>
             <dd className="metric-tile__value">
               <div className="metric-tile__stack">
@@ -229,58 +245,66 @@ export const PerformanceAnalysisGrid: React.FC<PerformanceAnalysisGridProps> = (
           <div className="metric-tile">
             <dt className="metric-tile__label">
               <span>Risk-adjusted return</span>
-              <button
-                type="button"
-                className="metric-tile__help-button"
-                onClick={() => toggleTooltip('sharpe')}
-                aria-label="Learn about Risk-adjusted return"
+              <div
+                className="metric-tile__help-wrapper"
+                onMouseEnter={() => setActiveTooltip('sharpe')}
+                onMouseLeave={() => setActiveTooltip(null)}
               >
-                <HelpCircle size={15} />
-              </button>
-              {activeTooltip === 'sharpe' && (
-                <div className="metric-tile__popover">
-                  <div className="metric-tile__popover-header">
-                    <span>Sharpe Ratio Ratings</span>
-                    <button type="button" onClick={() => setActiveTooltip(null)}>
-                      <X size={13} />
-                    </button>
+                <button
+                  type="button"
+                  className="metric-tile__help-button"
+                  onClick={() => toggleTooltip('sharpe')}
+                  onFocus={() => setActiveTooltip('sharpe')}
+                  onBlur={() => setActiveTooltip(null)}
+                  aria-label="Learn about Risk-adjusted return"
+                >
+                  <HelpCircle size={15} />
+                </button>
+                {activeTooltip === 'sharpe' && (
+                  <div className="metric-tile__popover" role="tooltip">
+                    <div className="metric-tile__popover-header">
+                      <span>Sharpe Ratio Ratings</span>
+                      <button type="button" onClick={() => setActiveTooltip(null)}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <p>
+                      Sharpe ratio is the portfolio’s excess return above the risk-free rate (2.5%), divided by its
+                      volatility.
+                    </p>
+                    <table className="dashboard-tooltip__table">
+                      <thead>
+                        <tr>
+                          <th>Sharpe</th>
+                          <th>Rating</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>&lt; 0</td>
+                          <td>Below risk-free</td>
+                        </tr>
+                        <tr>
+                          <td>0 – &lt;0.50</td>
+                          <td>Low</td>
+                        </tr>
+                        <tr>
+                          <td>0.50 – &lt;1.00</td>
+                          <td>Moderate</td>
+                        </tr>
+                        <tr>
+                          <td>1.00 – &lt;2.00</td>
+                          <td>Good</td>
+                        </tr>
+                        <tr>
+                          <td>≥ 2.00</td>
+                          <td>Excellent</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
-                  <p>
-                    Sharpe ratio is the portfolio’s excess return above the risk-free rate (2.5%), divided by its
-                    volatility.
-                  </p>
-                  <table className="dashboard-tooltip__table">
-                    <thead>
-                      <tr>
-                        <th>Sharpe</th>
-                        <th>Rating</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>&lt; 0</td>
-                        <td>Below risk-free</td>
-                      </tr>
-                      <tr>
-                        <td>0 – &lt;0.50</td>
-                        <td>Low</td>
-                      </tr>
-                      <tr>
-                        <td>0.50 – &lt;1.00</td>
-                        <td>Moderate</td>
-                      </tr>
-                      <tr>
-                        <td>1.00 – &lt;2.00</td>
-                        <td>Good</td>
-                      </tr>
-                      <tr>
-                        <td>≥ 2.00</td>
-                        <td>Excellent</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                )}
+              </div>
             </dt>
             <dd className="metric-tile__value">
               <div className="metric-tile__stack">
@@ -296,28 +320,36 @@ export const PerformanceAnalysisGrid: React.FC<PerformanceAnalysisGridProps> = (
           <div className="metric-tile">
             <dt className="metric-tile__label">
               <span>Active return</span>
-              <button
-                type="button"
-                className="metric-tile__help-button"
-                onClick={() => toggleTooltip('activeReturn')}
-                aria-label="Learn about Active return"
+              <div
+                className="metric-tile__help-wrapper"
+                onMouseEnter={() => setActiveTooltip('activeReturn')}
+                onMouseLeave={() => setActiveTooltip(null)}
               >
-                <HelpCircle size={15} />
-              </button>
-              {activeTooltip === 'activeReturn' && (
-                <div className="metric-tile__popover">
-                  <div className="metric-tile__popover-header">
-                    <span>Active Return</span>
-                    <button type="button" onClick={() => setActiveTooltip(null)}>
-                      <X size={13} />
-                    </button>
+                <button
+                  type="button"
+                  className="metric-tile__help-button"
+                  onClick={() => toggleTooltip('activeReturn')}
+                  onFocus={() => setActiveTooltip('activeReturn')}
+                  onBlur={() => setActiveTooltip(null)}
+                  aria-label="Learn about Active return"
+                >
+                  <HelpCircle size={15} />
+                </button>
+                {activeTooltip === 'activeReturn' && (
+                  <div className="metric-tile__popover" role="tooltip">
+                    <div className="metric-tile__popover-header">
+                      <span>Active Return</span>
+                      <button type="button" onClick={() => setActiveTooltip(null)}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <p>
+                      Portfolio return minus benchmark return on the same annualized basis. Positive means outperforming
+                      the benchmark.
+                    </p>
                   </div>
-                  <p>
-                    Portfolio return minus benchmark return on the same annualized basis. Positive means outperforming
-                    the benchmark.
-                  </p>
-                </div>
-              )}
+                )}
+              </div>
             </dt>
             <dd className="metric-tile__value">
               <div className="metric-tile__stack">
@@ -337,25 +369,33 @@ export const PerformanceAnalysisGrid: React.FC<PerformanceAnalysisGridProps> = (
           <div className="metric-tile">
             <dt className="metric-tile__label">
               <span>Net contributions</span>
-              <button
-                type="button"
-                className="metric-tile__help-button"
-                onClick={() => toggleTooltip('netContributions')}
-                aria-label="Learn about Net contributions"
+              <div
+                className="metric-tile__help-wrapper"
+                onMouseEnter={() => setActiveTooltip('netContributions')}
+                onMouseLeave={() => setActiveTooltip(null)}
               >
-                <HelpCircle size={15} />
-              </button>
-              {activeTooltip === 'netContributions' && (
-                <div className="metric-tile__popover">
-                  <div className="metric-tile__popover-header">
-                    <span>Net Contributions</span>
-                    <button type="button" onClick={() => setActiveTooltip(null)}>
-                      <X size={13} />
-                    </button>
+                <button
+                  type="button"
+                  className="metric-tile__help-button"
+                  onClick={() => toggleTooltip('netContributions')}
+                  onFocus={() => setActiveTooltip('netContributions')}
+                  onBlur={() => setActiveTooltip(null)}
+                  aria-label="Learn about Net contributions"
+                >
+                  <HelpCircle size={15} />
+                </button>
+                {activeTooltip === 'netContributions' && (
+                  <div className="metric-tile__popover" role="tooltip">
+                    <div className="metric-tile__popover-header">
+                      <span>Net Contributions</span>
+                      <button type="button" onClick={() => setActiveTooltip(null)}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <p>External deposits and transferred-in assets minus withdrawals and transferred-out assets.</p>
                   </div>
-                  <p>External deposits and transferred-in assets minus withdrawals and transferred-out assets.</p>
-                </div>
-              )}
+                )}
+              </div>
             </dt>
             <dd className="metric-tile__value">
               <span className="currency">{formatCurrency(metrics.totalInvested, currency)}</span>
@@ -366,27 +406,35 @@ export const PerformanceAnalysisGrid: React.FC<PerformanceAnalysisGridProps> = (
           <div className="metric-tile">
             <dt className="metric-tile__label">
               <span>Price contribution</span>
-              <button
-                type="button"
-                className="metric-tile__help-button"
-                onClick={() => toggleTooltip('priceContribution')}
-                aria-label="Learn about Price contribution"
+              <div
+                className="metric-tile__help-wrapper"
+                onMouseEnter={() => setActiveTooltip('priceContribution')}
+                onMouseLeave={() => setActiveTooltip(null)}
               >
-                <HelpCircle size={15} />
-              </button>
-              {activeTooltip === 'priceContribution' && (
-                <div className="metric-tile__popover">
-                  <div className="metric-tile__popover-header">
-                    <span>Price Contribution</span>
-                    <button type="button" onClick={() => setActiveTooltip(null)}>
-                      <X size={13} />
-                    </button>
+                <button
+                  type="button"
+                  className="metric-tile__help-button"
+                  onClick={() => toggleTooltip('priceContribution')}
+                  onFocus={() => setActiveTooltip('priceContribution')}
+                  onBlur={() => setActiveTooltip(null)}
+                  aria-label="Learn about Price contribution"
+                >
+                  <HelpCircle size={15} />
+                </button>
+                {activeTooltip === 'priceContribution' && (
+                  <div className="metric-tile__popover" role="tooltip">
+                    <div className="metric-tile__popover-header">
+                      <span>Price Contribution</span>
+                      <button type="button" onClick={() => setActiveTooltip(null)}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <p>
+                      The portion of portfolio return attributed to changes in asset market values and capital gains.
+                    </p>
                   </div>
-                  <p>
-                    The portion of portfolio return attributed to changes in asset market values and capital gains.
-                  </p>
-                </div>
-              )}
+                )}
+              </div>
             </dt>
             <dd className="metric-tile__value">
               <div className="metric-tile__stack">
@@ -414,25 +462,33 @@ export const PerformanceAnalysisGrid: React.FC<PerformanceAnalysisGridProps> = (
           <div className="metric-tile">
             <dt className="metric-tile__label">
               <span>Income contribution</span>
-              <button
-                type="button"
-                className="metric-tile__help-button"
-                onClick={() => toggleTooltip('incomeContribution')}
-                aria-label="Learn about Income contribution"
+              <div
+                className="metric-tile__help-wrapper"
+                onMouseEnter={() => setActiveTooltip('incomeContribution')}
+                onMouseLeave={() => setActiveTooltip(null)}
               >
-                <HelpCircle size={15} />
-              </button>
-              {activeTooltip === 'incomeContribution' && (
-                <div className="metric-tile__popover">
-                  <div className="metric-tile__popover-header">
-                    <span>Income Contribution</span>
-                    <button type="button" onClick={() => setActiveTooltip(null)}>
-                      <X size={13} />
-                    </button>
+                <button
+                  type="button"
+                  className="metric-tile__help-button"
+                  onClick={() => toggleTooltip('incomeContribution')}
+                  onFocus={() => setActiveTooltip('incomeContribution')}
+                  onBlur={() => setActiveTooltip(null)}
+                  aria-label="Learn about Income contribution"
+                >
+                  <HelpCircle size={15} />
+                </button>
+                {activeTooltip === 'incomeContribution' && (
+                  <div className="metric-tile__popover" role="tooltip">
+                    <div className="metric-tile__popover-header">
+                      <span>Income Contribution</span>
+                      <button type="button" onClick={() => setActiveTooltip(null)}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <p>The portion of return attributed to recorded dividends, interest, and coupon payouts.</p>
                   </div>
-                  <p>The portion of return attributed to recorded dividends, interest, and coupon payouts.</p>
-                </div>
-              )}
+                )}
+              </div>
             </dt>
             <dd className="metric-tile__value">
               <div className="metric-tile__stack">
@@ -460,28 +516,36 @@ export const PerformanceAnalysisGrid: React.FC<PerformanceAnalysisGridProps> = (
           <div className="metric-tile">
             <dt className="metric-tile__label">
               <span>Cost contribution</span>
-              <button
-                type="button"
-                className="metric-tile__help-button"
-                onClick={() => toggleTooltip('costContribution')}
-                aria-label="Learn about Cost contribution"
+              <div
+                className="metric-tile__help-wrapper"
+                onMouseEnter={() => setActiveTooltip('costContribution')}
+                onMouseLeave={() => setActiveTooltip(null)}
               >
-                <HelpCircle size={15} />
-              </button>
-              {activeTooltip === 'costContribution' && (
-                <div className="metric-tile__popover">
-                  <div className="metric-tile__popover-header">
-                    <span>Cost Contribution</span>
-                    <button type="button" onClick={() => setActiveTooltip(null)}>
-                      <X size={13} />
-                    </button>
+                <button
+                  type="button"
+                  className="metric-tile__help-button"
+                  onClick={() => toggleTooltip('costContribution')}
+                  onFocus={() => setActiveTooltip('costContribution')}
+                  onBlur={() => setActiveTooltip(null)}
+                  aria-label="Learn about Cost contribution"
+                >
+                  <HelpCircle size={15} />
+                </button>
+                {activeTooltip === 'costContribution' && (
+                  <div className="metric-tile__popover" role="tooltip">
+                    <div className="metric-tile__popover-header">
+                      <span>Cost Contribution</span>
+                      <button type="button" onClick={() => setActiveTooltip(null)}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                    <p>
+                      The portion of return attributed to recorded broker commissions, transaction fees, and custody
+                      costs.
+                    </p>
                   </div>
-                  <p>
-                    The portion of return attributed to recorded broker commissions, transaction fees, and custody
-                    costs.
-                  </p>
-                </div>
-              )}
+                )}
+              </div>
             </dt>
             <dd className="metric-tile__value">
               <div className="metric-tile__stack">

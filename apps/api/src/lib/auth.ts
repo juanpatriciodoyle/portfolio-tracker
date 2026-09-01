@@ -14,6 +14,14 @@ export function generateToken(userId: string): string {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '30d' });
 }
 
+export function verifyToken(token: string): { userId: string } | null {
+  try {
+    return jwt.verify(token, JWT_SECRET) as { userId: string };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Express middleware to verify JWT Authorization token
  */
@@ -29,11 +37,11 @@ export function authenticateToken(
     return res.status(401).json({ error: 'Access denied. Authentication token required.' });
   }
 
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-    req.userId = decoded.userId;
-    next();
-  } catch (err) {
+  const decoded = verifyToken(token);
+  if (!decoded) {
     return res.status(403).json({ error: 'Invalid or expired authentication token.' });
   }
+
+  req.userId = decoded.userId;
+  next();
 }

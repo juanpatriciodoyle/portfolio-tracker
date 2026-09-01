@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, LogOut, Lock } from 'lucide-react';
+import { Plus, LogOut } from 'lucide-react';
 import TransactionForm from './components/TransactionForm';
 import SideDrawer from './components/SideDrawer';
 import LoginModal from './components/LoginModal';
@@ -84,17 +84,27 @@ function App() {
   });
 
   const getGreetingName = () => {
-    if (!user) return 'Investor';
+    if (!user) return 'Joe';
+    if (
+      user.email === 'demo@portfolio.local' ||
+      user.name === 'Joe' ||
+      user.name?.toLowerCase().includes('demo')
+    ) {
+      return 'Joe';
+    }
     if (user.name && !['Passkey User', 'Passkey', 'Privacy User', 'User'].includes(user.name)) {
       return user.name.split(' ')[0];
     }
     if (user.email && !user.email.includes('privacy.local') && !user.email.includes('passkey.local')) {
       const raw = user.email.split('@')[0];
+      if (raw.toLowerCase() === 'demo') {
+        return 'Joe';
+      }
       if (raw.toLowerCase() !== 'user' && raw.toLowerCase() !== 'passkey') {
         return raw.charAt(0).toUpperCase() + raw.slice(1);
       }
     }
-    return user.name || 'Investor';
+    return user.name || 'Joe';
   };
 
   const fetchStats = async () => {
@@ -183,7 +193,7 @@ function App() {
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '16px 40px',
-          borderBottom: '1px solid #1E1E22',
+          borderBottom: '1px solid var(--border-card-color)',
           backgroundColor: 'var(--bg-card)',
           position: 'sticky',
           top: 0,
@@ -191,7 +201,7 @@ function App() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.5px', color: '#F4F4F5' }}>Portfolio Tracker</span>
+          <span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.5px', color: 'var(--text-heading)' }}>Portfolio Tracker</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -199,7 +209,7 @@ function App() {
           <button
             onClick={() => setIsRealInflationMode(!isRealInflationMode)}
             style={{
-              border: isRealInflationMode ? '1px solid #F4F4F5' : '1px solid #27272A',
+              border: isRealInflationMode ? '1px solid var(--text-heading)' : '1px solid var(--border-subtle-color)',
               borderRadius: '8px',
               padding: '8px 14px',
               fontSize: '13px',
@@ -208,8 +218,8 @@ function App() {
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              backgroundColor: isRealInflationMode ? '#27272A' : '#161618',
-              color: isRealInflationMode ? '#FFFFFF' : 'var(--text-secondary)',
+              backgroundColor: isRealInflationMode ? 'var(--border-subtle-color)' : 'var(--bg-input)',
+              color: isRealInflationMode ? 'var(--text-primary)' : 'var(--text-secondary)',
             }}
           >
             <span>{isRealInflationMode ? 'Inflation Adjusted 🛡️' : 'Adjust for Inflation? 🎈'}</span>
@@ -222,12 +232,12 @@ function App() {
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              backgroundColor: '#161618',
-              border: '1px solid #27272A',
+              backgroundColor: 'var(--bg-input)',
+              border: '1px solid var(--border-subtle-color)',
               borderRadius: '8px',
               padding: '8px 12px',
               fontSize: '13px',
-              color: '#F4F4F5',
+              color: 'var(--text-heading)',
               cursor: 'pointer',
             }}
           >
@@ -241,15 +251,15 @@ function App() {
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              backgroundColor: '#2563EB',
-              color: '#FFFFFF',
+              backgroundColor: 'var(--accent-primary)',
+              color: 'var(--text-primary)',
               border: 'none',
               borderRadius: '8px',
               padding: '9px 16px',
               fontSize: '14px',
               fontWeight: 600,
               cursor: 'pointer',
-              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+              boxShadow: '0 4px 14px var(--accent-blue-glow)',
             }}
           >
             <Plus size={16} /> Log Transaction
@@ -264,10 +274,10 @@ function App() {
               justifyContent: 'center',
               width: '36px',
               height: '36px',
-              backgroundColor: '#161618',
-              border: '1px solid #27272A',
+              backgroundColor: 'var(--bg-input)',
+              border: '1px solid var(--border-subtle-color)',
               borderRadius: '8px',
-              color: '#A1A1AA',
+              color: 'var(--text-secondary)',
               cursor: 'pointer',
             }}
           >
@@ -281,7 +291,7 @@ function App() {
         <div style={{ maxWidth: '1200px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
             <h1 style={{ fontSize: '26px', fontWeight: 700, margin: 0, letterSpacing: '-0.5px', color: '#F4F4F5' }}>
-              How's the day going, {getGreetingName()}? 👋
+              How's your day going, {getGreetingName()}? 👋🏼
             </h1>
 
             {/* Reporting Period Rail Toolbar */}
@@ -383,90 +393,8 @@ function App() {
             </div>
           </div>
 
-          {/* Open Active Positions */}
-          {stats.positions.length > 0 && (
-            <div style={{ backgroundColor: 'var(--bg-card)', border: 'var(--border-card)', borderRadius: '14px', padding: '20px' }}>
-              <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600, color: '#F4F4F5' }}>
-                Active Open Investments ({stats.positions.length})
-              </h3>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid #1E1E22', color: '#A1A1AA', fontSize: '11px', textTransform: 'uppercase' }}>
-                      <th style={{ padding: '10px 14px' }}>Symbol</th>
-                      <th style={{ padding: '10px 14px' }}>Asset Class</th>
-                      <th style={{ padding: '10px 14px' }}>Region / Sector</th>
-                      <th style={{ padding: '10px 14px', textAlign: 'right' }}>Money Invested (€)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stats.positions.map((pos) => (
-                      <tr key={pos.id} style={{ borderBottom: '1px solid #1E1E22' }}>
-                        <td style={{ padding: '12px 14px', fontWeight: 600, color: '#F4F4F5' }}>{pos.symbol}</td>
-                        <td style={{ padding: '12px 14px', color: '#A1A1AA' }}>{pos.assetClass}</td>
-                        <td style={{ padding: '12px 14px', color: '#A1A1AA' }}>{pos.region} • {pos.sector}</td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#F4F4F5' }}>
-                          €{pos.investedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Sold Assets Profit Table */}
-          {stats.soldAssets.length > 0 && (
-            <div style={{ backgroundColor: 'var(--bg-card)', border: 'var(--border-card)', borderRadius: '14px', padding: '20px' }}>
-              <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600, color: '#F4F4F5', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Lock size={16} color="#10B981" /> Profit from Sold Assets ({stats.soldAssets.length})
-              </h3>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid #1E1E22', color: '#A1A1AA', fontSize: '11px', textTransform: 'uppercase' }}>
-                      <th style={{ padding: '10px 14px' }}>Date Sold</th>
-                      <th style={{ padding: '10px 14px' }}>Symbol</th>
-                      <th style={{ padding: '10px 14px', textAlign: 'right' }}>Money Invested</th>
-                      <th style={{ padding: '10px 14px', textAlign: 'right' }}>Money Received</th>
-                      <th style={{ padding: '10px 14px', textAlign: 'right' }}>Profit (€)</th>
-                      <th style={{ padding: '10px 14px', textAlign: 'right' }}>Holding Inflation</th>
-                      <th style={{ padding: '10px 14px', textAlign: 'right' }}>Real Profit (€)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stats.soldAssets.map((gain) => (
-                      <tr key={gain.id} style={{ borderBottom: '1px solid #1E1E22' }}>
-                        <td style={{ padding: '12px 14px', color: '#A1A1AA' }}>
-                          {new Date(gain.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </td>
-                        <td style={{ padding: '12px 14px', fontWeight: 600, color: '#F4F4F5' }}>{gain.symbol}</td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', color: '#A1A1AA' }}>
-                          €{gain.investedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', color: '#F4F4F5' }}>
-                          €{gain.returnedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: gain.soldProfit >= 0 ? '#10B981' : '#F43F5E' }}>
-                          {gain.soldProfit >= 0 ? '+' : ''}€{gain.soldProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({gain.soldProfitPercent.toFixed(1)}%)
-                        </td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', color: '#A1A1AA' }}>
-                          {gain.holdingInflationPercent.toFixed(1)}%
-                        </td>
-                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: gain.realProfitEuros >= 0 ? '#10B981' : '#F43F5E' }}>
-                          {gain.realProfitEuros >= 0 ? '+' : ''}€{gain.realProfitEuros.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
           {/* Transaction History Log Table */}
-          <TransactionHistoryTable key={tableKey} />
+          <TransactionHistoryTable key={tableKey} userId={user?.id} />
         </div>
       </main>
 
@@ -507,7 +435,7 @@ const cardHeaderStyle = {
   justifyContent: 'space-between',
   fontSize: '12px',
   fontWeight: 600,
-  color: '#A1A1AA',
+  color: 'var(--text-secondary)',
   textTransform: 'uppercase' as const,
   letterSpacing: '0.5px',
 };
@@ -515,7 +443,7 @@ const cardHeaderStyle = {
 const cardValueStyle = {
   fontSize: '24px',
   fontWeight: 700,
-  color: '#F4F4F5',
+  color: 'var(--text-heading)',
   letterSpacing: '-0.5px',
   marginTop: '10px',
 };

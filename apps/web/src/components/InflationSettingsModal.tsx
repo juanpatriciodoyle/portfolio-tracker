@@ -80,11 +80,8 @@ export default function InflationSettingsModal({
     <div
       style={{
         position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+        inset: 0,
+        backgroundColor: 'var(--bg-modal-overlay)',
         backdropFilter: 'blur(8px)',
         display: 'flex',
         alignItems: 'center',
@@ -98,7 +95,7 @@ export default function InflationSettingsModal({
           width: '100%',
           maxWidth: '480px',
           backgroundColor: 'var(--bg-card)',
-          border: '1px solid #27272A',
+          border: '1px solid var(--border-subtle-color)',
           borderRadius: '16px',
           padding: '28px',
           boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
@@ -110,8 +107,8 @@ export default function InflationSettingsModal({
               width: '40px',
               height: '40px',
               borderRadius: '10px',
-              backgroundColor: 'rgba(244, 63, 94, 0.15)',
-              color: '#F43F5E',
+              backgroundColor: 'var(--color-loss-bg)',
+              color: 'var(--color-loss)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -129,7 +126,7 @@ export default function InflationSettingsModal({
           </div>
         </div>
 
-        <div style={{ marginBottom: '20px', padding: '12px 14px', borderRadius: '10px', backgroundColor: '#000000', border: '1px solid #27272A', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ marginBottom: '20px', padding: '12px 14px', borderRadius: '10px', backgroundColor: 'var(--bg-canvas)', border: '1px solid var(--border-subtle-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>🇪🇸 Spain Annual CPI Inflation</div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Monthly Eurostat / INE sync service</div>
@@ -141,9 +138,9 @@ export default function InflationSettingsModal({
             style={{
               padding: '6px 12px',
               borderRadius: '6px',
-              border: '1px solid #27272A',
-              backgroundColor: '#161618',
-              color: '#F4F4F5',
+              border: '1px solid var(--border-subtle-color)',
+              backgroundColor: 'var(--bg-input)',
+              color: 'var(--text-heading)',
               fontSize: '12px',
               fontWeight: 600,
               cursor: 'pointer',
@@ -168,7 +165,7 @@ export default function InflationSettingsModal({
                 width: '100%',
                 padding: '12px',
                 borderRadius: '8px',
-                border: '1px solid #27272A',
+                border: '1px solid var(--border-subtle-color)',
                 backgroundColor: 'var(--bg-input)',
                 color: 'var(--text-primary)',
                 fontSize: '14px',
@@ -199,7 +196,7 @@ export default function InflationSettingsModal({
                   width: '100%',
                   padding: '12px 14px',
                   borderRadius: '8px',
-                  border: '1px solid #27272A',
+                  border: '1px solid var(--border-subtle-color)',
                   backgroundColor: 'var(--bg-input)',
                   color: 'var(--text-primary)',
                   fontSize: '14px',
@@ -218,7 +215,7 @@ export default function InflationSettingsModal({
                 flex: 1,
                 padding: '12px',
                 borderRadius: '8px',
-                border: '1px solid #27272A',
+                border: '1px solid var(--border-subtle-color)',
                 backgroundColor: 'transparent',
                 color: 'var(--text-secondary)',
                 fontWeight: 600,
@@ -236,7 +233,7 @@ export default function InflationSettingsModal({
                 borderRadius: '8px',
                 border: 'none',
                 backgroundColor: 'var(--accent-primary)',
-                color: '#FFFFFF',
+                color: 'var(--text-primary)',
                 fontWeight: 600,
                 cursor: 'pointer',
                 display: 'flex',

@@ -13,30 +13,29 @@ const privacy_1 = require("./lib/privacy");
 const auth_1 = require("./lib/auth");
 const passkey_1 = require("./lib/passkey");
 const financialFetcher_1 = require("./lib/financialFetcher");
+const demoSeed_1 = require("./lib/demoSeed");
 dotenv_1.default.config();
 const googleClient = new google_auth_library_1.OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const app = (0, express_1.default)();
 app.use(express_1.default.json());
 const PORT = process.env.PORT || 3001;
+function getUserIdFromReq(req) {
+    if (req.query.userId && typeof req.query.userId === 'string') {
+        return req.query.userId;
+    }
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        const decoded = (0, auth_1.verifyToken)(token);
+        if (decoded?.userId) {
+            return decoded.userId;
+        }
+    }
+    return undefined;
+}
 async function seedAdmin() {
     try {
-        const adminEmail = 'demo@portfolio.local';
-        let admin = await db_1.db.user.findUnique({
-            where: { email: adminEmail },
-        });
-        if (!admin) {
-            admin = await db_1.db.user.create({
-                data: {
-                    email: adminEmail,
-                    name: 'Demo Account',
-                    cashBalance: 0.0,
-                    country: 'Spain',
-                    baseCurrency: 'EUR',
-                    annualInflationRate: 2.8,
-                },
-            });
-            console.log('✅ Default demo user seeded with $0 cash baseline.');
-        }
+        await (0, demoSeed_1.ensureDemoUserWithData)();
         await (0, inflationService_1.syncCountryInflationHistory)('Spain');
     }
     catch (error) {
@@ -64,7 +63,7 @@ app.get('/api/market/search', async (req, res) => {
 // GET /api/portfolio/stats - Return real portfolio statistics for user
 app.get('/api/portfolio/stats', async (req, res) => {
     try {
-        const userId = req.query.userId || undefined;
+        const userId = getUserIdFromReq(req);
         const overview = await (0, pnlEngine_1.getPortfolioOverview)(userId);
         return res.json(overview);
     }
@@ -73,10 +72,34 @@ app.get('/api/portfolio/stats', async (req, res) => {
         return res.status(500).json({ error: 'Internal server error calculating portfolio stats.' });
     }
 });
+// GET /api/portfolio/history - Return real live historical time series for user
+app.get('/api/portfolio/history', async (req, res) => {
+    try {
+        const userId = getUserIdFromReq(req);
+        const history = await (0, pnlEngine_1.getPortfolioHistory)(userId);
+        return res.json(history);
+    }
+    catch (error) {
+        console.error('Error calculating portfolio history:', error);
+        return res.status(500).json({ error: 'Internal server error calculating portfolio history.' });
+    }
+});
+// GET /api/portfolio/performance-periods - Return monthly and annual returns for bar chart & heatmap
+app.get('/api/portfolio/performance-periods', async (req, res) => {
+    try {
+        const userId = getUserIdFromReq(req);
+        const periods = await (0, pnlEngine_1.getPortfolioPerformancePeriods)(userId);
+        return res.json(periods);
+    }
+    catch (error) {
+        console.error('Error calculating performance periods:', error);
+        return res.status(500).json({ error: 'Internal server error calculating performance periods.' });
+    }
+});
 // GET /api/transactions - Return logged transaction history for user
 app.get('/api/transactions', async (req, res) => {
     try {
-        const userId = req.query.userId || undefined;
+        const userId = getUserIdFromReq(req);
         let targetUserId = userId;
         if (!targetUserId) {
             const admin = await db_1.db.user.findFirst();
@@ -303,6 +326,28 @@ app.post('/api/auth/passkey/verify', async (req, res) => {
     catch (error) {
         console.error('Passkey Verification Error:', error);
         return res.status(400).json({ error: error.message || 'Passkey verification failed.' });
+    }
+});
+// POST /api/auth/demo - Sneak peek demo account login
+app.post('/api/auth/demo', async (req, res) => {
+    try {
+        const demoUser = await (0, demoSeed_1.ensureDemoUserWithData)();
+        const token = (0, auth_1.generateToken)(demoUser.id);
+        return res.status(200).json({
+            success: true,
+            token,
+            user: {
+                id: demoUser.id,
+                email: demoUser.email || 'demo@portfolio.local',
+                name: 'Joe',
+                avatarUrl: demoUser.avatarUrl,
+                country: demoUser.country,
+            },
+        });
+    }
+    catch (error) {
+        console.error('Demo Auth Error:', error);
+        return res.status(500).json({ error: 'Failed to initialize demo portfolio.' });
     }
 });
 app.listen(PORT, async () => {

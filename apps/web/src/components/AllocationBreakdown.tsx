@@ -23,17 +23,16 @@ interface AllocationBreakdownProps {
 type TabType = 'sectors' | 'regions' | 'assetClasses' | 'holdings';
 
 const COLOR_PALETTE = [
-  '#3B82F6', // Blue
-  '#8B5CF6', // Purple
-  '#10B981', // Emerald
-  '#F59E0B', // Amber
-  '#EC4899', // Pink
-  '#06B6D4', // Cyan
-  '#6366F1', // Indigo
-  '#14B8A6', // Teal
-  '#F43F5E', // Rose
-  '#84CC16', // Lime
-  '#64748B', // Slate
+  'var(--chart-color-1)',
+  'var(--chart-color-2)',
+  'var(--chart-color-3)',
+  'var(--chart-color-4)',
+  'var(--chart-color-5)',
+  'var(--chart-color-6)',
+  'var(--chart-color-7)',
+  'var(--chart-color-8)',
+  'var(--chart-color-9)',
+  'var(--chart-color-10)',
 ];
 
 export const AllocationBreakdown: React.FC<AllocationBreakdownProps> = ({
@@ -171,7 +170,7 @@ export const AllocationBreakdown: React.FC<AllocationBreakdownProps> = ({
             <div className="dashboard-allocation__donut-wrap">
               <svg width="280" height="280" viewBox="0 0 280 280" className="dashboard-allocation__donut-svg">
                 {donutArcs.length === 0 ? (
-                  <circle cx="140" cy="140" r="100" fill="none" stroke="#1E1E24" strokeWidth="32" />
+                  <circle cx="140" cy="140" r="100" fill="none" stroke="var(--border-divider-color)" strokeWidth="32" />
                 ) : (
                   donutArcs.map((arc, i) => (
                     <path

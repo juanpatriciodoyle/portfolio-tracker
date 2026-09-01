@@ -2,12 +2,18 @@ import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import { OAuth2Client } from 'google-auth-library';
 import { db } from './lib/db';
-import { getPortfolioOverview, getPortfolioHistory, getPortfolioPerformancePeriods, processTransaction } from './lib/pnlEngine';
+import {
+  getPortfolioOverview,
+  getPortfolioHistory,
+  getPortfolioPerformancePeriods,
+  processTransaction,
+} from './lib/pnlEngine';
 import { syncCountryInflationHistory } from './lib/inflationService';
 import { hashUserIdentity } from './lib/privacy';
-import { generateToken, authenticateToken, AuthenticatedRequest } from './lib/auth';
+import { generateToken, authenticateToken, AuthenticatedRequest, verifyToken } from './lib/auth';
 import { getPasskeyOptions, verifyPasskeyCredential } from './lib/passkey';
 import { searchMarketTickers } from './lib/financialFetcher';
+import { ensureDemoUserWithData } from './lib/demoSeed';
 
 dotenv.config();
 
@@ -18,27 +24,24 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
 
+function getUserIdFromReq(req: Request): string | undefined {
+  if (req.query.userId && typeof req.query.userId === 'string') {
+    return req.query.userId;
+  }
+  const authHeader = req.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    const decoded = verifyToken(token);
+    if (decoded?.userId) {
+      return decoded.userId;
+    }
+  }
+  return undefined;
+}
+
 async function seedAdmin() {
   try {
-    const adminEmail = 'demo@portfolio.local';
-    let admin = await db.user.findUnique({
-      where: { email: adminEmail },
-    });
-
-    if (!admin) {
-      admin = await db.user.create({
-        data: {
-          email: adminEmail,
-          name: 'Demo Account',
-          cashBalance: 0.0,
-          country: 'Spain',
-          baseCurrency: 'EUR',
-          annualInflationRate: 2.8,
-        },
-      });
-      console.log('✅ Default demo user seeded with $0 cash baseline.');
-    }
-
+    await ensureDemoUserWithData();
     await syncCountryInflationHistory('Spain');
   } catch (error) {
     console.error('Error seeding demo user:', error);
@@ -67,7 +70,7 @@ app.get('/api/market/search', async (req: Request, res: Response) => {
 // GET /api/portfolio/stats - Return real portfolio statistics for user
 app.get('/api/portfolio/stats', async (req: Request, res: Response) => {
   try {
-    const userId = (req.query.userId as string) || undefined;
+    const userId = getUserIdFromReq(req);
     const overview = await getPortfolioOverview(userId);
     return res.json(overview);
   } catch (error) {
@@ -79,7 +82,7 @@ app.get('/api/portfolio/stats', async (req: Request, res: Response) => {
 // GET /api/portfolio/history - Return real live historical time series for user
 app.get('/api/portfolio/history', async (req: Request, res: Response) => {
   try {
-    const userId = (req.query.userId as string) || undefined;
+    const userId = getUserIdFromReq(req);
     const history = await getPortfolioHistory(userId);
     return res.json(history);
   } catch (error) {
@@ -91,7 +94,7 @@ app.get('/api/portfolio/history', async (req: Request, res: Response) => {
 // GET /api/portfolio/performance-periods - Return monthly and annual returns for bar chart & heatmap
 app.get('/api/portfolio/performance-periods', async (req: Request, res: Response) => {
   try {
-    const userId = (req.query.userId as string) || undefined;
+    const userId = getUserIdFromReq(req);
     const periods = await getPortfolioPerformancePeriods(userId);
     return res.json(periods);
   } catch (error) {
@@ -103,7 +106,7 @@ app.get('/api/portfolio/performance-periods', async (req: Request, res: Response
 // GET /api/transactions - Return logged transaction history for user
 app.get('/api/transactions', async (req: Request, res: Response) => {
   try {
-    const userId = (req.query.userId as string) || undefined;
+    const userId = getUserIdFromReq(req);
     let targetUserId = userId;
     if (!targetUserId) {
       const admin = await db.user.findFirst();
@@ -362,6 +365,29 @@ app.post('/api/auth/passkey/verify', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Passkey Verification Error:', error);
     return res.status(400).json({ error: error.message || 'Passkey verification failed.' });
+  }
+});
+
+// POST /api/auth/demo - Sneak peek demo account login
+app.post('/api/auth/demo', async (req: Request, res: Response) => {
+  try {
+    const demoUser = await ensureDemoUserWithData();
+    const token = generateToken(demoUser.id);
+
+    return res.status(200).json({
+      success: true,
+      token,
+      user: {
+        id: demoUser.id,
+        email: demoUser.email || 'demo@portfolio.local',
+        name: 'Joe',
+        avatarUrl: demoUser.avatarUrl,
+        country: demoUser.country,
+      },
+    });
+  } catch (error) {
+    console.error('Demo Auth Error:', error);
+    return res.status(500).json({ error: 'Failed to initialize demo portfolio.' });
   }
 });
 

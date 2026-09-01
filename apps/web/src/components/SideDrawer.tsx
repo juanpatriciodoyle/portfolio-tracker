@@ -38,7 +38,7 @@ export default function SideDrawer({ isOpen, onClose, children }: SideDrawerProp
           maxWidth: '460px',
           height: '100%',
           backgroundColor: 'var(--bg-card)',
-          borderLeft: '1px solid #1F1F23',
+          borderLeft: '1px solid var(--border-card-color)',
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '-10px 0 30px rgba(0, 0, 0, 0.5)',

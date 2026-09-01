@@ -196,8 +196,8 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
             display: 'grid',
             gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
             borderRadius: '8px',
-            backgroundColor: '#000000',
-            border: '1px solid #1E1E22',
+            backgroundColor: 'var(--bg-canvas)',
+            border: '1px solid var(--border-card-color)',
             padding: '4px',
             gap: '4px',
           }}
@@ -216,8 +216,8 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
               cursor: 'pointer',
               fontWeight: 600,
               fontSize: '12px',
-              backgroundColor: type === 'BOUGHT' ? 'var(--color-success)' : 'transparent',
-              color: type === 'BOUGHT' ? '#FFFFFF' : 'var(--text-secondary)',
+              backgroundColor: type === 'BOUGHT' ? 'var(--color-profit)' : 'transparent',
+              color: type === 'BOUGHT' ? 'var(--text-primary)' : 'var(--text-secondary)',
             }}
           >
             <ArrowUpRight size={14} /> Bought
@@ -237,8 +237,8 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
               cursor: 'pointer',
               fontWeight: 600,
               fontSize: '12px',
-              backgroundColor: type === 'SOLD' ? 'var(--color-danger)' : 'transparent',
-              color: type === 'SOLD' ? '#FFFFFF' : 'var(--text-secondary)',
+              backgroundColor: type === 'SOLD' ? 'var(--color-loss)' : 'transparent',
+              color: type === 'SOLD' ? 'var(--text-primary)' : 'var(--text-secondary)',
             }}
           >
             <ArrowDownLeft size={14} /> Sold
@@ -258,8 +258,8 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
               cursor: 'pointer',
               fontWeight: 600,
               fontSize: '12px',
-              backgroundColor: type === 'DEPOSIT' ? '#854D0E' : 'transparent',
-              color: type === 'DEPOSIT' ? '#FFFFFF' : 'var(--text-secondary)',
+              backgroundColor: type === 'DEPOSIT' ? 'var(--color-deposit)' : 'transparent',
+              color: type === 'DEPOSIT' ? 'var(--text-primary)' : 'var(--text-secondary)',
             }}
           >
             <PlusCircle size={14} /> Deposit
@@ -279,8 +279,8 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
               cursor: 'pointer',
               fontWeight: 600,
               fontSize: '12px',
-              backgroundColor: type === 'WITHDRAWAL' ? '#F59E0B' : 'transparent',
-              color: type === 'WITHDRAWAL' ? '#FFFFFF' : 'var(--text-secondary)',
+              backgroundColor: type === 'WITHDRAWAL' ? 'var(--color-warning)' : 'transparent',
+              color: type === 'WITHDRAWAL' ? 'var(--text-primary)' : 'var(--text-secondary)',
             }}
           >
             <MinusCircle size={14} /> Withdraw
@@ -294,7 +294,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
             <div style={{ position: 'relative' }} ref={searchContainerRef}>
               <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Search size={14} /> Instrument Ticker / Symbol (Type 3+ letters)</span>
-                {isSearching && <span style={{ fontSize: '11px', color: '#60A5FA' }}>Searching live market...</span>}
+                {isSearching && <span style={{ fontSize: '11px', color: 'var(--text-accent)' }}>Searching live market...</span>}
               </label>
               <input
                 type="text"
@@ -319,8 +319,8 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                     right: 0,
                     zIndex: 50,
                     marginTop: '4px',
-                    backgroundColor: '#18181B',
-                    border: '1px solid #27272A',
+                    backgroundColor: 'var(--bg-popover)',
+                    border: '1px solid var(--border-subtle-color)',
                     borderRadius: '8px',
                     maxHeight: '180px',
                     overflowY: 'auto',
@@ -335,20 +335,20 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                       style={{
                         padding: '10px 12px',
                         cursor: 'pointer',
-                        borderBottom: '1px solid #27272A',
+                        borderBottom: '1px solid var(--border-subtle-color)',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
                         fontSize: '13px',
-                        backgroundColor: idx === highlightedIndex ? '#2563EB' : 'transparent',
-                        color: idx === highlightedIndex ? '#FFFFFF' : 'inherit',
+                        backgroundColor: idx === highlightedIndex ? 'var(--accent-primary)' : 'transparent',
+                        color: idx === highlightedIndex ? 'var(--text-primary)' : 'inherit',
                       }}
                     >
                       <div>
-                        <span style={{ fontWeight: 700, color: '#F4F4F5' }}>{item.symbol}</span>
-                        <span style={{ color: '#A1A1AA', marginLeft: '8px', fontSize: '12px' }}>{item.name}</span>
+                        <span style={{ fontWeight: 700, color: 'var(--text-heading)' }}>{item.symbol}</span>
+                        <span style={{ color: 'var(--text-secondary)', marginLeft: '8px', fontSize: '12px' }}>{item.name}</span>
                       </div>
-                      <span style={{ fontSize: '11px', color: '#10B981', backgroundColor: '#064E3B', padding: '2px 6px', borderRadius: '4px' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--color-profit)', backgroundColor: 'var(--color-profit-bg)', padding: '2px 6px', borderRadius: '4px' }}>
                         {item.assetClass}
                       </span>
                     </div>
@@ -487,9 +487,9 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
               borderRadius: '8px',
               fontSize: '13px',
               fontWeight: 500,
-              backgroundColor: status.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)',
-              color: status.type === 'success' ? 'var(--color-success)' : 'var(--color-danger)',
-              border: status.type === 'success' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(244, 63, 94, 0.3)',
+              backgroundColor: status.type === 'success' ? 'var(--color-profit-bg)' : 'var(--color-loss-bg)',
+              color: status.type === 'success' ? 'var(--color-profit)' : 'var(--color-loss)',
+              border: status.type === 'success' ? '1px solid var(--color-profit-glow)' : '1px solid var(--color-loss-glow)',
             }}
           >
             {status.message}
@@ -506,12 +506,12 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
             borderRadius: '8px',
             border: 'none',
             backgroundColor: 'var(--accent-primary)',
-            color: '#FFFFFF',
+            color: 'var(--text-primary)',
             fontWeight: 700,
             fontSize: '14px',
             cursor: isSubmitting ? 'not-allowed' : 'pointer',
             opacity: isSubmitting ? 0.7 : 1,
-            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+            boxShadow: '0 4px 14px var(--accent-blue-glow)',
           }}
         >
           {isSubmitting ? 'Confirming...' : 'Confirm'}
@@ -525,7 +525,7 @@ const inputStyle = {
   width: '100%',
   padding: '10px 12px',
   borderRadius: '8px',
-  border: '1px solid #1E1E22',
+  border: '1px solid var(--border-card-color)',
   backgroundColor: 'var(--bg-input)',
   color: 'var(--text-primary)',
   fontSize: '14px',

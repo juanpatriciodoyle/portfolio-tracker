@@ -58,7 +58,12 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
         const url = userId
           ? `/api/portfolio/performance-periods?userId=${userId}`
           : '/api/portfolio/performance-periods';
-        const res = await fetch(url);
+        const token = localStorage.getItem('auth_token');
+        const headers: Record<string, string> = {};
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch(url, { headers });
         if (res.ok) {
           const data = await res.json();
           setPeriods(data);
@@ -112,8 +117,8 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
   const getHeatmapColorStyles = (item: PerformancePeriodItem | null) => {
     if (!item) {
       return {
-        background: '#161618',
-        color: '#71717A',
+        background: 'var(--bg-input)',
+        color: 'var(--text-muted)',
       };
     }
 
@@ -123,22 +128,22 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
 
     if (Math.abs(metric) < 0.0001) {
       return {
-        background: '#1E1E24',
-        color: '#71717A',
+        background: 'var(--border-divider-color)',
+        color: 'var(--text-muted)',
       };
     }
 
     if (metric > 0) {
       const intensity = unit === 'currency' ? Math.min(0.4, 0.1 + (val / 50000) * 0.3) : Math.min(0.4, 0.1 + (rate / 0.15) * 0.3);
       return {
-        background: `rgba(34, 197, 94, ${intensity.toFixed(3)})`,
-        color: '#22c55e',
+        background: `rgba(16, 185, 129, ${intensity.toFixed(3)})`,
+        color: 'var(--color-profit)',
       };
     } else {
       const intensity = unit === 'currency' ? Math.min(0.4, 0.1 + (Math.abs(val) / 50000) * 0.3) : Math.min(0.4, 0.1 + (Math.abs(rate) / 0.15) * 0.3);
       return {
-        background: `rgba(239, 68, 68, ${intensity.toFixed(3)})`,
-        color: '#ef4444',
+        background: `rgba(244, 63, 94, ${intensity.toFixed(3)})`,
+        color: 'var(--color-loss)',
       };
     }
   };
@@ -332,9 +337,9 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
                   style={{ overflow: 'visible' }}
                 >
                   {/* Background horizontal zero baseline & grid */}
-                  <line x1="40" y1="160" x2="780" y2="160" stroke="#27272A" strokeWidth="1.5" strokeDasharray="3 3" />
-                  <line x1="40" y1="50" x2="780" y2="50" stroke="#1E1E24" strokeWidth="1" />
-                  <line x1="40" y1="270" x2="780" y2="270" stroke="#1E1E24" strokeWidth="1" />
+                  <line x1="40" y1="160" x2="780" y2="160" stroke="var(--border-subtle-color)" strokeWidth="1.5" strokeDasharray="3 3" />
+                  <line x1="40" y1="50" x2="780" y2="50" stroke="var(--border-divider-color)" strokeWidth="1" />
+                  <line x1="40" y1="270" x2="780" y2="270" stroke="var(--border-divider-color)" strokeWidth="1" />
 
                   {/* Render Bars */}
                   {(() => {
@@ -358,7 +363,7 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
                       const barHeight = Math.max(3, (Math.abs(val) / maxAbs) * 100);
                       const x = 40 + i * step + (step - barWidth) / 2;
                       const y = isPositive ? 160 - barHeight : 160;
-                      const barColor = isPositive ? '#10B981' : '#F43F5E';
+                      const barColor = isPositive ? 'var(--color-profit)' : 'var(--color-loss)';
                       const isHovered = hoveredBarIndex === i;
 
                       return (
@@ -381,7 +386,7 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
                             x={x + barWidth / 2}
                             y="300"
                             textAnchor="middle"
-                            fill="#A1A1AA"
+                            fill="var(--text-secondary)"
                             fontSize="11"
                             fontWeight="500"
                           >
@@ -415,8 +420,8 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
                       position: 'absolute',
                       top: '12px',
                       right: '16px',
-                      backgroundColor: '#18181B',
-                      border: '1px solid #3F3F46',
+                      backgroundColor: 'var(--bg-popover)',
+                      border: '1px solid var(--border-popover)',
                       borderRadius: '8px',
                       padding: '10px 14px',
                       fontSize: '12px',
@@ -425,18 +430,18 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
                       zIndex: 10,
                     }}
                   >
-                    <div style={{ fontWeight: 600, color: '#FFFFFF', marginBottom: '4px' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
                       {barChartItems[hoveredBarIndex].label}
                     </div>
-                    <div style={{ color: '#A1A1AA', fontSize: '11.5px' }}>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '11.5px' }}>
                       Absolute return:{' '}
                       <span
                         style={{
                           fontWeight: 600,
                           color:
                             barChartItems[hoveredBarIndex].item.absolute_return_amount_in_reporting_currency >= 0
-                              ? '#10B981'
-                              : '#F43F5E',
+                              ? 'var(--color-profit)'
+                              : 'var(--color-loss)',
                         }}
                       >
                         {barChartItems[hoveredBarIndex].item.absolute_return_amount_in_reporting_currency >= 0 ? '+' : ''}
@@ -446,13 +451,13 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
                         )}
                       </span>
                     </div>
-                    <div style={{ color: '#A1A1AA', fontSize: '11.5px', marginTop: '2px' }}>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '11.5px', marginTop: '2px' }}>
                       TWR:{' '}
                       <span
                         style={{
                           fontWeight: 600,
                           color:
-                            barChartItems[hoveredBarIndex].item.time_weighted_return_rate >= 0 ? '#10B981' : '#F43F5E',
+                            barChartItems[hoveredBarIndex].item.time_weighted_return_rate >= 0 ? 'var(--color-profit)' : 'var(--color-loss)',
                         }}
                       >
                         {(barChartItems[hoveredBarIndex].item.time_weighted_return_rate * 100).toFixed(2)}%

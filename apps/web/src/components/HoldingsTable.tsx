@@ -362,30 +362,38 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                           <span>Net cash invested</span>
                           {renderSortIndicator('net_cash_invested')}
                         </div>
-                        <button
-                          type="button"
-                          className="metric-tile__help-button"
-                          onClick={() =>
-                            setActiveTooltip(activeTooltip === 'netCash' ? null : 'netCash')
-                          }
-                          aria-label="Learn about Net cash invested"
+                        <div
+                          className="metric-tile__help-wrapper"
+                          onMouseEnter={() => setActiveTooltip('netCash')}
+                          onMouseLeave={() => setActiveTooltip(null)}
                         >
-                          <HelpCircle size={14} />
-                        </button>
-                        {activeTooltip === 'netCash' && (
-                          <div className="metric-tile__popover metric-tile__popover--table">
-                            <div className="metric-tile__popover-header">
-                              <span>Net Cash Invested</span>
-                              <button type="button" onClick={() => setActiveTooltip(null)}>
-                                <X size={12} />
-                              </button>
+                          <button
+                            type="button"
+                            className="metric-tile__help-button"
+                            onClick={() =>
+                              setActiveTooltip(activeTooltip === 'netCash' ? null : 'netCash')
+                            }
+                            onFocus={() => setActiveTooltip('netCash')}
+                            onBlur={() => setActiveTooltip(null)}
+                            aria-label="Learn about Net cash invested"
+                          >
+                            <HelpCircle size={14} />
+                          </button>
+                          {activeTooltip === 'netCash' && (
+                            <div className="metric-tile__popover metric-tile__popover--table" role="tooltip">
+                              <div className="metric-tile__popover-header">
+                                <span>Net Cash Invested</span>
+                                <button type="button" onClick={() => setActiveTooltip(null)}>
+                                  <X size={12} />
+                                </button>
+                              </div>
+                              <p>
+                                Purchases and other cash invested in the holding minus sales proceeds and other cash
+                                returned, shown in base currency.
+                              </p>
                             </div>
-                            <p>
-                              Purchases and other cash invested in the holding minus sales proceeds and other cash
-                              returned, shown in base currency.
-                            </p>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                       <div
                         className="dashboard-table-sort-header dashboard-table-sort-header--right dashboard-table__subhead"
@@ -436,30 +444,38 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                           <span>Holding return (MWR)</span>
                           {renderSortIndicator('money_weighted_return')}
                         </div>
-                        <button
-                          type="button"
-                          className="metric-tile__help-button"
-                          onClick={() =>
-                            setActiveTooltip(activeTooltip === 'mwr' ? null : 'mwr')
-                          }
-                          aria-label="Learn about Holding return (MWR)"
+                        <div
+                          className="metric-tile__help-wrapper"
+                          onMouseEnter={() => setActiveTooltip('mwr')}
+                          onMouseLeave={() => setActiveTooltip(null)}
                         >
-                          <HelpCircle size={14} />
-                        </button>
-                        {activeTooltip === 'mwr' && (
-                          <div className="metric-tile__popover metric-tile__popover--table">
-                            <div className="metric-tile__popover-header">
-                              <span>Holding Return (MWR)</span>
-                              <button type="button" onClick={() => setActiveTooltip(null)}>
-                                <X size={12} />
-                              </button>
+                          <button
+                            type="button"
+                            className="metric-tile__help-button"
+                            onClick={() =>
+                              setActiveTooltip(activeTooltip === 'mwr' ? null : 'mwr')
+                            }
+                            onFocus={() => setActiveTooltip('mwr')}
+                            onBlur={() => setActiveTooltip(null)}
+                            aria-label="Learn about Holding return (MWR)"
+                          >
+                            <HelpCircle size={14} />
+                          </button>
+                          {activeTooltip === 'mwr' && (
+                            <div className="metric-tile__popover metric-tile__popover--table" role="tooltip">
+                              <div className="metric-tile__popover-header">
+                                <span>Holding Return (MWR)</span>
+                                <button type="button" onClick={() => setActiveTooltip(null)}>
+                                  <X size={12} />
+                                </button>
+                              </div>
+                              <p>
+                                The return on the capital invested in this holding, accounting for the size and timing of
+                                its recorded transactions via XIRR.
+                              </p>
                             </div>
-                            <p>
-                              The return on the capital invested in this holding, accounting for the size and timing of
-                              its recorded transactions via XIRR.
-                            </p>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                       <div
                         className="dashboard-table-sort-header dashboard-table-sort-header--right dashboard-table__subhead"
