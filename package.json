@@ -1,0 +1,8 @@
+{
+  "name": "portfolio-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "turn-on": "open -a Docker && echo 'Starting Docker Desktop, please wait...' && until docker info > /dev/null 2>&1; do sleep 1; done && docker compose up -d && (cd apps/api && npx prisma db push && npm run dev &) && (cd apps/web && npm run dev)"
+  }
+}

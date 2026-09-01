@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { FormEvent } from 'react';
-import { ArrowUpRight, ArrowDownLeft, PlusCircle, MinusCircle, Calendar } from 'lucide-react';
+import { DollarSign, ArrowUpRight, ArrowDownLeft, PlusCircle, MinusCircle, Calendar, Search } from 'lucide-react';
 
 interface TransactionFormProps {
   onSuccess?: () => void;
@@ -98,166 +98,204 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setStatus(null);
+
+    const isCashOp = type === 'DEPOSIT' || type === 'WITHDRAWAL';
+    if (!isCashOp && (!symbol || !amount)) {
+      setStatus({ type: 'error', message: 'Please enter Instrument Symbol and Amount.' });
+      return;
+    }
+
+    if (isCashOp && !amount) {
+      setStatus({ type: 'error', message: 'Please enter the cash amount.' });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const token = localStorage.getItem('auth_token');
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const res = await fetch('/api/transactions', {
+      const response = await fetch('/api/transactions', {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type,
-          symbol: type === 'DEPOSIT' || type === 'WITHDRAWAL' ? 'CASH' : symbol.toUpperCase(),
-          name: name || undefined,
-          quantity: type === 'DEPOSIT' || type === 'WITHDRAWAL' ? 1 : parseFloat(quantity),
+          symbol: isCashOp ? 'CASH' : symbol.toUpperCase(),
+          name: name || (isCashOp ? 'Cash Operation' : symbol.toUpperCase()),
+          quantity: isCashOp ? 1.0 : parseFloat(quantity || '1'),
           amount: parseFloat(amount),
-          fee: parseFloat(fee) || 0,
-          date: new Date(date).toISOString(),
-          assetClass: type === 'DEPOSIT' || type === 'WITHDRAWAL' ? 'Cash' : assetClass,
-          sector: type === 'DEPOSIT' || type === 'WITHDRAWAL' ? 'Financials' : sector,
-          region,
+          fee: parseFloat(fee || '0'),
+          date: date ? new Date(date).toISOString() : new Date().toISOString(),
+          assetClass: isCashOp ? 'Cash' : assetClass,
+          sector: isCashOp ? 'Financials' : sector,
+          region: isCashOp ? 'Global' : region,
+          currency: 'EUR',
         }),
       });
 
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Failed to log transaction');
-      }
+      const data = await response.json();
 
-      setStatus({ type: 'success', message: 'Transaction logged successfully!' });
-      setSymbol('');
-      setName('');
-      setQuantity('1');
-      setAmount('');
-      setFee('0');
-      setIsCompleted(false);
-
-      if (onSuccess) {
-        onSuccess();
+      if (response.ok) {
+        setStatus({
+          type: 'success',
+          message: `Recorded transaction successfully!`,
+        });
+        setSymbol('');
+        setName('');
+        setQuantity('1');
+        setAmount('');
+        setFee('0');
+        if (onSuccess) {
+          onSuccess();
+        }
+      } else {
+        setStatus({ type: 'error', message: data.error || 'Failed to submit transaction.' });
       }
-    } catch (err: any) {
-      setStatus({ type: 'error', message: err.message || 'An error occurred' });
+    } catch (err) {
+      setStatus({ type: 'error', message: 'Could not connect to the API server.' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const isCashOp = type === 'DEPOSIT' || type === 'WITHDRAWAL';
+
   return (
-    <div style={{ color: 'var(--text-primary)' }}>
-      <h2 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 20px 0', letterSpacing: '-0.5px' }}>
-        Log Portfolio Transaction
+    <div style={{ fontFamily: 'inherit' }}>
+      <h2
+        style={{
+          fontSize: '22px',
+          fontWeight: 700,
+          color: 'var(--text-primary)',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          letterSpacing: '-0.5px',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '36px',
+            height: '36px',
+            borderRadius: '8px',
+            backgroundColor: 'rgba(37, 99, 235, 0.15)',
+            color: 'var(--accent-primary)',
+          }}
+        >
+          <DollarSign size={20} />
+        </div>
+        Log Transaction
       </h2>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {/* Transaction Type Tabs */}
-        <div>
-          <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px', color: 'var(--text-secondary)' }}>
-            Operation Type
-          </label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-            <button
-              type="button"
-              onClick={() => setType('BOUGHT')}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '10px 4px',
-                borderRadius: '8px',
-                border: type === 'BOUGHT' ? '1px solid #10B981' : '1px solid #1E1E22',
-                backgroundColor: type === 'BOUGHT' ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-input)',
-                color: type === 'BOUGHT' ? '#10B981' : 'var(--text-secondary)',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <ArrowUpRight size={16} /> Bought
-            </button>
+        {/* Transaction Type Selector */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+            borderRadius: '8px',
+            backgroundColor: '#000000',
+            border: '1px solid #1E1E22',
+            padding: '4px',
+            gap: '4px',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setType('BOUGHT')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              padding: '9px 4px',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '12px',
+              backgroundColor: type === 'BOUGHT' ? 'var(--color-success)' : 'transparent',
+              color: type === 'BOUGHT' ? '#FFFFFF' : 'var(--text-secondary)',
+            }}
+          >
+            <ArrowUpRight size={14} /> Bought
+          </button>
 
-            <button
-              type="button"
-              onClick={() => setType('SOLD')}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '10px 4px',
-                borderRadius: '8px',
-                border: type === 'SOLD' ? '1px solid #F43F5E' : '1px solid #1E1E22',
-                backgroundColor: type === 'SOLD' ? 'rgba(244, 63, 94, 0.15)' : 'var(--bg-input)',
-                color: type === 'SOLD' ? '#F43F5E' : 'var(--text-secondary)',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <ArrowDownLeft size={16} /> Sold
-            </button>
+          <button
+            type="button"
+            onClick={() => setType('SOLD')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              padding: '9px 4px',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '12px',
+              backgroundColor: type === 'SOLD' ? 'var(--color-danger)' : 'transparent',
+              color: type === 'SOLD' ? '#FFFFFF' : 'var(--text-secondary)',
+            }}
+          >
+            <ArrowDownLeft size={14} /> Sold
+          </button>
 
-            <button
-              type="button"
-              onClick={() => setType('DEPOSIT')}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '10px 4px',
-                borderRadius: '8px',
-                border: type === 'DEPOSIT' ? '1px solid #CA8A04' : '1px solid #1E1E22',
-                backgroundColor: type === 'DEPOSIT' ? 'rgba(133, 77, 14, 0.25)' : 'var(--bg-input)',
-                color: type === 'DEPOSIT' ? '#EAB308' : 'var(--text-secondary)',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <PlusCircle size={16} /> Deposit
-            </button>
+          <button
+            type="button"
+            onClick={() => setType('DEPOSIT')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              padding: '9px 4px',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '12px',
+              backgroundColor: type === 'DEPOSIT' ? '#854D0E' : 'transparent',
+              color: type === 'DEPOSIT' ? '#FFFFFF' : 'var(--text-secondary)',
+            }}
+          >
+            <PlusCircle size={14} /> Deposit
+          </button>
 
-            <button
-              type="button"
-              onClick={() => setType('WITHDRAWAL')}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '10px 4px',
-                borderRadius: '8px',
-                border: type === 'WITHDRAWAL' ? '1px solid #F59E0B' : '1px solid #1E1E22',
-                backgroundColor: type === 'WITHDRAWAL' ? 'rgba(245, 158, 11, 0.15)' : 'var(--bg-input)',
-                color: type === 'WITHDRAWAL' ? '#F59E0B' : 'var(--text-secondary)',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <MinusCircle size={16} /> Withdraw
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setType('WITHDRAWAL')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              padding: '9px 4px',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '12px',
+              backgroundColor: type === 'WITHDRAWAL' ? '#F59E0B' : 'transparent',
+              color: type === 'WITHDRAWAL' ? '#FFFFFF' : 'var(--text-secondary)',
+            }}
+          >
+            <MinusCircle size={14} /> Withdraw
+          </button>
         </div>
 
-        {/* Asset Fields (Bought/Sold) */}
-        {type === 'BOUGHT' || type === 'SOLD' ? (
+        {/* Dynamic Fields */}
+        {!isCashOp ? (
           <>
-            {/* Ticker Search Field with Autocomplete Dropdown */}
-            <div ref={searchContainerRef} style={{ position: 'relative' }}>
+            {/* Ticker Search Field with Autocomplete */}
+            <div style={{ position: 'relative' }} ref={searchContainerRef}>
               <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-                <span>Asset Symbol / Ticker</span>
-                {isSearching && <span style={{ fontSize: '11px', color: '#2563EB' }}>Searching live tickers...</span>}
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Search size={14} /> Instrument Ticker / Symbol (Type 3+ letters)</span>
+                {isSearching && <span style={{ fontSize: '11px', color: '#60A5FA' }}>Searching live market...</span>}
               </label>
-
               <input
                 type="text"
                 placeholder="e.g. SAN.MC, AAPL, NVDA, BTC-USD"
