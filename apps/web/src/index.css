@@ -1053,5 +1053,150 @@ button {
   min-width: 100%;
 }
 
+/* ==========================================================================
+   PERFORMANCE BREAKDOWN (BAR CHART & MONTHLY HEATMAP) STYLES
+   ========================================================================== */
+
+.dashboard-performance {
+  background-color: #0B0B0C;
+  border: 1px solid #1E1E22;
+  border-radius: 14px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dashboard-performance__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dashboard-performance__controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dashboard-performance__tabs-scroll {
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.dashboard-performance__tabs {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.dashboard-performance__body {
+  width: 100%;
+}
+
+.dashboard-performance__bar-panel {
+  width: 100%;
+  background-color: #0E0E11;
+  border: 1px solid #1E1E24;
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+
+.dashboard-performance__heatmap-panel {
+  width: 100%;
+  background-color: #0E0E11;
+  border: 1px solid #1E1E24;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.dashboard-performance__heatmap-scroll {
+  overflow-x: auto;
+}
+
+.dashboard-performance__heatmap {
+  display: grid;
+  grid-template-columns: 56px repeat(12, minmax(44px, 1fr));
+  gap: 6px;
+  align-items: center;
+  min-width: 620px;
+}
+
+.dashboard-performance__heatmap-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #A1A1AA;
+  display: flex;
+  align-items: center;
+}
+
+.dashboard-performance__heatmap-month {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #71717A;
+  text-align: center;
+  padding-bottom: 4px;
+}
+
+.dashboard-performance__heatmap-cell {
+  height: 38px;
+  border-radius: 6px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s ease, filter 0.1s ease;
+  user-select: none;
+}
+
+.dashboard-performance__heatmap-cell:hover:not(.is-empty) {
+  transform: scale(1.05);
+  filter: brightness(1.2);
+  z-index: 2;
+}
+
+.dashboard-performance__heatmap-cell.is-empty {
+  background-color: #141416 !important;
+  border: 1px dashed #27272A;
+  cursor: default;
+}
+
+.dashboard-performance__heatmap-value {
+  white-space: nowrap;
+  letter-spacing: -0.2px;
+}
+
+.dashboard-performance__footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.dashboard-performance__show-more {
+  background: none;
+  border: 1px solid #27272A;
+  border-radius: 8px;
+  color: #A1A1AA;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dashboard-performance__show-more:hover {
+  background-color: #1E1E24;
+  color: #FFFFFF;
+  border-color: #3F3F46;
+}
+
+
 
 

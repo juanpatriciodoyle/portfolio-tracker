@@ -519,3 +519,175 @@ export async function getPortfolioHistory(userId?: string) {
   return points;
 }
 
+export interface PerformancePeriodItem {
+  period_type: 'year' | 'month' | 'ttm';
+  year: number;
+  month: number | null;
+  from_date: string;
+  to_date: string;
+  absolute_return_amount_in_reporting_currency: number;
+  time_weighted_return_rate: number;
+}
+
+export async function getPortfolioPerformancePeriods(userId?: string): Promise<PerformancePeriodItem[]> {
+  let targetUser = null;
+  if (userId) {
+    targetUser = await db.user.findUnique({ where: { id: userId } });
+  } else {
+    targetUser = await db.user.findFirst();
+  }
+
+  if (!targetUser) return [];
+
+  const transactions = await db.transaction.findMany({
+    where: { userId: targetUser.id },
+    orderBy: { date: 'asc' },
+  });
+
+  const history = await getPortfolioHistory(userId);
+  if (!history || history.length === 0) return [];
+
+  const getStateAt = (d: Date) => {
+    const timestamp = d.getTime();
+    let prev = history[0];
+    for (const pt of history) {
+      if (new Date(pt.date_time).getTime() <= timestamp) {
+        prev = pt;
+      } else {
+        break;
+      }
+    }
+    return prev;
+  };
+
+  const results: PerformancePeriodItem[] = [];
+  const now = new Date();
+  const currentYear = now.getFullYear();
+
+  const earliestDate = new Date(history[0].date_time);
+  const minYear = Math.max(2020, earliestDate.getFullYear());
+
+  for (let y = currentYear; y >= minYear; y--) {
+    for (let m = 1; m <= 12; m++) {
+      const fromDate = new Date(Date.UTC(y, m - 1, 1));
+      const toDate = new Date(Date.UTC(y, m, 0, 23, 59, 59));
+
+      if (fromDate.getTime() > now.getTime()) {
+        continue;
+      }
+
+      const effectiveToDate = toDate.getTime() > now.getTime() ? now : toDate;
+
+      const startState = getStateAt(fromDate);
+      const endState = getStateAt(effectiveToDate);
+
+      const netCashflow = transactions
+        .filter((tx) => {
+          const t = new Date(tx.date).getTime();
+          return (
+            t >= fromDate.getTime() &&
+            t <= effectiveToDate.getTime() &&
+            (tx.type === 'DEPOSIT' || tx.type === 'WITHDRAWAL')
+          );
+        })
+        .reduce((acc, tx) => acc + (tx.type === 'DEPOSIT' ? tx.amount : -tx.amount), 0);
+
+      const startVal = startState.portfolio_value_in_reporting_currency;
+      const endVal = endState.portfolio_value_in_reporting_currency;
+      const absoluteReturn = Math.round((endVal - startVal - netCashflow) * 100) / 100;
+
+      const twrRate =
+        startVal > 0
+          ? absoluteReturn / startVal
+          : netCashflow > 0
+          ? absoluteReturn / netCashflow
+          : 0;
+
+      results.push({
+        period_type: 'month',
+        year: y,
+        month: m,
+        from_date: fromDate.toISOString(),
+        to_date: effectiveToDate.toISOString(),
+        absolute_return_amount_in_reporting_currency: absoluteReturn,
+        time_weighted_return_rate: Math.round(twrRate * 10000) / 10000,
+      });
+    }
+
+    const yearFromDate = new Date(Date.UTC(y, 0, 1));
+    const yearToDate = new Date(Date.UTC(y, 11, 31, 23, 59, 59));
+    const effectiveYearToDate = yearToDate.getTime() > now.getTime() ? now : yearToDate;
+
+    const yStartState = getStateAt(yearFromDate);
+    const yEndState = getStateAt(effectiveYearToDate);
+    const yStartVal = yStartState.portfolio_value_in_reporting_currency;
+    const yEndVal = yEndState.portfolio_value_in_reporting_currency;
+
+    const yNetCashflow = transactions
+      .filter((tx) => {
+        const t = new Date(tx.date).getTime();
+        return (
+          t >= yearFromDate.getTime() &&
+          t <= effectiveYearToDate.getTime() &&
+          (tx.type === 'DEPOSIT' || tx.type === 'WITHDRAWAL')
+        );
+      })
+      .reduce((acc, tx) => acc + (tx.type === 'DEPOSIT' ? tx.amount : -tx.amount), 0);
+
+    const yAbsoluteReturn = Math.round((yEndVal - yStartVal - yNetCashflow) * 100) / 100;
+    const yTwrRate =
+      yStartVal > 0
+        ? yAbsoluteReturn / yStartVal
+        : yNetCashflow > 0
+        ? yAbsoluteReturn / yNetCashflow
+        : 0;
+
+    results.push({
+      period_type: 'year',
+      year: y,
+      month: null,
+      from_date: yearFromDate.toISOString(),
+      to_date: effectiveYearToDate.toISOString(),
+      absolute_return_amount_in_reporting_currency: yAbsoluteReturn,
+      time_weighted_return_rate: Math.round(yTwrRate * 10000) / 10000,
+    });
+  }
+
+  const ttmFromDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+  const ttmStartState = getStateAt(ttmFromDate);
+  const ttmEndState = getStateAt(now);
+  const ttmStartVal = ttmStartState.portfolio_value_in_reporting_currency;
+  const ttmEndVal = ttmEndState.portfolio_value_in_reporting_currency;
+
+  const ttmNetCashflow = transactions
+    .filter((tx) => {
+      const t = new Date(tx.date).getTime();
+      return (
+        t >= ttmFromDate.getTime() &&
+        t <= now.getTime() &&
+        (tx.type === 'DEPOSIT' || tx.type === 'WITHDRAWAL')
+      );
+    })
+    .reduce((acc, tx) => acc + (tx.type === 'DEPOSIT' ? tx.amount : -tx.amount), 0);
+
+  const ttmAbsoluteReturn = Math.round((ttmEndVal - ttmStartVal - ttmNetCashflow) * 100) / 100;
+  const ttmTwrRate =
+    ttmStartVal > 0
+      ? ttmAbsoluteReturn / ttmStartVal
+      : ttmNetCashflow > 0
+      ? ttmAbsoluteReturn / ttmNetCashflow
+      : 0;
+
+  results.push({
+    period_type: 'ttm',
+    year: currentYear,
+    month: null,
+    from_date: ttmFromDate.toISOString(),
+    to_date: now.toISOString(),
+    absolute_return_amount_in_reporting_currency: ttmAbsoluteReturn,
+    time_weighted_return_rate: Math.round(ttmTwrRate * 10000) / 10000,
+  });
+
+  return results;
+}
+

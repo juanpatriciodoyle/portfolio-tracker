@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import { OAuth2Client } from 'google-auth-library';
 import { db } from './lib/db';
-import { getPortfolioOverview, getPortfolioHistory, processTransaction } from './lib/pnlEngine';
+import { getPortfolioOverview, getPortfolioHistory, getPortfolioPerformancePeriods, processTransaction } from './lib/pnlEngine';
 import { syncCountryInflationHistory } from './lib/inflationService';
 import { hashUserIdentity } from './lib/privacy';
 import { generateToken, authenticateToken, AuthenticatedRequest } from './lib/auth';
@@ -85,6 +85,18 @@ app.get('/api/portfolio/history', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error calculating portfolio history:', error);
     return res.status(500).json({ error: 'Internal server error calculating portfolio history.' });
+  }
+});
+
+// GET /api/portfolio/performance-periods - Return monthly and annual returns for bar chart & heatmap
+app.get('/api/portfolio/performance-periods', async (req: Request, res: Response) => {
+  try {
+    const userId = (req.query.userId as string) || undefined;
+    const periods = await getPortfolioPerformancePeriods(userId);
+    return res.json(periods);
+  } catch (error) {
+    console.error('Error calculating performance periods:', error);
+    return res.status(500).json({ error: 'Internal server error calculating performance periods.' });
   }
 });
 

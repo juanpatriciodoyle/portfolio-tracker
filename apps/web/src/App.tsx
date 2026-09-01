@@ -10,6 +10,7 @@ import PortfolioChart from './components/PortfolioChart';
 import PerformanceAnalysisGrid from './components/PerformanceAnalysisGrid';
 import HoldingsTable, { type PositionItem, type SoldAssetItem } from './components/HoldingsTable';
 import CashBalancesTable, { type CashBalanceItem } from './components/CashBalancesTable';
+import PerformanceBreakdown from './components/PerformanceBreakdown';
 import { type ChartDataPoint, type ReportingPeriod, type DateRange } from './data/sampleChartData';
 
 interface User {
@@ -325,6 +326,12 @@ function App() {
             cashBalances={stats.cashBalances}
             cashBalance={stats.cashBalance}
             reportingCurrency={stats.baseCurrency || 'EUR'}
+          />
+
+          {/* Performance Breakdown (Bar Chart & Monthly Heatmap) */}
+          <PerformanceBreakdown
+            currency={stats.baseCurrency || 'EUR'}
+            userId={user?.id}
           />
 
           {/* Metric Overview Cards (3 Cards) */}
