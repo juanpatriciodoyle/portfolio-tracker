@@ -11,6 +11,7 @@ import PerformanceAnalysisGrid from './components/PerformanceAnalysisGrid';
 import HoldingsTable, { type PositionItem, type SoldAssetItem } from './components/HoldingsTable';
 import CashBalancesTable, { type CashBalanceItem } from './components/CashBalancesTable';
 import PerformanceBreakdown from './components/PerformanceBreakdown';
+import AllocationBreakdown from './components/AllocationBreakdown';
 import { type ChartDataPoint, type ReportingPeriod, type DateRange } from './data/sampleChartData';
 
 interface User {
@@ -59,7 +60,6 @@ function App() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isInflationModalOpen, setIsInflationModalOpen] = useState(false);
   const [isRealInflationMode, setIsRealInflationMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'regions' | 'sectors' | 'assetClasses'>('regions');
   const [tableKey, setTableKey] = useState(0);
 
   const [period, setPeriod] = useState<ReportingPeriod>('All');
@@ -334,6 +334,15 @@ function App() {
             userId={user?.id}
           />
 
+          {/* Portfolio Allocation Breakdown (Donut Chart & Interactive Legend) */}
+          <AllocationBreakdown
+            breakdowns={stats.breakdowns}
+            positions={stats.positions}
+            cashBalance={stats.cashBalance}
+            netWorth={stats.netWorth}
+            currency={stats.baseCurrency || 'EUR'}
+          />
+
           {/* Metric Overview Cards (3 Cards) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '16px' }}>
             {/* Card 1: Net Worth */}
@@ -371,66 +380,6 @@ function App() {
               <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>
                 Return: {activeRoiPercent >= 0 ? '+' : ''}{activeRoiPercent.toFixed(2)}% {isRealInflationMode ? `(${stats.country} inflation adj.)` : '(standard)'}
               </div>
-            </div>
-          </div>
-
-          {/* Allocation & Geographic Distribution */}
-          <div style={{ backgroundColor: 'var(--bg-card)', border: 'var(--border-card)', borderRadius: '14px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1E1E22', paddingBottom: '14px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#F4F4F5' }}>
-                Asset & Regional Allocation
-              </h3>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {(['regions', 'sectors', 'assetClasses'] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      border: '1px solid #27272A',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      textTransform: 'capitalize',
-                      backgroundColor: activeTab === tab ? '#F4F4F5' : '#161618',
-                      color: activeTab === tab ? '#000000' : '#A1A1AA',
-                    }}
-                  >
-                    {tab === 'assetClasses' ? 'Asset Classes' : tab}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {stats.breakdowns[activeTab].length === 0 ? (
-                <div style={{ color: '#A1A1AA', fontSize: '13px', padding: '12px 0', textAlign: 'center' }}>
-                  No allocation data logged yet. Click <strong>Log Transaction</strong> to start.
-                </div>
-              ) : (
-                stats.breakdowns[activeTab].map((item) => (
-                  <div key={item.name} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 500 }}>
-                      <span style={{ color: '#F4F4F5' }}>{item.name}</span>
-                      <span style={{ color: '#A1A1AA' }}>
-                        €{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} ({item.percentage}%)
-                      </span>
-                    </div>
-                    <div style={{ width: '100%', height: '6px', backgroundColor: '#1E1E22', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div
-                        style={{
-                          height: '100%',
-                          width: `${Math.min(item.percentage, 100)}%`,
-                          backgroundColor: '#E4E4E7',
-                          borderRadius: '3px',
-                          transition: 'width 0.4s ease',
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))
-              )}
             </div>
           </div>
 
