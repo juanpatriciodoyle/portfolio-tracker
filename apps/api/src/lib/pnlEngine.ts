@@ -320,16 +320,28 @@ export async function getPortfolioOverview(userId?: string) {
       sectors: formatBreakdown(sectorTotals, netWorth),
       assetClasses: formatBreakdown(assetClassTotals, netWorth),
     },
-    positions: positions.map((p) => ({
-      id: p.id,
-      symbol: p.symbol,
-      name: p.name,
-      assetClass: p.assetClass,
-      region: p.region,
-      sector: p.sector,
-      quantity: p.quantity,
-      investedAmount: p.investedAmount,
-    })),
+    positions: positions.map((p) => {
+      const holdingDays = Math.max(
+        1,
+        Math.floor((new Date().getTime() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+      );
+      const costPerShare = p.quantity > 0 ? p.investedAmount / p.quantity : 0;
+      return {
+        id: p.id,
+        symbol: p.symbol,
+        name: p.name || p.symbol,
+        assetClass: p.assetClass,
+        region: p.region,
+        sector: p.sector,
+        quantity: p.quantity,
+        investedAmount: p.investedAmount,
+        costPerShare: Math.round(costPerShare * 100) / 100,
+        currentPrice: Math.round(costPerShare * 100) / 100,
+        currentValue: p.investedAmount,
+        holdingDays,
+        createdAt: p.createdAt,
+      };
+    }),
     soldAssets: soldAssetsWithInflation,
   };
 }

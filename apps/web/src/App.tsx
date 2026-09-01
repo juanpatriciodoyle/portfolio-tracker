@@ -8,6 +8,7 @@ import TransactionHistoryTable from './components/TransactionHistoryTable';
 import ReportingPeriodBar from './components/ReportingPeriodBar';
 import PortfolioChart from './components/PortfolioChart';
 import PerformanceAnalysisGrid from './components/PerformanceAnalysisGrid';
+import HoldingsTable, { type PositionItem, type SoldAssetItem } from './components/HoldingsTable';
 import { type ChartDataPoint, type ReportingPeriod, type DateRange } from './data/sampleChartData';
 
 interface User {
@@ -20,31 +21,6 @@ interface BreakdownItem {
   name: string;
   amount: number;
   percentage: number;
-}
-
-interface PositionItem {
-  id: string;
-  symbol: string;
-  name: string;
-  assetClass: string;
-  region: string;
-  sector: string;
-  investedAmount: number;
-}
-
-interface SoldAssetItem {
-  id: string;
-  symbol: string;
-  assetClass: string;
-  region: string;
-  sector: string;
-  investedAmount: number;
-  returnedAmount: number;
-  soldProfit: number;
-  soldProfitPercent: number;
-  holdingInflationPercent: number;
-  realProfitEuros: number;
-  date: string;
 }
 
 interface StatsData {
@@ -330,6 +306,15 @@ function App() {
             stats={stats}
             historyData={chartData}
             period={period}
+            isRealInflationMode={isRealInflationMode}
+          />
+
+          {/* Holdings Breakdown Table */}
+          <HoldingsTable
+            positions={stats.positions}
+            soldAssets={stats.soldAssets}
+            netWorth={stats.netWorth}
+            currency={stats.baseCurrency || 'EUR'}
             isRealInflationMode={isRealInflationMode}
           />
 
