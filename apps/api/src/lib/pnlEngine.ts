@@ -293,6 +293,71 @@ export async function getPortfolioOverview(userId?: string) {
   const realProfitEuros = totalProfit - totalInflationEurosLoss;
   const realRoiPercent = totalInvested > 0 ? (realProfitEuros / totalInvested) * 100 : 0;
 
+  const CURRENCY_METADATA: Record<string, { name: string; symbol: string; rateToEur: number }> = {
+    EUR: { name: 'Euro', symbol: '€', rateToEur: 1.0 },
+    USD: { name: 'US Dollar', symbol: '$', rateToEur: 0.86236 },
+    GBP: { name: 'British Pound', symbol: '£', rateToEur: 1.176 },
+    CHF: { name: 'Swiss Franc', symbol: 'CHF', rateToEur: 1.052 },
+    JPY: { name: 'Japanese Yen', symbol: '¥', rateToEur: 0.0061 },
+    CAD: { name: 'Canadian Dollar', symbol: 'CA$', rateToEur: 0.68 },
+    AUD: { name: 'Australian Dollar', symbol: 'A$', rateToEur: 0.61 },
+  };
+
+  const userTransactions = targetUserId
+    ? await db.transaction.findMany({
+        where: { userId: targetUserId },
+      })
+    : [];
+
+  const cashByCurrency: Record<string, number> = {};
+
+  for (const tx of userTransactions) {
+    const curr = (tx.currency || baseCurrency || 'EUR').toUpperCase();
+    if (tx.type === 'DEPOSIT') {
+      cashByCurrency[curr] = (cashByCurrency[curr] || 0) + tx.amount;
+    } else if (tx.type === 'WITHDRAWAL') {
+      cashByCurrency[curr] = (cashByCurrency[curr] || 0) - tx.amount;
+    } else if (tx.type === 'BOUGHT') {
+      cashByCurrency[curr] = (cashByCurrency[curr] || 0) - (tx.amount + (tx.fee || 0));
+    } else if (tx.type === 'SOLD') {
+      cashByCurrency[curr] = (cashByCurrency[curr] || 0) + (tx.amount - (tx.fee || 0));
+    }
+  }
+
+  // Fallback to cashBalance if no transaction-level currency breakdown exists
+  if (Object.keys(cashByCurrency).length === 0 && cashBalance > 0) {
+    cashByCurrency[baseCurrency] = cashBalance;
+  }
+
+  let totalReportingCash = 0;
+  const cashBalances = Object.entries(cashByCurrency)
+    .filter(([_, bal]) => Math.abs(bal) > 0.001)
+    .map(([curr, bal]) => {
+      const meta = CURRENCY_METADATA[curr] || { name: curr, symbol: curr, rateToEur: 1.0 };
+      const baseRate = CURRENCY_METADATA[baseCurrency]?.rateToEur || 1.0;
+      const rateToBase = (meta.rateToEur || 1.0) / baseRate;
+      const balanceInReportingCurrency = bal * rateToBase;
+      totalReportingCash += balanceInReportingCurrency;
+
+      return {
+        currency: curr,
+        name: meta.name,
+        currencySymbol: meta.symbol,
+        balance: Math.round(bal * 100) / 100,
+        balanceInReportingCurrency: Math.round(balanceInReportingCurrency * 100) / 100,
+        percentage: 0,
+      };
+    });
+
+  cashBalances.forEach((entry) => {
+    entry.percentage =
+      totalReportingCash > 0
+        ? Math.round((entry.balanceInReportingCurrency / totalReportingCash) * 10000) / 100
+        : 0;
+  });
+
+  cashBalances.sort((a, b) => b.balanceInReportingCurrency - a.balanceInReportingCurrency);
+
   const formatBreakdown = (dict: Record<string, number>, total: number) => {
     return Object.entries(dict).map(([key, amount]) => ({
       name: key,
@@ -304,6 +369,7 @@ export async function getPortfolioOverview(userId?: string) {
   return {
     netWorth,
     cashBalance,
+    cashBalances,
     totalInvested,
     openInvestedValue,
     soldProfit,

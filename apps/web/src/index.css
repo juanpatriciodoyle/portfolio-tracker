@@ -1035,4 +1035,23 @@ button {
   text-decoration: underline;
 }
 
+/* ==========================================================================
+   CASH BALANCES TABLE STYLES
+   ========================================================================== */
+
+.dashboard-table-asset--no-logo {
+  display: flex;
+  align-items: center;
+}
+
+.dashboard-table-asset__name--muted {
+  font-weight: 500;
+  color: #F4F4F5;
+}
+
+.dashboard-table-wrapper--cash {
+  min-width: 100%;
+}
+
+
 

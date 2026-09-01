@@ -9,6 +9,7 @@ import ReportingPeriodBar from './components/ReportingPeriodBar';
 import PortfolioChart from './components/PortfolioChart';
 import PerformanceAnalysisGrid from './components/PerformanceAnalysisGrid';
 import HoldingsTable, { type PositionItem, type SoldAssetItem } from './components/HoldingsTable';
+import CashBalancesTable, { type CashBalanceItem } from './components/CashBalancesTable';
 import { type ChartDataPoint, type ReportingPeriod, type DateRange } from './data/sampleChartData';
 
 interface User {
@@ -45,6 +46,7 @@ interface StatsData {
   };
   positions: PositionItem[];
   soldAssets: SoldAssetItem[];
+  cashBalances?: CashBalanceItem[];
 }
 
 function App() {
@@ -316,6 +318,13 @@ function App() {
             netWorth={stats.netWorth}
             currency={stats.baseCurrency || 'EUR'}
             isRealInflationMode={isRealInflationMode}
+          />
+
+          {/* Cash Balances Table */}
+          <CashBalancesTable
+            cashBalances={stats.cashBalances}
+            cashBalance={stats.cashBalance}
+            reportingCurrency={stats.baseCurrency || 'EUR'}
           />
 
           {/* Metric Overview Cards (3 Cards) */}
