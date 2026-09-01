@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import { OAuth2Client } from 'google-auth-library';
 import { db } from './lib/db';
-import { getPortfolioOverview, processTransaction } from './lib/pnlEngine';
+import { getPortfolioOverview, getPortfolioHistory, processTransaction } from './lib/pnlEngine';
 import { syncCountryInflationHistory } from './lib/inflationService';
 import { hashUserIdentity } from './lib/privacy';
 import { generateToken, authenticateToken, AuthenticatedRequest } from './lib/auth';
@@ -73,6 +73,18 @@ app.get('/api/portfolio/stats', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error calculating portfolio stats:', error);
     return res.status(500).json({ error: 'Internal server error calculating portfolio stats.' });
+  }
+});
+
+// GET /api/portfolio/history - Return real live historical time series for user
+app.get('/api/portfolio/history', async (req: Request, res: Response) => {
+  try {
+    const userId = (req.query.userId as string) || undefined;
+    const history = await getPortfolioHistory(userId);
+    return res.json(history);
+  } catch (error) {
+    console.error('Error calculating portfolio history:', error);
+    return res.status(500).json({ error: 'Internal server error calculating portfolio history.' });
   }
 });
 

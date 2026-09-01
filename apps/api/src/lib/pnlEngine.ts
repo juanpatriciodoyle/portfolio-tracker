@@ -268,6 +268,23 @@ export async function getPortfolioOverview(userId?: string) {
       })
     : { _sum: { amount: 0 } };
 
+  const feesAggregate = targetUserId
+    ? await db.transaction.aggregate({
+        where: { userId: targetUserId },
+        _sum: { fee: true },
+      })
+    : { _sum: { fee: 0 } };
+
+  const incomeAggregate = targetUserId
+    ? await db.transaction.aggregate({
+        where: { userId: targetUserId, type: 'DEPOSIT', notes: { contains: 'dividend' } },
+        _sum: { amount: true },
+      })
+    : { _sum: { amount: 0 } };
+
+  const totalFees = feesAggregate._sum.fee || 0;
+  const totalIncome = incomeAggregate._sum.amount || 0;
+
   const totalInvested = (deposits._sum.amount || 0) - (withdrawals._sum.amount || 0);
   const allTimeRoiPercent = totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
 
@@ -291,6 +308,8 @@ export async function getPortfolioOverview(userId?: string) {
     openInvestedValue,
     soldProfit,
     totalProfit,
+    totalFees,
+    totalIncome,
     allTimeRoiPercent,
     realProfitEuros,
     realRoiPercent,
@@ -314,3 +333,111 @@ export async function getPortfolioOverview(userId?: string) {
     soldAssets: soldAssetsWithInflation,
   };
 }
+
+export async function getPortfolioHistory(userId?: string) {
+  let targetUser = null;
+  if (userId) {
+    targetUser = await db.user.findUnique({ where: { id: userId } });
+  } else {
+    targetUser = await db.user.findFirst();
+  }
+
+  if (!targetUser) return [];
+
+  const transactions = await db.transaction.findMany({
+    where: { userId: targetUser.id },
+    orderBy: { date: 'asc' },
+  });
+
+  if (!transactions.length) {
+    if (targetUser.cashBalance > 0) {
+      return [
+        {
+          date_time: new Date().toISOString(),
+          portfolio_value_in_reporting_currency: targetUser.cashBalance,
+          cumulative_cost_in_reporting_currency: targetUser.cashBalance,
+          cashflow_in_reporting_currency: targetUser.cashBalance,
+          benchmark_value_in_reporting_currency: targetUser.cashBalance,
+          cumulative_time_weighted_return_rate: 0,
+          cumulative_benchmark_time_weighted_return_rate: 0,
+        },
+      ];
+    }
+    return [];
+  }
+
+  const points: {
+    date_time: string;
+    portfolio_value_in_reporting_currency: number;
+    cumulative_cost_in_reporting_currency: number;
+    cashflow_in_reporting_currency: number;
+    benchmark_value_in_reporting_currency: number;
+    cumulative_time_weighted_return_rate: number;
+    cumulative_benchmark_time_weighted_return_rate: number;
+  }[] = [];
+
+  let runningCash = 0;
+  let runningInvestedInPositions = 0;
+  let cumulativeNetContributions = 0;
+  let cumulativeRealizedPnl = 0;
+
+  const positionCostMap = new Map<string, number>();
+
+  for (const tx of transactions) {
+    const txDate = new Date(tx.date);
+    let cashflow = 0;
+
+    if (tx.type === 'DEPOSIT') {
+      runningCash += tx.amount;
+      cumulativeNetContributions += tx.amount;
+      cashflow = tx.amount;
+    } else if (tx.type === 'WITHDRAWAL') {
+      runningCash -= tx.amount;
+      cumulativeNetContributions -= tx.amount;
+      cashflow = -tx.amount;
+    } else if (tx.type === 'BOUGHT') {
+      const outflow = tx.amount + (tx.fee || 0);
+      runningCash -= outflow;
+      const currentCost = positionCostMap.get(tx.symbol) || 0;
+      positionCostMap.set(tx.symbol, currentCost + tx.amount);
+      runningInvestedInPositions += tx.amount;
+    } else if (tx.type === 'SOLD') {
+      const inflow = tx.amount - (tx.fee || 0);
+      runningCash += inflow;
+      const currentCost = positionCostMap.get(tx.symbol) || tx.amount;
+      const realizedBasis = Math.min(currentCost, tx.amount);
+      const gain = inflow - realizedBasis;
+      cumulativeRealizedPnl += gain;
+      positionCostMap.set(tx.symbol, Math.max(0, currentCost - realizedBasis));
+      runningInvestedInPositions = Math.max(0, runningInvestedInPositions - realizedBasis);
+    }
+
+    const portfolioValue = Math.max(0, runningCash + runningInvestedInPositions + cumulativeRealizedPnl);
+    const twr = cumulativeNetContributions > 0
+      ? (portfolioValue - cumulativeNetContributions) / cumulativeNetContributions
+      : 0;
+
+    points.push({
+      date_time: txDate.toISOString(),
+      portfolio_value_in_reporting_currency: Math.round(portfolioValue * 100) / 100,
+      cumulative_cost_in_reporting_currency: Math.round(cumulativeNetContributions * 100) / 100,
+      cashflow_in_reporting_currency: Math.round(cashflow * 100) / 100,
+      benchmark_value_in_reporting_currency: Math.round(cumulativeNetContributions * 1.05 * 100) / 100,
+      cumulative_time_weighted_return_rate: Math.round(twr * 10000) / 10000,
+      cumulative_benchmark_time_weighted_return_rate: 0.05,
+    });
+  }
+
+  const now = new Date();
+  const lastPt = points[points.length - 1];
+  if (lastPt && new Date(lastPt.date_time).toDateString() !== now.toDateString()) {
+    points.push({
+      ...lastPt,
+      date_time: now.toISOString(),
+      cashflow_in_reporting_currency: 0,
+    });
+  }
+
+  return points;
+}
+

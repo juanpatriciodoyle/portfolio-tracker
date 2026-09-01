@@ -1,10 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Plus, LogOut, Lock } from 'lucide-react';
 import TransactionForm from './components/TransactionForm';
 import SideDrawer from './components/SideDrawer';
 import LoginModal from './components/LoginModal';
 import InflationSettingsModal from './components/InflationSettingsModal';
 import TransactionHistoryTable from './components/TransactionHistoryTable';
+import ReportingPeriodBar from './components/ReportingPeriodBar';
+import PortfolioChart from './components/PortfolioChart';
+import PerformanceAnalysisGrid from './components/PerformanceAnalysisGrid';
+import { type ChartDataPoint, type ReportingPeriod, type DateRange } from './data/sampleChartData';
 
 interface User {
   id: string;
@@ -50,6 +54,8 @@ interface StatsData {
   openInvestedValue: number;
   soldProfit: number;
   totalProfit: number;
+  totalFees?: number;
+  totalIncome?: number;
   allTimeRoiPercent: number;
   realProfitEuros: number;
   realRoiPercent: number;
@@ -77,6 +83,10 @@ function App() {
   const [activeTab, setActiveTab] = useState<'regions' | 'sectors' | 'assetClasses'>('regions');
   const [tableKey, setTableKey] = useState(0);
 
+  const [period, setPeriod] = useState<ReportingPeriod>('All');
+  const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
+  const [historyData, setHistoryData] = useState<ChartDataPoint[]>([]);
+
   const [stats, setStats] = useState<StatsData>({
     netWorth: 0,
     cashBalance: 0,
@@ -95,7 +105,7 @@ function App() {
   });
 
   const getGreetingName = () => {
-    if (!user) return 'Richard';
+    if (!user) return 'Investor';
     if (user.name && !['Passkey User', 'Passkey', 'Privacy User', 'User'].includes(user.name)) {
       return user.name.split(' ')[0];
     }
@@ -105,7 +115,7 @@ function App() {
         return raw.charAt(0).toUpperCase() + raw.slice(1);
       }
     }
-    return 'Richard';
+    return user.name || 'Investor';
   };
 
   const fetchStats = async () => {
@@ -115,13 +125,21 @@ function App() {
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
-      const res = await fetch('/api/portfolio/stats', { headers });
-      if (res.ok) {
-        const data = await res.json();
+      const [statsRes, historyRes] = await Promise.all([
+        fetch('/api/portfolio/stats', { headers }),
+        fetch('/api/portfolio/history', { headers }),
+      ]);
+
+      if (statsRes.ok) {
+        const data = await statsRes.json();
         setStats(data);
       }
+      if (historyRes.ok) {
+        const hist = await historyRes.json();
+        setHistoryData(hist);
+      }
     } catch (err) {
-      console.error('Failed to fetch portfolio stats:', err);
+      console.error('Failed to fetch portfolio data:', err);
     }
   };
 
@@ -142,6 +160,25 @@ function App() {
     fetchStats();
     setTableKey((prev) => prev + 1);
   };
+
+  // Real live chart data from database
+  const chartData = useMemo(() => {
+    if (historyData && historyData.length > 0) {
+      return historyData;
+    }
+    // Live real 0 baseline for accounts with 0 transactions
+    return [
+      {
+        date_time: new Date().toISOString(),
+        portfolio_value_in_reporting_currency: stats.netWorth,
+        cumulative_cost_in_reporting_currency: stats.totalInvested,
+        cashflow_in_reporting_currency: 0,
+        benchmark_value_in_reporting_currency: stats.totalInvested,
+        cumulative_time_weighted_return_rate: 0,
+        cumulative_benchmark_time_weighted_return_rate: 0,
+      },
+    ];
+  }, [historyData, stats.netWorth, stats.totalInvested]);
 
   if (!user) {
     return (
@@ -261,15 +298,42 @@ function App() {
       </header>
 
       {/* Main Dashboard Body */}
-      <main style={{ flex: 1, padding: '36px 40px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
-        <div style={{ maxWidth: '1200px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '28px' }}>
-          <div>
-            <h1 style={{ fontSize: '28px', fontWeight: 700, margin: 0, letterSpacing: '-0.5px', color: '#F4F4F5' }}>
+      <main style={{ flex: 1, padding: '32px 40px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ maxWidth: '1200px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+            <h1 style={{ fontSize: '26px', fontWeight: 700, margin: 0, letterSpacing: '-0.5px', color: '#F4F4F5' }}>
               How's the day going, {getGreetingName()}? 👋
             </h1>
+
+            {/* Reporting Period Rail Toolbar */}
+            <ReportingPeriodBar
+              activePeriod={period}
+              onPeriodChange={(p, range) => {
+                setPeriod(p);
+                if (range) setCustomRange(range);
+              }}
+              customRange={customRange}
+            />
           </div>
 
-          {/* Metric Overview Cards (Merged into 3 Cards) */}
+          {/* Interactive Multi-Mode Portfolio Chart */}
+          <PortfolioChart
+            data={chartData}
+            period={period}
+            customRange={customRange}
+            currency={stats.baseCurrency || 'EUR'}
+            userCashBalance={stats.cashBalance}
+          />
+
+          {/* Performance Analysis Metric Grid (8 Tiles) */}
+          <PerformanceAnalysisGrid
+            stats={stats}
+            historyData={chartData}
+            period={period}
+            isRealInflationMode={isRealInflationMode}
+          />
+
+          {/* Metric Overview Cards (3 Cards) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '16px' }}>
             {/* Card 1: Net Worth */}
             <div style={cardStyle}>
@@ -295,7 +359,7 @@ function App() {
               </div>
             </div>
 
-            {/* Card 3: All-Time Return (Merged dynamic single card) */}
+            {/* Card 3: All-Time Return */}
             <div style={cardStyle}>
               <div style={cardHeaderStyle}>
                 <span>All-Time Return</span>
