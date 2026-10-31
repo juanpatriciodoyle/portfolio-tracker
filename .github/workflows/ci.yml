@@ -22,6 +22,9 @@ jobs:
           cache: 'npm'
           cache-dependency-path: apps/api/package-lock.json
 
+      - name: Check shared contracts are in sync
+        run: node scripts/contracts.mjs check
+
       - name: Install Backend Dependencies & Generate Prisma Client
         run: |
           cd apps/api

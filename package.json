@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "contracts:sync": "node scripts/contracts.mjs sync",
+    "contracts:check": "node scripts/contracts.mjs check",
     "turn-on": "open -a Docker && echo 'Starting Docker Desktop, please wait...' && until docker info > /dev/null 2>&1; do sleep 1; done && docker compose up -d && (cd apps/api && npx prisma db push && npm run dev &) && (cd apps/web && npm run dev)",
     "turn-off": "(docker compose stop 2>/dev/null || true) && (lsof -ti:3000,5173 | xargs kill -9 2>/dev/null || true) && (osascript -e 'quit app \"Docker\"' 2>/dev/null || true) && echo '✅ Everything has been stopped and Docker Desktop quit successfully.'"
   }
