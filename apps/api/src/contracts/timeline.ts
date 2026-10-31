@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { fixedCostCategorySchema } from './fixedCost';
 import { calendarDateSchema, countryCodeSchema, currencyCodeSchema } from './primitives';
-import { PHASE_STATUSES } from './vocabulary';
+import { FX_RATE_SOURCES, PHASE_STATUSES } from './vocabulary';
 
 /** Whole minor units that may be negative (deficits and deltas). */
 const signedMinor = z.number().int();
@@ -57,6 +57,8 @@ export const phaseComparisonResponse = z.discriminatedUnion('comparable', [
         deltaMinor: signedMinor,
       })
     ),
+    /** Only when currencies were converted: where each rate came from (BCRA_OFFICIAL is the official Argentine rate). */
+    rateSources: z.array(z.object({ currency: currencyCodeSchema, source: z.enum(FX_RATE_SOURCES) })).optional(),
   }),
   z.object({
     comparable: z.literal(false),

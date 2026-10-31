@@ -28,6 +28,18 @@ export const UTILITY_CATEGORIES = ['ELECTRICITY', 'GAS', 'WATER'] as const satis
 export const COST_CADENCES = ['MONTHLY', 'BIMONTHLY', 'QUARTERLY', 'ANNUAL'] as const;
 export type CostCadence = (typeof COST_CADENCES)[number];
 
+/** Bills as they were actually issued: the recurring cadences, plus a single charge that is not recurring. */
+export const BILLING_CADENCES = [...COST_CADENCES, 'ONE_OFF'] as const;
+export type BillingCadence = (typeof BILLING_CADENCES)[number];
+
+/** Rolling-average windows, in complete months. */
+export const ROLLING_WINDOW_MONTHS = [3, 6, 12] as const;
+export type RollingWindowMonths = (typeof ROLLING_WINDOW_MONTHS)[number];
+
+/** Where an exchange rate came from. REFERENCE is a built-in approximate table, used when no live source answers. */
+export const FX_RATE_SOURCES = ['ECB', 'BCRA_OFFICIAL', 'REFERENCE'] as const;
+export type FxRateSource = (typeof FX_RATE_SOURCES)[number];
+
 export const HOUSING_TENURES = ['RENT', 'OWN', 'FAMILY_OR_FREE', 'OTHER'] as const;
 export type HousingTenure = (typeof HOUSING_TENURES)[number];
 
