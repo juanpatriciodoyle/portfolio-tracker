@@ -90,11 +90,61 @@ describe('describeComparison', () => {
     expect(result.categories.map((line) => line.direction)).toEqual(['up', 'down', 'same']);
   });
 
-  it('explains, kindly, that different currencies need exchange rates', () => {
+  it('explains, kindly, that no exchange rate is available for two currencies right now', () => {
     const result = describe_({ comparable: false, reason: 'FX_REQUIRED', currencies: ['EUR', 'ARS'] });
 
     expect(result.kind).toBe('not-comparable');
     expect(result.headline).toContain('EUR and ARS');
-    expect(result.headline).toContain('exchange rates');
+    expect(result.headline).toContain('no exchange rate is available');
+  });
+
+  describe('when currencies were converted', () => {
+    const converted = (rateSources: Comparable['rateSources'], currency = 'ARS') => describe_(comparable({ currency, rateSources }));
+
+    it('says nothing about conversion when everything was in one currency', () => {
+      expect(describe_(comparable())).toMatchObject({ conversionNote: null, rates: [] });
+    });
+
+    it('names the official rate for Argentine pesos', () => {
+      const result = converted([{ currency: 'ARS', source: 'BCRA_OFFICIAL' }]);
+
+      expect(result).toMatchObject({
+        kind: 'comparable',
+        conversionNote: 'Amounts shown in ARS, converted at the official rate.',
+        rates: [{ currency: 'ARS', label: 'Official rate' }],
+      });
+    });
+
+    it.each([
+      ['ECB', 'the ECB rate', 'ECB rate'],
+      ['REFERENCE', 'the approximate rate', 'Approximate rate'],
+    ] as const)('words the %s source for people', (source, phrase, label) => {
+      const result = converted([{ currency: 'USD', source }], 'EUR');
+
+      expect(result).toMatchObject({
+        conversionNote: `Amounts shown in EUR, converted at ${phrase}.`,
+        rates: [{ currency: 'USD', label }],
+      });
+    });
+
+    it('says which rate belongs to which currency when they differ', () => {
+      const result = converted([
+        { currency: 'ARS', source: 'BCRA_OFFICIAL' },
+        { currency: 'USD', source: 'ECB' },
+      ]);
+
+      expect(result).toMatchObject({
+        conversionNote: 'Amounts shown in ARS, converted at the official rate for ARS and the ECB rate for USD.',
+      });
+    });
+
+    it('says it once when the sources agree', () => {
+      const result = converted([
+        { currency: 'USD', source: 'ECB' },
+        { currency: 'GBP', source: 'ECB' },
+      ]);
+
+      expect(result).toMatchObject({ conversionNote: 'Amounts shown in ARS, converted at the ECB rate.' });
+    });
   });
 });

@@ -1,9 +1,12 @@
 import {
+  BILLING_CADENCES,
   COST_CADENCES,
   UTILITY_CATEGORIES,
+  type BillingCadence,
   type CostCadence,
   type EmploymentStatus,
   type FixedCostCategory,
+  type FxRateSource,
   type HousingTenure,
   type PhaseStatus,
 } from '../../contracts';
@@ -51,6 +54,27 @@ export const CADENCE_PHRASES: Record<CostCadence, string> = {
 };
 
 export const CADENCE_OPTIONS = COST_CADENCES.map((value) => ({ value, label: CADENCE_LABELS[value] }));
+
+/** Bills as received: the recurring cadences plus a single charge. */
+export const BILLING_CADENCE_LABELS: Record<BillingCadence, string> = { ...CADENCE_LABELS, ONE_OFF: 'One-off' };
+
+export const BILLING_CADENCE_PHRASES: Record<BillingCadence, string> = { ...CADENCE_PHRASES, ONE_OFF: 'one-off' };
+
+export const BILLING_CADENCE_OPTIONS = BILLING_CADENCES.map((value) => ({ value, label: BILLING_CADENCE_LABELS[value] }));
+
+/** Where an exchange rate came from, in words. BCRA_OFFICIAL is the official Argentine rate, not a market (MEP) rate. */
+export const RATE_SOURCE_LABELS: Record<FxRateSource, string> = {
+  BCRA_OFFICIAL: 'Official rate',
+  ECB: 'ECB rate',
+  REFERENCE: 'Approximate rate',
+};
+
+/** The same sources inside a sentence: "converted at the official rate". */
+export const RATE_SOURCE_PHRASES: Record<FxRateSource, string> = {
+  BCRA_OFFICIAL: 'the official rate',
+  ECB: 'the ECB rate',
+  REFERENCE: 'the approximate rate',
+};
 
 export const TENURE_LABELS: Record<HousingTenure, string> = {
   RENT: 'Renting',

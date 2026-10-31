@@ -26,7 +26,7 @@ describe('the profile view keeps to its layers', () => {
   it('only the data hooks reach for the API client', () => {
     const users = hookFiles.filter(({ source }) => /lib\/apiClient/.test(source)).map(({ name }) => name);
 
-    expect(users.sort()).toEqual(['useLivingPhases.ts', 'useProfile.ts']);
+    expect(users.sort()).toEqual(['useBillingRecords.ts', 'useLivingPhases.ts', 'useProfile.ts', 'useTrends.ts']);
   });
 });
 

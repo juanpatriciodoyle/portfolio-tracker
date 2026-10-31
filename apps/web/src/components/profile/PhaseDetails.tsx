@@ -4,6 +4,8 @@ import type { CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFi
 import type { MutationResult } from '../../lib/apiErrors';
 import { formatMonths } from '../../lib/duration';
 import { formatMinor } from '../../lib/money';
+import BillsSection from './BillsSection';
+import type { BillingView } from './billingView';
 import { describeFailure } from './failureMessage';
 import FixedCostEditor from './FixedCostEditor';
 import { CADENCE_PHRASES, CATEGORY_GROUPS, CATEGORY_LABELS } from './labels';
@@ -14,12 +16,14 @@ interface PhaseDetailsProps {
   onAddCost: (phaseId: string, input: CreateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onUpdateCost: (phaseId: string, costId: string, input: UpdateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onDeleteCost: (phaseId: string, costId: string) => Promise<MutationResult<unknown>>;
+  /** The bills received for this phase; absent where bills are not shown. */
+  billing?: BillingView;
   /** Tells screen readers what just happened. */
   announce: (message: string) => void;
 }
 
 /** What opens up when a phase card is expanded: the monthly picture, the bills, and how to change them. */
-export default function PhaseDetails({ phase, entry, onAddCost, onUpdateCost, onDeleteCost, announce }: PhaseDetailsProps) {
+export default function PhaseDetails({ phase, entry, onAddCost, onUpdateCost, onDeleteCost, billing, announce }: PhaseDetailsProps) {
   const id = useId();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -203,6 +207,8 @@ export default function PhaseDetails({ phase, entry, onAddCost, onUpdateCost, on
           </p>
         )}
       </section>
+
+      {billing && <BillsSection phase={phase} billing={billing} announce={announce} />}
     </div>
   );
 }

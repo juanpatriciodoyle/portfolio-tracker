@@ -115,6 +115,10 @@
   --color-phase-upcoming: var(--color-warning);
   --color-phase-past: var(--text-muted);
 
+  /* Bills against what was declared */
+  --color-drift-higher: var(--color-warning);
+  --color-drift-lower: var(--color-profit);
+
   /* Motion (the Profile view); components switch these off for prefers-reduced-motion */
   --motion-quick: 0.15s;
   --motion-base: 0.2s;

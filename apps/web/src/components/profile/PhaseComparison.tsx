@@ -43,6 +43,18 @@ export default function PhaseComparison({ fromName, toName, state, onClose }: Ph
         <>
           <p className="phase-comparison__headline">{description.headline}</p>
           {description.leftOverLine && <p className="phase-comparison__detail">{description.leftOverLine}</p>}
+          {description.conversionNote && (
+            <p className="phase-comparison__note phase-comparison__conversion">
+              {description.conversionNote}
+              <span className="rate-badges">
+                {description.rates.map((rate) => (
+                  <span key={rate.currency} className="rate-badge">
+                    {rate.currency} · {rate.label}
+                  </span>
+                ))}
+              </span>
+            </p>
+          )}
           {description.categories.length > 0 && (
             <ul className="phase-comparison__list">
               {description.categories.map((line) => (

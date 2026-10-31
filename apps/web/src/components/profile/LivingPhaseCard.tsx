@@ -5,6 +5,7 @@ import type { MutationResult } from '../../lib/apiErrors';
 import { countryName, flagEmoji } from '../../lib/countries';
 import { formatMinor, formatPercent, formatPhaseRange } from '../../lib/money';
 import { barWidthPercent } from '../../lib/scale';
+import type { BillingView } from './billingView';
 import { describeFailure } from './failureMessage';
 import { STATUS_LABELS } from './labels';
 import PhaseDetails from './PhaseDetails';
@@ -22,6 +23,7 @@ interface LivingPhaseCardProps {
   onAddCost: (phaseId: string, input: CreateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onUpdateCost: (phaseId: string, costId: string, input: UpdateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onDeleteCost: (phaseId: string, costId: string) => Promise<MutationResult<unknown>>;
+  billing?: BillingView;
   announce: (message: string) => void;
 }
 
@@ -38,6 +40,7 @@ export default function LivingPhaseCard({
   onAddCost,
   onUpdateCost,
   onDeleteCost,
+  billing,
   announce,
 }: LivingPhaseCardProps) {
   const id = useId();
@@ -128,6 +131,7 @@ export default function LivingPhaseCard({
             onAddCost={onAddCost}
             onUpdateCost={onUpdateCost}
             onDeleteCost={onDeleteCost}
+            billing={billing}
             announce={announce}
           />
 

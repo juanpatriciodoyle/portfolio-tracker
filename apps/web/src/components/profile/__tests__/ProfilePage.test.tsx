@@ -1,10 +1,10 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { ENCRYPTION_NOT_CONFIGURED, type LivingPhaseDto, type TimelineEntryDto } from '../../../contracts';
+import { ENCRYPTION_NOT_CONFIGURED, type BillingRecordDto, type LivingPhaseDto, type TimelineEntryDto, type TrendsResponse } from '../../../contracts';
 import * as client from '../../../lib/apiClient';
 import { ApiError, type RequestOptions } from '../../../lib/apiClient';
-import { makeEntry, makePhase, makeProfile } from '../../../test/fixtures';
+import { makeBill, makeEmptyTrends, makeEntry, makePhase, makeProfile, makeTrends } from '../../../test/fixtures';
 import ProfilePage from '../ProfilePage';
 
 vi.mock('../../../lib/apiClient', async (importOriginal) => {
@@ -42,12 +42,21 @@ const lisbonEntry = makeEntry({
 interface World {
   phases: LivingPhaseDto[];
   entries: TimelineEntryDto[];
+  records: BillingRecordDto[];
+  trends: TrendsResponse;
   failures: Record<string, Error>;
 }
 
 /** A tiny fake server. `failures` maps "METHOD /path" (GET has no method prefix) to an error. */
 function serve(initial: Partial<World> = {}) {
-  const world: World = { phases: [madrid, lisbon], entries: [madridEntry, lisbonEntry], failures: {}, ...initial };
+  const world: World = {
+    phases: [madrid, lisbon],
+    entries: [madridEntry, lisbonEntry],
+    records: [],
+    trends: makeEmptyTrends(),
+    failures: {},
+    ...initial,
+  };
   apiRequest.mockImplementation(async (path, _schema, options) => {
     const route = path.split('?')[0];
     const key = options?.method && options.method !== 'GET' ? `${options.method} ${route}` : route;
@@ -56,6 +65,9 @@ function serve(initial: Partial<World> = {}) {
     if (key === '/api/living-phases') return { phases: world.phases };
     if (key === '/api/living-phases/timeline') return { asOf: '2026-10-31', entries: world.entries };
     if (key === 'POST /api/living-phases') return { id: 'new-phase' };
+    if (key === '/api/billing-records') return { records: world.records };
+    if (key === 'POST /api/billing-records') return { id: 'new-bill' };
+    if (key === '/api/insights/trends') return world.trends;
     if (key === '/api/living-phases/compare') {
       return {
         comparable: true,
@@ -328,5 +340,119 @@ describe('ProfilePage changes', () => {
       expect(apiCommand).toHaveBeenCalledWith('/api/profile', { method: 'PUT', body: { ...makeProfile(), fullName: 'Juan P. Doyle' } })
     );
     expect(await screen.findByText('Juan P. Doyle')).toBeInTheDocument();
+  });
+});
+
+const trendLoads = () => apiRequest.mock.calls.filter(([path]) => path === '/api/insights/trends').length;
+const billLoads = () =>
+  apiRequest.mock.calls.filter(([path, , options]) => path === '/api/billing-records' && !options?.method).length;
+
+describe('ProfilePage trends and bills', () => {
+  it('shows the trends card above the phase cards, from what the server calculated', async () => {
+    serve({ trends: makeTrends(), records: [makeBill({ phaseId: 'p1' })] });
+    renderPage();
+
+    const row = await screen.findByRole('row', { name: /^Fixed costs/ });
+
+    const trends = screen.getByRole('heading', { level: 2, name: 'Trends' });
+    expect(trends.closest('section')).toContainElement(row);
+    const list = screen.getByRole('list', { name: 'Living phases' });
+    expect(trends.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('invites the first bill when there are none, and opens the home to log it in', async () => {
+    serve();
+    renderPage();
+    await screen.findByText(/No bills yet\./);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Madrid' }));
+
+    expect(within(cardFor('Madrid')).getByRole('button', { name: 'Madrid' })).toHaveAttribute('aria-expanded', 'true');
+    expect(within(cardFor('Madrid')).getByRole('button', { name: /Log a bill/ })).toBeInTheDocument();
+  });
+
+  it('shows each phase its own bills, and how they compare with what was declared', async () => {
+    serve({
+      records: [makeBill({ id: 'mine', phaseId: 'p1', vendor: 'Iberdrola' }), makeBill({ id: 'other', phaseId: 'p2', vendor: 'EDP' })],
+      trends: makeTrends(),
+    });
+    renderPage();
+    await screen.findByRole('row', { name: /^Fixed costs/ });
+    await waitFor(() => expect(billLoads()).toBe(1));
+    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: 'Madrid' }));
+
+    const bills = await within(cardFor('Madrid')).findByRole('list', { name: 'Bills received' });
+    expect(within(bills).getByText(/Iberdrola/)).toBeInTheDocument();
+    expect(within(bills).queryByText(/EDP/)).not.toBeInTheDocument();
+    expect(within(cardFor('Madrid')).getByText(/Bills say about €1,310 a month vs €1,293 declared/)).toBeInTheDocument();
+  });
+
+  it('logs a bill and reloads the trends and the bills, so the numbers are never stale', async () => {
+    serve();
+    renderPage();
+    await screen.findByText(/No bills yet\./);
+    await waitFor(() => expect(trendLoads()).toBe(1));
+    expect(billLoads()).toBe(1);
+    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: 'Madrid' }));
+    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Log a bill/ }));
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Electricity' }));
+    fireEvent.change(screen.getByLabelText('Who sent it?'), { target: { value: 'Iberdrola' } });
+    fireEvent.change(screen.getByLabelText('Total on the bill'), { target: { value: '96' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Every 2 months' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Log bill' }));
+
+    await waitFor(() =>
+      expect(apiRequest).toHaveBeenCalledWith(
+        '/api/billing-records',
+        expect.anything(),
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.objectContaining({ phaseId: 'p1', category: 'ELECTRICITY', cadence: 'BIMONTHLY', amountMinor: 9600, vendor: 'Iberdrola' }),
+        })
+      )
+    );
+    await waitFor(() => expect(trendLoads()).toBe(2));
+    await waitFor(() => expect(billLoads()).toBe(2));
+  });
+
+  it('shows the new averages once they arrive', async () => {
+    const world = serve();
+    renderPage();
+    await screen.findByText(/No bills yet\./);
+    world.trends = makeTrends();
+    world.records = [makeBill({ phaseId: 'p1' })];
+    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: 'Madrid' }));
+    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Log a bill/ }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Electricity' }));
+    fireEvent.change(screen.getByLabelText('Who sent it?'), { target: { value: 'Iberdrola' } });
+    fireEvent.change(screen.getByLabelText('Total on the bill'), { target: { value: '96' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Log bill' }));
+
+    expect(await screen.findByRole('row', { name: /^Fixed costs/ })).toBeInTheDocument();
+    expect(screen.queryByText(/No bills yet\./)).not.toBeInTheDocument();
+  });
+
+  it('refreshes trends and bills after a living phase changes (a deleted phase takes its bills with it)', async () => {
+    const world = serve();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Living phases' });
+    await waitFor(() => expect(trendLoads()).toBe(1));
+    world.entries = [madridEntry, { ...lisbonEntry, monthlyFixedCostsMinor: 100000 }];
+
+    fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Lisbon' }));
+    fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: /Delete phase/ }));
+    fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(trendLoads()).toBe(2));
+    expect(billLoads()).toBe(2);
+  });
+
+  it('does not break the page when the trends cannot be loaded', async () => {
+    serve({ failures: { '/api/insights/trends': new Error('boom') } });
+    renderPage();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('boom');
+    expect(screen.getByRole('heading', { level: 3, name: 'Madrid' })).toBeInTheDocument();
   });
 });

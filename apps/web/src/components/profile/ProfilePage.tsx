@@ -1,15 +1,19 @@
 import { ArrowLeft, Plus } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import type { LivingPhaseDto, TimelineEntryDto } from '../../contracts';
+import { useBillingRecords } from '../../hooks/useBillingRecords';
 import { useLivingPhases } from '../../hooks/useLivingPhases';
 import { usePhaseComparison } from '../../hooks/usePhaseComparison';
 import { useProfile } from '../../hooks/useProfile';
+import { useTrends } from '../../hooks/useTrends';
 import { combineStatuses, type MutationResult } from '../../lib/apiErrors';
+import type { BillingView } from './billingView';
 import PhaseComparison from './PhaseComparison';
 import PhaseEditorDrawer from './PhaseEditorDrawer';
 import type { PhasePayload } from './phaseForm';
 import PhaseTimeline from './PhaseTimeline';
 import ProfileForm from './ProfileForm';
+import TrendsCard from './TrendsCard';
 import './profile.css';
 
 interface ProfilePageProps {
@@ -35,6 +39,20 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
   const [announcement, setAnnouncement] = useState('');
 
   const { phases, entries } = phasesApi;
+  // Bills and trends depend on the phases: they load once those are ready and again whenever they change.
+  const dataReady = phasesApi.status === 'ready';
+  const trendsApi = useTrends(dataReady, entries);
+  const billsApi = useBillingRecords(dataReady, entries, trendsApi.reload);
+  const billing: BillingView = {
+    asOf: phasesApi.asOf,
+    recordsFor: (phaseId) => billsApi.records.filter((record) => record.phaseId === phaseId),
+    observedFor: (phaseId) => trendsApi.trends?.phases.find((observed) => observed.phaseId === phaseId),
+    onAdd: billsApi.createBill,
+    onUpdate: billsApi.updateBill,
+    onDelete: billsApi.deleteBill,
+  };
+  // Where a person is most likely to log a bill: the home they live in now, else the latest one.
+  const billPhase = phases.find((phase) => entries.find((entry) => entry.phaseId === phase.id)?.status === 'current') ?? phases.at(-1);
   const status = combineStatuses(phasesApi.status, profileApi.status);
   const announce = useCallback((message: string) => setAnnouncement(message), []);
 
@@ -144,6 +162,17 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
                 </button>
               </div>
 
+              {phases.length > 0 && (
+                <TrendsCard
+                  status={trendsApi.status}
+                  trends={trendsApi.trends}
+                  message={trendsApi.message}
+                  onRetry={trendsApi.reload}
+                  onOpenPhase={billPhase ? () => setExpandedId(billPhase.id) : undefined}
+                  openPhaseName={billPhase?.name}
+                />
+              )}
+
               {from && to && (
                 <PhaseComparison fromName={from.name} toName={to.name} state={comparison} onClose={() => setCompareIds([])} />
               )}
@@ -172,6 +201,7 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
                   onAddCost={phasesApi.addFixedCost}
                   onUpdateCost={phasesApi.updateFixedCost}
                   onDeleteCost={phasesApi.deleteFixedCost}
+                  billing={billing}
                   announce={announce}
                 />
               )}

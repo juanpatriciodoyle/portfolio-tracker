@@ -58,6 +58,25 @@ describe('PhaseComparison', () => {
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
   });
 
+  it('says amounts were converted, and labels the official Argentine rate as official', () => {
+    const converted: PhaseComparisonResponse = {
+      ...comparable,
+      currency: 'ARS',
+      categories: [],
+      rateSources: [{ currency: 'ARS', source: 'BCRA_OFFICIAL' }],
+    };
+    render(<PhaseComparison fromName="Madrid" toName="Buenos Aires" state={{ status: 'ready', comparison: converted }} onClose={vi.fn()} />);
+
+    expect(screen.getByText(/Amounts shown in ARS, converted at the official rate\./)).toBeInTheDocument();
+    expect(screen.getByText('ARS · Official rate')).toBeInTheDocument();
+  });
+
+  it('adds no conversion note when nothing was converted', () => {
+    render(<PhaseComparison fromName="Madrid" toName="Lisbon" state={{ status: 'ready', comparison: comparable }} onClose={vi.fn()} />);
+
+    expect(screen.queryByText(/converted at/)).not.toBeInTheDocument();
+  });
+
   it('shows what went wrong', () => {
     render(<PhaseComparison fromName="Madrid" toName="Lisbon" state={{ status: 'error', message: 'Could not reach the server.' }} onClose={vi.fn()} />);
 

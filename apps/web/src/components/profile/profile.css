@@ -1056,3 +1056,189 @@
     animation-duration: 0.01ms !important;
   }
 }
+
+/* ---------- Bills received ---------- */
+
+.bills-section {
+  margin-top: 4px;
+}
+
+.bill-row__main {
+  align-items: flex-start;
+}
+
+.bill-row__main .category-dot {
+  margin-top: 5px;
+}
+
+.bill-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bill-row__period {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.bills-drift {
+  margin: 0 0 10px 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-heading);
+}
+
+.bills-drift.is-higher {
+  color: var(--color-drift-higher);
+}
+
+.bills-drift.is-lower {
+  color: var(--color-drift-lower);
+}
+
+.bills-drift__basis {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.bills-section__more {
+  margin-top: 8px;
+}
+
+/* ---------- Trends ---------- */
+
+.trends-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.trends-card__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trends-card__header .profile-section__hint {
+  margin: 0;
+}
+
+.trends-card__problem,
+.trends-card__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.trends-card__how summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.trends-card__how p {
+  margin: 8px 0 0 0;
+}
+
+.trends-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.trends-block__currency {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.trends-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.trends-table th,
+.trends-table td {
+  padding: 8px 4px;
+  text-align: right;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.trends-table tbody tr {
+  border-top: 1px solid var(--border-divider-color);
+}
+
+.trends-table__corner,
+.trends-table__row-label {
+  width: 30%;
+  text-align: left;
+}
+
+.trends-table__row-label {
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.trends-table__window {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.trends-table__amount {
+  display: block;
+  color: var(--text-heading);
+}
+
+.trends-table__hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+
+@media (max-width: 520px) {
+  .trends-table {
+    font-size: 12.5px;
+  }
+
+  .trends-table__corner,
+  .trends-table__row-label {
+    width: 27%;
+  }
+}
+
+/* ---------- Converted comparison ---------- */
+
+.phase-comparison__conversion {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rate-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rate-badge {
+  padding: 2px 8px;
+  border: 1px solid var(--border-divider-color);
+  border-radius: 999px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}

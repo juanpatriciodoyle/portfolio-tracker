@@ -1,6 +1,6 @@
 import type { FixedCostCategory, PhaseComparisonResponse } from '../../contracts';
 import { displayLocale, formatMinor, formatPercent, formatSignedMinor } from '../../lib/money';
-import { CATEGORY_LABELS } from './labels';
+import { CATEGORY_LABELS, RATE_SOURCE_LABELS, RATE_SOURCE_PHRASES } from './labels';
 
 export interface CategoryChange {
   category: FixedCostCategory;
@@ -9,8 +9,22 @@ export interface CategoryChange {
   direction: 'up' | 'down' | 'same';
 }
 
+export interface RateLabel {
+  currency: string;
+  /** "Official rate", "ECB rate" or "Approximate rate". */
+  label: string;
+}
+
 export type ComparisonDescription =
-  | { kind: 'comparable'; headline: string; leftOverLine: string | null; categories: CategoryChange[] }
+  | {
+      kind: 'comparable';
+      headline: string;
+      leftOverLine: string | null;
+      categories: CategoryChange[];
+      /** Said when currencies were converted: "Amounts shown in ARS, converted at the official rate." */
+      conversionNote: string | null;
+      rates: RateLabel[];
+    }
   | { kind: 'not-comparable'; headline: string };
 
 interface DescribeInput {
@@ -29,7 +43,7 @@ export function describeComparison(
     const [first, second] = comparison.currencies;
     return {
       kind: 'not-comparable',
-      headline: `These two homes use different currencies (${first} and ${second}), so a fair comparison needs exchange rates. That is coming soon.`,
+      headline: `These two homes use different currencies (${first} and ${second}) and no exchange rate is available for them right now. Try again a little later.`,
     };
   }
 
@@ -65,7 +79,23 @@ export function describeComparison(
     })
     .sort((a, b) => magnitude(comparison, b.category) - magnitude(comparison, a.category));
 
-  return { kind: 'comparable', headline, leftOverLine, categories };
+  const sources = comparison.rateSources ?? [];
+  const rates = sources.map((entry): RateLabel => ({ currency: entry.currency, label: RATE_SOURCE_LABELS[entry.source] }));
+  return { kind: 'comparable', headline, leftOverLine, categories, conversionNote: describeConversion(currency, sources), rates };
+}
+
+/** "Amounts shown in ARS, converted at the official rate." Names each currency's rate when they differ. */
+function describeConversion(
+  currency: string,
+  sources: readonly { currency: string; source: keyof typeof RATE_SOURCE_PHRASES }[]
+): string | null {
+  if (sources.length === 0) return null;
+  const distinct = [...new Set(sources.map((entry) => RATE_SOURCE_PHRASES[entry.source]))];
+  const used =
+    distinct.length === 1
+      ? distinct[0]
+      : sources.map((entry) => `${RATE_SOURCE_PHRASES[entry.source]} for ${entry.currency}`).join(' and ');
+  return `Amounts shown in ${currency}, converted at ${used}.`;
 }
 
 function magnitude(comparison: Extract<PhaseComparisonResponse, { comparable: true }>, category: FixedCostCategory): number {
