@@ -39,6 +39,9 @@ Execute commands in this specific sequence[cite: 6, 11]:
 ### Shared Contracts (Zod)
 - Request/response schemas are written once in `apps/api/src/contracts`. `apps/web/src/contracts` is a generated, read-only mirror: after changing a contract run `npm run contracts:sync` at the repo root. `npm run contracts:check` (also run in CI) fails if the mirror drifted.
 
+### Exchange Rates
+- Comparing living phases in different currencies converts with live rates from free, key-less public APIs: ECB reference rates (Frankfurter) and the official BCRA wholesale rate for Argentine pesos (priced through the ECB dollar). Every converted amount is labelled with its source ("Official rate", "ECB rate" or "Approximate rate"). A built-in approximate table in `infrastructure/fx/referenceFxRates.ts` is only the fallback when a live source is down. A financial/MEP peso rate is planned as a separate provider.
+
 ### Tests
 - `npm test` (inside `apps/api` or `apps/web`) is hermetic: no network, no database.
 - `npm run test:integration` (inside `apps/api`) needs `TEST_DATABASE_URL` pointing at a disposable database, never your real data.
