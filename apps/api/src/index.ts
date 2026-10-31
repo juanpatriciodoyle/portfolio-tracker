@@ -14,6 +14,7 @@ import { generateToken, authenticateToken, AuthenticatedRequest, verifyToken } f
 import { getPasskeyOptions, verifyPasskeyCredential } from './lib/passkey';
 import { searchMarketTickers } from './lib/financialFetcher';
 import { ensureDemoUserWithData } from './lib/demoSeed';
+import { mountProfileFeature } from './routes/profileFeature';
 
 dotenv.config();
 
@@ -21,6 +22,9 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const app = express();
 app.use(express.json());
+
+// Profile, living phases and fixed costs (field-level encrypted; see routes/profileFeature.ts).
+mountProfileFeature(app, { env: process.env, prisma: db });
 
 const PORT = process.env.PORT || 3000;
 
