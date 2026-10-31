@@ -3,19 +3,15 @@ import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import { db } from './lib/db';
-import {
-  getPortfolioOverview,
-  getPortfolioHistory,
-  getPortfolioPerformancePeriods,
-  processTransaction,
-} from './lib/pnlEngine';
 import { syncCountryInflationHistory } from './lib/inflationService';
 import { hashUserIdentity } from './lib/privacy';
-import { assertJwtSecretConfigured, generateToken, authenticateToken, AuthenticatedRequest, verifyToken } from './lib/auth';
+import { assertJwtSecretConfigured, generateToken } from './lib/auth';
 import { getPasskeyOptions, verifyPasskeyCredential } from './lib/passkey';
 import { searchMarketTickers } from './lib/financialFetcher';
 import { ensureDemoUserWithData } from './lib/demoSeed';
 import { mountProfileFeature } from './routes/profileFeature';
+import { createPortfolioRouter } from './routes/portfolio';
+import { createPrismaPortfolioDeps } from './infrastructure/prismaPortfolioDeps';
 
 assertJwtSecretConfigured();
 
@@ -27,22 +23,10 @@ app.use(express.json());
 // Profile, living phases and fixed costs (field-level encrypted; see routes/profileFeature.ts).
 mountProfileFeature(app, { env: process.env, prisma: db });
 
-const PORT = process.env.PORT || 3000;
+// The original portfolio endpoints; every one acts for the bearer-token holder only.
+app.use('/api', createPortfolioRouter(createPrismaPortfolioDeps(db)));
 
-function getUserIdFromReq(req: Request): string | undefined {
-  if (req.query.userId && typeof req.query.userId === 'string') {
-    return req.query.userId;
-  }
-  const authHeader = req.headers['authorization'];
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
-    const decoded = verifyToken(token);
-    if (decoded?.userId) {
-      return decoded.userId;
-    }
-  }
-  return undefined;
-}
+const PORT = process.env.PORT || 3000;
 
 async function seedAdmin() {
   try {
@@ -69,190 +53,6 @@ app.get('/api/market/search', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Market search error:', error);
     return res.status(500).json({ error: 'Market search failed.' });
-  }
-});
-
-// GET /api/portfolio/stats - Return real portfolio statistics for user
-app.get('/api/portfolio/stats', async (req: Request, res: Response) => {
-  try {
-    const userId = getUserIdFromReq(req);
-    const overview = await getPortfolioOverview(userId);
-    return res.json(overview);
-  } catch (error) {
-    console.error('Error calculating portfolio stats:', error);
-    return res.status(500).json({ error: 'Internal server error calculating portfolio stats.' });
-  }
-});
-
-// GET /api/portfolio/history - Return real live historical time series for user
-app.get('/api/portfolio/history', async (req: Request, res: Response) => {
-  try {
-    const userId = getUserIdFromReq(req);
-    const history = await getPortfolioHistory(userId);
-    return res.json(history);
-  } catch (error) {
-    console.error('Error calculating portfolio history:', error);
-    return res.status(500).json({ error: 'Internal server error calculating portfolio history.' });
-  }
-});
-
-// GET /api/portfolio/performance-periods - Return monthly and annual returns for bar chart & heatmap
-app.get('/api/portfolio/performance-periods', async (req: Request, res: Response) => {
-  try {
-    const userId = getUserIdFromReq(req);
-    const periods = await getPortfolioPerformancePeriods(userId);
-    return res.json(periods);
-  } catch (error) {
-    console.error('Error calculating performance periods:', error);
-    return res.status(500).json({ error: 'Internal server error calculating performance periods.' });
-  }
-});
-
-// GET /api/transactions - Return logged transaction history for user
-app.get('/api/transactions', async (req: Request, res: Response) => {
-  try {
-    const userId = getUserIdFromReq(req);
-    let targetUserId = userId;
-    if (!targetUserId) {
-      const admin = await db.user.findFirst();
-      if (admin) targetUserId = admin.id;
-    }
-
-    const transactions = await db.transaction.findMany({
-      where: targetUserId ? { userId: targetUserId } : {},
-      orderBy: { date: 'desc' },
-    });
-
-    return res.json(transactions);
-  } catch (error) {
-    console.error('Error fetching transaction logs:', error);
-    return res.status(500).json({ error: 'Internal server error fetching transactions.' });
-  }
-});
-
-// POST /api/transactions - Process BOUGHT, SOLD, DEPOSIT, WITHDRAWAL
-app.post('/api/transactions', async (req: Request, res: Response) => {
-  try {
-    const {
-      type,
-      symbol,
-      name,
-      assetClass,
-      region,
-      sector,
-      quantity,
-      amount,
-      fee,
-      currency,
-      notes,
-      date,
-      userId,
-    } = req.body;
-
-    if (!type || amount === undefined || isNaN(parseFloat(amount))) {
-      return res.status(400).json({ error: 'Missing required transaction fields (type, amount).' });
-    }
-
-    let targetUserId = userId;
-    if (!targetUserId) {
-      const admin = await db.user.findFirst();
-      if (admin) targetUserId = admin.id;
-    }
-
-    const parsedAmount = parseFloat(amount);
-    const parsedFee = fee ? parseFloat(fee) : 0;
-    const parsedQuantity = quantity ? parseFloat(quantity) : 1.0;
-
-    const result = await processTransaction({
-      userId: targetUserId,
-      type,
-      symbol: symbol ? symbol.toUpperCase() : type,
-      name,
-      assetClass,
-      region,
-      sector,
-      quantity: parsedQuantity,
-      amount: parsedAmount,
-      fee: parsedFee,
-      currency: currency || 'EUR',
-      notes,
-      date,
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: `Recorded ${type} order for ${symbol || type}`,
-      transaction: result,
-    });
-  } catch (error) {
-    console.error('Core transaction processing failure details:', error);
-    return res.status(500).json({ error: 'Internal server error processing transaction.' });
-  }
-});
-
-// GET /api/user/config - Fetch user settings
-app.get('/api/user/config', async (req: Request, res: Response) => {
-  try {
-    const userId = (req.query.userId as string) || undefined;
-    const admin = userId
-      ? await db.user.findUnique({ where: { id: userId } })
-      : await db.user.findFirst();
-
-    if (!admin) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    return res.json({
-      country: admin.country,
-      baseCurrency: admin.baseCurrency,
-      annualInflationRate: admin.annualInflationRate,
-      cashBalance: admin.cashBalance,
-    });
-  } catch (error) {
-    return res.status(500).json({ error: 'Internal server error fetching user config.' });
-  }
-});
-
-// POST /api/user/config - Update user settings
-app.post('/api/user/config', async (req: Request, res: Response) => {
-  try {
-    const { country, baseCurrency, annualInflationRate, userId } = req.body;
-    let targetUserId = userId;
-    if (!targetUserId) {
-      const admin = await db.user.findFirst();
-      if (admin) targetUserId = admin.id;
-    }
-
-    const updated = await db.user.update({
-      where: { id: targetUserId },
-      data: {
-        country: country || undefined,
-        baseCurrency: baseCurrency || undefined,
-        annualInflationRate: annualInflationRate !== undefined ? parseFloat(annualInflationRate) : undefined,
-      },
-    });
-
-    return res.json({
-      success: true,
-      config: {
-        country: updated.country,
-        baseCurrency: updated.baseCurrency,
-        annualInflationRate: updated.annualInflationRate,
-      },
-    });
-  } catch (error) {
-    return res.status(500).json({ error: 'Internal server error updating user config.' });
-  }
-});
-
-// POST /api/user/sync-inflation - Re-fetch annual inflation rate history
-app.post('/api/user/sync-inflation', async (req: Request, res: Response) => {
-  try {
-    const { country = 'Spain' } = req.body || {};
-    const rates = await syncCountryInflationHistory(country);
-    return res.json({ success: true, country, annualInflationRate: rates[new Date().getFullYear() - 1] || 2.8 });
-  } catch (error) {
-    return res.status(500).json({ error: 'Failed to sync inflation rate.' });
   }
 });
 

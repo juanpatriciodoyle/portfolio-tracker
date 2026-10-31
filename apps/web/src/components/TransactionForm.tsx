@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { DollarSign, ArrowUpRight, ArrowDownLeft, PlusCircle, MinusCircle, Calendar, Search } from 'lucide-react';
+import { authorizedFetch } from '../lib/authorizedFetch';
 
 interface TransactionFormProps {
   onSuccess?: () => void;
@@ -113,7 +114,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('/api/transactions', {
+      const response = await authorizedFetch('/api/transactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

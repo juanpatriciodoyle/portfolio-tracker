@@ -4,7 +4,7 @@ import { inflationLossAmount } from '../domain/inflation';
 import { REFERENCE_EUR_RATES } from '../infrastructure/fx/referenceFxRates';
 
 export interface ProcessTransactionParams {
-  userId?: string;
+  userId: string;
   type: 'BOUGHT' | 'SOLD' | 'DEPOSIT' | 'WITHDRAWAL';
   symbol: string;
   name?: string;
@@ -39,13 +39,7 @@ export async function processTransaction(params: ProcessTransactionParams) {
   const totalAmount = amount + (type === 'BOUGHT' ? fee : -fee);
   const txDate = date ? new Date(date) : new Date();
 
-  let targetUserId = userId;
-  if (!targetUserId) {
-    const adminUser = await db.user.findFirst();
-    if (adminUser) {
-      targetUserId = adminUser.id;
-    }
-  }
+  const targetUserId = userId;
 
   // 1. Log Transaction
   const transaction = await db.transaction.create({
@@ -172,14 +166,8 @@ export async function processTransaction(params: ProcessTransactionParams) {
   return transaction;
 }
 
-export async function getPortfolioOverview(userId?: string) {
-  let targetUser = null;
-
-  if (userId) {
-    targetUser = await db.user.findUnique({ where: { id: userId } });
-  } else {
-    targetUser = await db.user.findFirst();
-  }
+export async function getPortfolioOverview(userId: string) {
+  const targetUser = await db.user.findUnique({ where: { id: userId } });
 
   const cashBalance = targetUser ? targetUser.cashBalance : 0;
   const country = targetUser ? targetUser.country : 'Spain';
@@ -414,13 +402,8 @@ export async function getPortfolioOverview(userId?: string) {
   };
 }
 
-export async function getPortfolioHistory(userId?: string) {
-  let targetUser = null;
-  if (userId) {
-    targetUser = await db.user.findUnique({ where: { id: userId } });
-  } else {
-    targetUser = await db.user.findFirst();
-  }
+export async function getPortfolioHistory(userId: string) {
+  const targetUser = await db.user.findUnique({ where: { id: userId } });
 
   if (!targetUser) return [];
 
@@ -531,13 +514,8 @@ export interface PerformancePeriodItem {
   time_weighted_return_rate: number;
 }
 
-export async function getPortfolioPerformancePeriods(userId?: string): Promise<PerformancePeriodItem[]> {
-  let targetUser = null;
-  if (userId) {
-    targetUser = await db.user.findUnique({ where: { id: userId } });
-  } else {
-    targetUser = await db.user.findFirst();
-  }
+export async function getPortfolioPerformancePeriods(userId: string): Promise<PerformancePeriodItem[]> {
+  const targetUser = await db.user.findUnique({ where: { id: userId } });
 
   if (!targetUser) return [];
 

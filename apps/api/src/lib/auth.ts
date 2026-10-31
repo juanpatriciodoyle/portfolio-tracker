@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import type { Request } from 'express';
 import jwt from 'jsonwebtoken';
 
 export interface AuthenticatedRequest extends Request {
@@ -37,28 +37,4 @@ export function verifyToken(token: string): { userId: string } | null {
   } catch {
     return null;
   }
-}
-
-/**
- * Express middleware to verify JWT Authorization token
- */
-export function authenticateToken(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction
-) {
-  const authHeader = req.headers['authorization'];
-  const token = (authHeader && authHeader.split(' ')[1]) || (req.query.token as string);
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access denied. Authentication token required.' });
-  }
-
-  const decoded = verifyToken(token);
-  if (!decoded) {
-    return res.status(403).json({ error: 'Invalid or expired authentication token.' });
-  }
-
-  req.userId = decoded.userId;
-  next();
 }

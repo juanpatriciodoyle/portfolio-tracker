@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { formatCurrency } from '../data/sampleChartData';
+import { authorizedFetch } from '../lib/authorizedFetch';
 
 export interface PerformancePeriodItem {
   period_type: 'year' | 'month' | 'ttm';
@@ -55,15 +56,7 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
 
     const fetchPeriods = async () => {
       try {
-        const url = userId
-          ? `/api/portfolio/performance-periods?userId=${userId}`
-          : '/api/portfolio/performance-periods';
-        const token = localStorage.getItem('auth_token');
-        const headers: Record<string, string> = {};
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-        const res = await fetch(url, { headers });
+        const res = await authorizedFetch('/api/portfolio/performance-periods');
         if (res.ok) {
           const data = await res.json();
           setPeriods(data);

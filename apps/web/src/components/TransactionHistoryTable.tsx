@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { History, ArrowUpRight, ArrowDownLeft, PlusCircle, MinusCircle, Search, Filter } from 'lucide-react';
+import { authorizedFetch } from '../lib/authorizedFetch';
 
 export interface TransactionLog {
   id: string;
@@ -28,8 +29,7 @@ export default function TransactionHistoryTable({ userId }: TransactionHistoryTa
 
   const fetchTransactions = async () => {
     try {
-      const url = userId ? `/api/transactions?userId=${userId}` : '/api/transactions';
-      const res = await fetch(url);
+      const res = await authorizedFetch('/api/transactions');
       if (res.ok) {
         const data = await res.json();
         setTransactions(data);

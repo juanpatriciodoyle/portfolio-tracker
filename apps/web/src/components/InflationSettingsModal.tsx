@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Percent, Globe, Check, RefreshCw } from 'lucide-react';
+import { authorizedFetch } from '../lib/authorizedFetch';
 
 interface InflationSettingsModalProps {
   currentCountry: string;
@@ -39,7 +40,7 @@ export default function InflationSettingsModal({
   const handleAutoSyncSpain = async () => {
     setIsSyncing(true);
     try {
-      const res = await fetch('/api/user/sync-inflation', { method: 'POST' });
+      const res = await authorizedFetch('/api/user/sync-inflation', { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
         setCountry('Spain');
@@ -58,7 +59,7 @@ export default function InflationSettingsModal({
     const numericRate = parseFloat(rate) || 0;
 
     try {
-      await fetch('/api/user/config', {
+      await authorizedFetch('/api/user/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

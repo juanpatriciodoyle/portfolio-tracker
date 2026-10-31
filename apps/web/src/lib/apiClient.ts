@@ -1,7 +1,6 @@
 import type { z } from 'zod';
 import { apiErrorResponse } from '../contracts';
-
-const TOKEN_KEY = 'auth_token';
+import { readAuthToken } from './authorizedFetch';
 
 /** The server answered with an error status. `body` is whatever JSON it sent, unparsed. */
 export class ApiError extends Error {
@@ -27,15 +26,6 @@ export class ApiContractError extends Error {
   }
 }
 
-/** Storage can throw (private modes, blocked cookies): no token then simply means signed out. */
-function readToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface RequestOptions {
@@ -46,7 +36,7 @@ export interface RequestOptions {
 
 async function send(path: string, { method = 'GET', body, signal }: RequestOptions): Promise<Response> {
   const headers: Record<string, string> = { Accept: 'application/json' };
-  const token = readToken();
+  const token = readAuthToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 

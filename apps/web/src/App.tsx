@@ -15,6 +15,7 @@ import AllocationBreakdown from './components/AllocationBreakdown';
 import ProfilePage from './components/profile/ProfilePage';
 import { PROFILE_PATH, useHashRoute } from './hooks/useHashRoute';
 import { type ChartDataPoint, type ReportingPeriod, type DateRange } from './data/sampleChartData';
+import { authorizedFetch } from './lib/authorizedFetch';
 
 interface User {
   id: string;
@@ -113,14 +114,9 @@ function App() {
 
   const fetchStats = async () => {
     try {
-      const token = localStorage.getItem('auth_token');
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
       const [statsRes, historyRes] = await Promise.all([
-        fetch('/api/portfolio/stats', { headers }),
-        fetch('/api/portfolio/history', { headers }),
+        authorizedFetch('/api/portfolio/stats'),
+        authorizedFetch('/api/portfolio/history'),
       ]);
 
       if (statsRes.ok) {
