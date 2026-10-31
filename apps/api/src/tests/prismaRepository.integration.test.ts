@@ -4,6 +4,7 @@ import { LivingPhaseService } from '../application/livingPhaseService';
 import { ProfileService } from '../application/profileService';
 import { createLivingPhaseRequest } from '../contracts';
 import { AesGcmFieldCipher } from '../infrastructure/aesGcmFieldCipher';
+import { HmacBillFingerprinter } from '../infrastructure/hmacBillFingerprinter';
 import { PrismaBillingRecordRepository } from '../infrastructure/prismaBillingRecordRepository';
 import { PrismaLivingPhaseRepository } from '../infrastructure/prismaLivingPhaseRepository';
 import { PrismaProfileRepository } from '../infrastructure/prismaProfileRepository';
@@ -71,7 +72,7 @@ if (!url) {
       const cipher = new AesGcmFieldCipher(Buffer.alloc(32, 3));
       const userId = await newUser();
       const phases = new LivingPhaseService({ repository: new PrismaLivingPhaseRepository(prisma), cipher });
-      const bills = new BillingRecordService({ repository: new PrismaBillingRecordRepository(prisma), phases, cipher });
+      const bills = new BillingRecordService({ repository: new PrismaBillingRecordRepository(prisma), phases, cipher, fingerprinter: new HmacBillFingerprinter(Buffer.alloc(32, 3)) });
       const { id: phaseId } = await phases.createPhase(
         userId,
         createLivingPhaseRequest.parse({ name: 'Home', city: 'Town', countryCode: 'ES', tenure: 'RENT', startDate: '2020-01-01', currency: 'EUR', monthlyIncomeMinor: 1 })

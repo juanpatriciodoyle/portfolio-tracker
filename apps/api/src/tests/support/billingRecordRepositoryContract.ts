@@ -28,6 +28,7 @@ const record = (id: string, phaseId: string, overrides: Partial<StoredBillingRec
   periodStart: '2026-07-15',
   periodEnd: '2026-09-14',
   payload: `sealed-${id}`,
+  fingerprint: `fp-${id}`,
   ...overrides,
 });
 
@@ -53,7 +54,7 @@ export function billingRecordRepositoryContract(name: string, setup: () => Promi
     it('stores a bill and reads it back unchanged, dates included', async () => {
       const bill = record('r1', 'home-a', { periodStart: '2024-02-29', periodEnd: '2024-04-28' });
 
-      expect(await harness.repository.create(harness.userA, bill)).toBe(true);
+      expect(await harness.repository.create(harness.userA, bill)).toBe('created');
 
       expect(await harness.repository.find(harness.userA, 'r1')).toEqual(bill);
     });
@@ -74,8 +75,8 @@ export function billingRecordRepositoryContract(name: string, setup: () => Promi
     });
 
     it('refuses a bill for a phase that does not exist or belongs to someone else', async () => {
-      expect(await harness.repository.create(harness.userA, record('r1', 'nope'))).toBe(false);
-      expect(await harness.repository.create(harness.userA, record('r2', 'home-b'))).toBe(false);
+      expect(await harness.repository.create(harness.userA, record('r1', 'nope'))).toBe('phase-missing');
+      expect(await harness.repository.create(harness.userA, record('r2', 'home-b'))).toBe('phase-missing');
       expect(await harness.repository.list(harness.userA)).toEqual([]);
     });
 
@@ -84,7 +85,7 @@ export function billingRecordRepositoryContract(name: string, setup: () => Promi
 
       expect(await harness.repository.list(harness.userB)).toEqual([]);
       expect(await harness.repository.find(harness.userB, 'mine')).toBeNull();
-      expect(await harness.repository.update(harness.userB, 'mine', { payload: 'hacked' })).toBe(false);
+      expect(await harness.repository.update(harness.userB, 'mine', { payload: 'hacked' })).toBe('missing');
       expect(await harness.repository.delete(harness.userB, 'mine')).toBe(false);
       expect((await harness.repository.find(harness.userA, 'mine'))?.payload).toBe('sealed-mine');
     });
@@ -92,12 +93,50 @@ export function billingRecordRepositoryContract(name: string, setup: () => Promi
     it('changes only the fields that are given', async () => {
       await harness.repository.create(harness.userA, record('r1', 'home-a'));
 
-      expect(await harness.repository.update(harness.userA, 'r1', { cadence: 'ONE_OFF', periodEnd: '2026-07-15', payload: 'sealed-new' })).toBe(true);
+      expect(await harness.repository.update(harness.userA, 'r1', { cadence: 'ONE_OFF', periodEnd: '2026-07-15', payload: 'sealed-new' })).toBe('updated');
 
       expect(await harness.repository.find(harness.userA, 'r1')).toEqual(
         record('r1', 'home-a', { cadence: 'ONE_OFF', periodEnd: '2026-07-15', payload: 'sealed-new' })
       );
-      expect(await harness.repository.update(harness.userA, 'nope', { payload: 'x' })).toBe(false);
+      expect(await harness.repository.update(harness.userA, 'nope', { payload: 'x' })).toBe('missing');
+    });
+
+    it('refuses a second bill with the same fingerprint for the same person, and says which one it is', async () => {
+      await harness.repository.create(harness.userA, record('first', 'home-a', { fingerprint: 'same' }));
+
+      expect(await harness.repository.create(harness.userA, record('second', 'home-a', { fingerprint: 'same' }))).toBe('duplicate');
+
+      expect(await harness.repository.find(harness.userA, 'second')).toBeNull();
+      expect(await harness.repository.findIdByFingerprint(harness.userA, 'same')).toBe('first');
+      expect(await harness.repository.findIdByFingerprint(harness.userA, 'other')).toBeNull();
+    });
+
+    it('lets two people hold the same fingerprint, and never reveals one person’s bill to another', async () => {
+      await harness.repository.create(harness.userA, record('mine', 'home-a', { fingerprint: 'same' }));
+
+      expect(await harness.repository.create(harness.userB, record('theirs', 'home-b', { fingerprint: 'same' }))).toBe('created');
+      expect(await harness.repository.findIdByFingerprint(harness.userB, 'same')).toBe('theirs');
+    });
+
+    it('allows any number of bills without a fingerprint', async () => {
+      expect(await harness.repository.create(harness.userA, record('r1', 'home-a', { fingerprint: null }))).toBe('created');
+      expect(await harness.repository.create(harness.userA, record('r2', 'home-a', { fingerprint: null }))).toBe('created');
+    });
+
+    it('refuses a change that would make a bill a duplicate of another, and lets a bill keep its own fingerprint', async () => {
+      await harness.repository.create(harness.userA, record('r1', 'home-a', { fingerprint: 'one' }));
+      await harness.repository.create(harness.userA, record('r2', 'home-a', { fingerprint: 'two' }));
+
+      expect(await harness.repository.update(harness.userA, 'r2', { fingerprint: 'one' })).toBe('duplicate');
+      expect(await harness.repository.update(harness.userA, 'r1', { fingerprint: 'one', payload: 'sealed-new' })).toBe('updated');
+      expect((await harness.repository.find(harness.userA, 'r2'))?.fingerprint).toBe('two');
+    });
+
+    it('frees the fingerprint when a bill is deleted', async () => {
+      await harness.repository.create(harness.userA, record('r1', 'home-a', { fingerprint: 'one' }));
+      await harness.repository.delete(harness.userA, 'r1');
+
+      expect(await harness.repository.create(harness.userA, record('r2', 'home-a', { fingerprint: 'one' }))).toBe('created');
     });
 
     it('deletes a bill', async () => {

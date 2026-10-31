@@ -144,19 +144,31 @@ export class InMemoryBillingRecordRepository implements BillingRecordRepository 
     return copy(row.record);
   }
 
-  async create(userId: string, record: StoredBillingRecord): Promise<boolean> {
-    if (!(await this.phases.find(userId, record.phaseId))) return false;
+  async create(userId: string, record: StoredBillingRecord): Promise<'created' | 'phase-missing' | 'duplicate'> {
+    if (!(await this.phases.find(userId, record.phaseId))) return 'phase-missing';
     if (this.rows.has(record.id)) throw new Error('Duplicate billing record id');
+    if (this.holds(userId, record.fingerprint, record.id)) return 'duplicate';
     this.rows.set(record.id, { userId, record: copy(record) });
-    return true;
+    return 'created';
   }
 
-  async update(userId: string, recordId: string, change: StoredBillingRecordChange): Promise<boolean> {
+  async update(userId: string, recordId: string, change: StoredBillingRecordChange): Promise<'updated' | 'missing' | 'duplicate'> {
     const row = this.rows.get(recordId);
-    if (!row || !(await this.find(userId, recordId))) return false;
+    if (!row || !(await this.find(userId, recordId))) return 'missing';
+    if (change.fingerprint && this.holds(userId, change.fingerprint, recordId)) return 'duplicate';
     const defined = Object.fromEntries(Object.entries(change).filter(([, value]) => value !== undefined));
     row.record = { ...row.record, ...defined };
-    return true;
+    return 'updated';
+  }
+
+  async findIdByFingerprint(userId: string, fingerprint: string): Promise<string | null> {
+    for (const row of this.rows.values()) if (row.userId === userId && row.record.fingerprint === fingerprint) return row.record.id;
+    return null;
+  }
+
+  private holds(userId: string, fingerprint: string | null, exceptId: string): boolean {
+    if (fingerprint === null) return false;
+    return [...this.rows.values()].some((row) => row.userId === userId && row.record.id !== exceptId && row.record.fingerprint === fingerprint);
   }
 
   async delete(userId: string, recordId: string): Promise<boolean> {

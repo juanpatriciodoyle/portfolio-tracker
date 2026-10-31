@@ -2,6 +2,8 @@ import type { PrismaClient } from '@prisma/client';
 import express from 'express';
 import request from 'supertest';
 import {
+  DUPLICATE_BILLING_RECORD,
+  duplicateBillingRecordErrorResponse,
   ENCRYPTION_NOT_CONFIGURED,
   listBillingRecordsResponse,
   listLivingPhasesResponse,
@@ -14,6 +16,7 @@ import {
 } from '../contracts';
 import { generateToken } from '../lib/auth';
 import { AesGcmFieldCipher, FieldCipherConfigError } from '../infrastructure/aesGcmFieldCipher';
+import { HmacBillFingerprinter } from '../infrastructure/hmacBillFingerprinter';
 import { buildProfileFeature, mountProfileFeature } from '../routes/profileFeature';
 import type { FxRateProvider } from '../application/ports';
 import {
@@ -65,6 +68,7 @@ function build(fx?: FxRateProvider) {
     '/api',
     ...buildProfileFeature({
       cipher: new AesGcmFieldCipher(Buffer.alloc(32, 4), (size) => Buffer.alloc(size, (++iv % 250) + 1)),
+      fingerprinter: new HmacBillFingerprinter(Buffer.alloc(32, 4)),
       livingPhaseRepository,
       profileRepository,
       billingRecordRepository,
@@ -351,6 +355,17 @@ describe('bills and trends over HTTP', () => {
     expect(Object.keys(created.body)).toEqual(['id']);
     expect(listed.records[0]).toMatchObject({ vendor: 'Landlord Marta', amountMinor: 120000, currency: 'EUR' });
     expect(JSON.stringify(billingRecordRepository.dump())).not.toContain('Marta');
+  });
+
+  it('answers 409 with the existing bill when the same bill is recorded twice', async () => {
+    const { app, phaseId } = await setup();
+    const { id } = (await request(app).post('/api/billing-records').set(ALICE).send(bill(phaseId))).body;
+
+    const again = await request(app).post('/api/billing-records').set(ALICE).send(bill(phaseId, { vendor: 'LANDLORD marta' }));
+
+    expect(again.status).toBe(409);
+    expect(duplicateBillingRecordErrorResponse.parse(again.body)).toMatchObject({ code: DUPLICATE_BILLING_RECORD, existingRecordId: id });
+    expect(JSON.stringify(again.body)).not.toContain('Marta');
   });
 
   it('changes and removes a bill', async () => {

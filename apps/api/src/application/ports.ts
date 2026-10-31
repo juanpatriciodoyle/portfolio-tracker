@@ -63,6 +63,8 @@ export interface StoredBillingRecord {
   readonly periodStart: CalendarDate;
   readonly periodEnd: CalendarDate;
   readonly payload: string;
+  /** Keyed hash of what makes the bill unique (see BillFingerprinter); null for bills recorded before it existed. */
+  readonly fingerprint: string | null;
 }
 
 /** Fields left out are unchanged. A bill never moves to another phase. */
@@ -73,9 +75,11 @@ export interface BillingRecordRepository {
   /** Newest period first. */
   list(userId: string, filter?: { phaseId?: string }): Promise<StoredBillingRecord[]>;
   find(userId: string, recordId: string): Promise<StoredBillingRecord | null>;
-  /** False when the user has no such phase. */
-  create(userId: string, record: StoredBillingRecord): Promise<boolean>;
-  update(userId: string, recordId: string, change: StoredBillingRecordChange): Promise<boolean>;
+  /** 'phase-missing' when the user has no such phase; 'duplicate' when the person already holds that fingerprint. */
+  create(userId: string, record: StoredBillingRecord): Promise<'created' | 'phase-missing' | 'duplicate'>;
+  update(userId: string, recordId: string, change: StoredBillingRecordChange): Promise<'updated' | 'missing' | 'duplicate'>;
+  /** The id of the person's bill with this fingerprint, if any. */
+  findIdByFingerprint(userId: string, fingerprint: string): Promise<string | null>;
   delete(userId: string, recordId: string): Promise<boolean>;
 }
 
@@ -100,4 +104,17 @@ export interface StoredProfile {
 export interface ProfileRepository {
   find(userId: string): Promise<StoredProfile | null>;
   save(userId: string, payload: string): Promise<void>;
+}
+
+/** Port: turns what identifies a bill into an opaque, per-person value that can be compared and stored. */
+export interface BillFingerprinter {
+  fingerprint(userId: string, identity: string): string;
+}
+
+/**
+ * Port: turns the bytes of a PDF into its text. The reader itself enforces the page limit and a time limit, and
+ * throws a DocumentRejectedError for a document it will not read. It must not write the document anywhere.
+ */
+export interface PdfTextExtractor {
+  extract(pdf: Uint8Array): Promise<{ pages: number; text: string }>;
 }

@@ -8,11 +8,13 @@ import type {
   UpdateBillingRecordRequest,
 } from '../contracts';
 import { createBillingRecord, type BillingRecord } from '../domain/billing';
+import { billIdentity } from '../domain/billIdentity';
+import { DuplicateBillingRecordError } from '../domain/errors';
 import { buildTrends } from '../domain/trends';
 import { ResourceNotFoundError } from './errors';
 import type { LivingPhaseService } from './livingPhaseService';
 import { PayloadVault } from './payloadVault';
-import type { BillingRecordRepository, CipherContext, FieldCipher, StoredBillingRecord } from './ports';
+import type { BillFingerprinter, BillingRecordRepository, CipherContext, FieldCipher, StoredBillingRecord } from './ports';
 import { billingPayloadSchema, type BillingPayload } from './storedPayloads';
 
 const recordContext = (userId: string, recordId: string): CipherContext => ({ table: 'BillingRecord', rowId: recordId, userId });
@@ -21,6 +23,7 @@ export interface BillingRecordServiceDeps {
   readonly repository: BillingRecordRepository;
   readonly phases: LivingPhaseService;
   readonly cipher: FieldCipher;
+  readonly fingerprinter: BillFingerprinter;
   readonly newId?: () => string;
 }
 
@@ -29,12 +32,14 @@ export class BillingRecordService {
   private readonly repository: BillingRecordRepository;
   private readonly phases: LivingPhaseService;
   private readonly vault: PayloadVault;
+  private readonly fingerprinter: BillFingerprinter;
   private readonly newId: () => string;
 
-  constructor({ repository, phases, cipher, newId = () => randomUUID() }: BillingRecordServiceDeps) {
+  constructor({ repository, phases, cipher, fingerprinter, newId = () => randomUUID() }: BillingRecordServiceDeps) {
     this.repository = repository;
     this.phases = phases;
     this.vault = new PayloadVault(cipher);
+    this.fingerprinter = fingerprinter;
     this.newId = newId;
   }
 
@@ -77,6 +82,7 @@ export class BillingRecordService {
     createBillingRecord({ id, ...pickBillingFields(request) });
     const payload: BillingPayload = { vendor: request.vendor, amountMinor: request.amountMinor, notes: request.notes ?? null };
 
+    const fingerprint = this.fingerprintOf(userId, { ...pickBillingFields(request), vendor: request.vendor });
     const created = await this.repository.create(userId, {
       id,
       phaseId: request.phaseId,
@@ -85,8 +91,10 @@ export class BillingRecordService {
       periodStart: request.periodStart,
       periodEnd: request.periodEnd,
       payload: this.vault.seal(payload, recordContext(userId, id)),
+      fingerprint,
     });
-    if (!created) throw new ResourceNotFoundError('living phase');
+    if (created === 'phase-missing') throw new ResourceNotFoundError('living phase');
+    if (created === 'duplicate') throw await this.duplicateOf(userId, fingerprint);
     return { id };
   }
 
@@ -108,8 +116,14 @@ export class BillingRecordService {
     };
     createBillingRecord({ id: recordId, phaseId: stored.phaseId, amountMinor: payload.amountMinor, ...fields });
 
-    const updated = await this.repository.update(userId, recordId, { ...fields, payload: this.vault.seal(payload, recordContext(userId, recordId)) });
-    if (!updated) throw new ResourceNotFoundError('bill');
+    const fingerprint = this.fingerprintOf(userId, { ...fields, phaseId: stored.phaseId, amountMinor: payload.amountMinor, vendor: payload.vendor });
+    const updated = await this.repository.update(userId, recordId, {
+      ...fields,
+      payload: this.vault.seal(payload, recordContext(userId, recordId)),
+      fingerprint,
+    });
+    if (updated === 'missing') throw new ResourceNotFoundError('bill');
+    if (updated === 'duplicate') throw await this.duplicateOf(userId, fingerprint);
   }
 
   async deleteRecord(userId: string, recordId: string): Promise<void> {
@@ -117,6 +131,14 @@ export class BillingRecordService {
   }
 
   // ---- internals -----------------------------------------------------------------------------
+
+  private fingerprintOf(userId: string, parts: Parameters<typeof billIdentity>[0]): string {
+    return this.fingerprinter.fingerprint(userId, billIdentity(parts));
+  }
+
+  private async duplicateOf(userId: string, fingerprint: string): Promise<DuplicateBillingRecordError> {
+    return new DuplicateBillingRecordError((await this.repository.findIdByFingerprint(userId, fingerprint)) ?? '');
+  }
 
   private toDto(userId: string, stored: StoredBillingRecord, currency: string): BillingRecordDto {
     const payload = this.vault.open(billingPayloadSchema, stored.payload, recordContext(userId, stored.id));

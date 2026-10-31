@@ -44,3 +44,12 @@ export class InvalidFxRateError extends DomainError {
     super(`The exchange rate for ${currency} must be a positive, finite number`);
   }
 }
+
+/** The same bill (phase, category, period, amount and sender) is already recorded. */
+export class DuplicateBillingRecordError extends DomainError {
+  readonly code = 'DUPLICATE_BILLING_RECORD';
+
+  constructor(readonly existingRecordId: string) {
+    super('This bill is already recorded');
+  }
+}

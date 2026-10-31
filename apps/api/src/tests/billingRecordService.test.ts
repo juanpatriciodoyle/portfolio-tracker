@@ -2,7 +2,8 @@ import { BillingRecordService } from '../application/billingRecordService';
 import { ResourceNotFoundError } from '../application/errors';
 import { LivingPhaseService } from '../application/livingPhaseService';
 import { createLivingPhaseRequest, trendsResponse, type CreateBillingRecordRequest } from '../contracts';
-import { InvalidBillingRecordError } from '../domain/errors';
+import { DuplicateBillingRecordError, InvalidBillingRecordError } from '../domain/errors';
+import { HmacBillFingerprinter } from '../infrastructure/hmacBillFingerprinter';
 import { AesGcmFieldCipher, FieldCipherError } from '../infrastructure/aesGcmFieldCipher';
 import { InMemoryBillingRecordRepository, InMemoryLivingPhaseRepository } from './support/inMemoryRepositories';
 
@@ -17,7 +18,8 @@ function build() {
   const cipher = new AesGcmFieldCipher(Buffer.alloc(32, 6), (size) => Buffer.alloc(size, (++iv % 250) + 1));
   const newId = () => `id-${++ids}`;
   const phases = new LivingPhaseService({ repository: phaseRepository, cipher, newId });
-  const service = new BillingRecordService({ repository: billRepository, phases, cipher, newId });
+  const fingerprinter = new HmacBillFingerprinter(Buffer.alloc(32, 9));
+  const service = new BillingRecordService({ repository: billRepository, phases, cipher, fingerprinter, newId });
   return { service, phases, billRepository, phaseRepository };
 }
 
@@ -126,6 +128,65 @@ describe('recording bills', () => {
     billRepository.corruptPayload(id);
 
     await expect(service.listRecords(USER)).rejects.toThrow(FieldCipherError);
+  });
+});
+
+describe('duplicate bills', () => {
+  it('refuses the same bill twice, naming the one already recorded', async () => {
+    const { service, phaseId } = await withMadrid();
+    const { id } = await service.createRecord(USER, electricity(phaseId));
+
+    const second = service.createRecord(USER, electricity(phaseId, { vendor: '  IBERDROLA clientes ' }));
+
+    await expect(second).rejects.toBeInstanceOf(DuplicateBillingRecordError);
+    await expect(second).rejects.toMatchObject({ existingRecordId: id });
+    expect((await service.listRecords(USER)).records).toHaveLength(1);
+  });
+
+  it('accepts bills that differ in any of vendor, amount, period, category or phase', async () => {
+    const { service, phases, phaseId } = await withMadrid();
+    await service.createRecord(USER, electricity(phaseId));
+    const { id: otherPhase } = await phases.createPhase(USER, { ...madridPhase, startDate: '2020-01-01', endDate: '2022-08-31', fixedCosts: [] });
+
+    for (const change of [{ vendor: 'Endesa' }, { amountMinor: 1 }, { periodEnd: '2026-09-15' }, { category: 'GAS' as const }, { phaseId: otherPhase }]) {
+      await expect(service.createRecord(USER, electricity(phaseId, change))).resolves.toHaveProperty('id');
+    }
+  });
+
+  it('lets two people record the same bill', async () => {
+    const { service, phases, phaseId } = await withMadrid();
+    const { id: theirPhase } = await phases.createPhase(OTHER_USER, madridPhase);
+    await service.createRecord(USER, electricity(phaseId));
+
+    await expect(service.createRecord(OTHER_USER, electricity(theirPhase))).resolves.toHaveProperty('id');
+  });
+
+  it('does not leak that someone else recorded a bill', async () => {
+    const { service, phases, phaseId } = await withMadrid();
+    const { id: theirPhase } = await phases.createPhase(OTHER_USER, madridPhase);
+    await service.createRecord(OTHER_USER, electricity(theirPhase));
+
+    await expect(service.createRecord(USER, electricity(phaseId))).resolves.toHaveProperty('id');
+  });
+
+  it('refuses a correction that turns a bill into a copy of another, and accepts one that keeps it distinct', async () => {
+    const { service, phaseId } = await withMadrid();
+    const { id: first } = await service.createRecord(USER, electricity(phaseId));
+    const { id: second } = await service.createRecord(USER, electricity(phaseId, { amountMinor: 5 }));
+
+    await expect(service.updateRecord(USER, second, { amountMinor: 987654 })).rejects.toMatchObject({ existingRecordId: first });
+    await expect(service.updateRecord(USER, second, { amountMinor: 6 })).resolves.toBeUndefined();
+    await expect(service.updateRecord(USER, first, { notes: 'just a note' })).resolves.toBeUndefined();
+  });
+
+  it('keeps the vendor, amount and period out of the stored fingerprint', async () => {
+    const { service, billRepository, phaseId } = await withMadrid();
+    await service.createRecord(USER, electricity(phaseId));
+
+    const stored = JSON.stringify(billRepository.dump());
+
+    expect(stored).toContain('fingerprint');
+    expect(stored).not.toMatch(/"fingerprint":"[^"]*(iberdrola|987654)/i);
   });
 });
 

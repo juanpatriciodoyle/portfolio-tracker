@@ -168,9 +168,12 @@ model BillingRecord {
   periodStart DateTime          @db.Date
   periodEnd   DateTime          @db.Date
   payload     String
+  /// Keyed hash of phase, category, period, amount and sender: finds duplicates without storing anything readable.
+  fingerprint String?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
+  @@unique([userId, fingerprint])
   @@index([userId, periodStart])
   @@index([phaseId])
 }

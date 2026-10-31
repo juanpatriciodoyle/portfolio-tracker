@@ -1,8 +1,9 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { z } from 'zod';
-import { ResourceNotFoundError } from '../application/errors';
-import type { ApiErrorResponse, PhaseOverlapErrorResponse, ValidationErrorResponse } from '../contracts';
-import { InvalidBillingRecordError, InvalidLivingPhaseError, InvalidProfileError, PhaseOverlapError } from '../domain/errors';
+import { DocumentRejectedError, ResourceNotFoundError } from '../application/errors';
+import { DUPLICATE_BILLING_RECORD } from '../contracts';
+import type { ApiErrorResponse, DuplicateBillingRecordErrorResponse, PhaseOverlapErrorResponse, ValidationErrorResponse } from '../contracts';
+import { DuplicateBillingRecordError, InvalidBillingRecordError, InvalidLivingPhaseError, InvalidProfileError, PhaseOverlapError } from '../domain/errors';
 import { verifyToken, type AuthenticatedRequest } from '../lib/auth';
 
 /** A request body, query or parameter that does not match its contract. Carries paths and rules, never values. */
@@ -61,6 +62,15 @@ export function handle(action: (req: Request, res: Response) => Promise<void>): 
   };
 }
 
+const DOCUMENT_STATUS: Record<DocumentRejectedError['code'], number> = {
+  NOT_A_PDF: 415,
+  DOCUMENT_TOO_LARGE: 413,
+  TOO_MANY_PAGES: 422,
+  UNREADABLE_DOCUMENT: 422,
+  EXTRACTION_BUSY: 503,
+  RATE_LIMITED: 429,
+};
+
 export function respondWithError(error: unknown, res: Response): void {
   if (error instanceof RequestValidationError) {
     res.status(400).json({ error: 'Invalid request', issues: error.issues } satisfies ValidationErrorResponse);
@@ -70,6 +80,13 @@ export function respondWithError(error: unknown, res: Response): void {
     res
       .status(409)
       .json({ error: error.message, conflictingPhaseIds: [...error.conflictingPhaseIds] } satisfies PhaseOverlapErrorResponse);
+  } else if (error instanceof DocumentRejectedError) {
+    if (error.retryAfterSeconds !== undefined) res.set('Retry-After', String(error.retryAfterSeconds));
+    res.status(DOCUMENT_STATUS[error.code]).json({ error: error.message, code: error.code } satisfies ApiErrorResponse);
+  } else if (error instanceof DuplicateBillingRecordError) {
+    res
+      .status(409)
+      .json({ error: error.message, code: DUPLICATE_BILLING_RECORD, existingRecordId: error.existingRecordId } satisfies DuplicateBillingRecordErrorResponse);
   } else if (
     error instanceof InvalidLivingPhaseError ||
     error instanceof InvalidBillingRecordError ||
