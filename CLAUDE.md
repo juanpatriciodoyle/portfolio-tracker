@@ -47,6 +47,12 @@ Execute commands in this specific sequence[cite: 6, 11]:
 - The extraction rules are pure code in `apps/api/src/domain/documentExtraction` (locale-aware amounts, dates, vendor dictionary, categories, cadence). New senders go in `vendors.ts`.
 - Saving goes through `POST /api/billing-records`. A bill that matches one already recorded (same living phase, category, period, amount and sender) answers 409 `DUPLICATE_BILLING_RECORD`; matching uses a keyed HMAC fingerprint derived from `PROFILE_ENCRYPTION_KEY`. After pulling this change run `npx prisma db push` in `apps/api` (adds `BillingRecord.fingerprint`).
 
+### Benchmarks
+- `GET /api/insights/benchmarks` compares each living phase with public statistics about its country: where the household income sits among people in the country, how much of the income housing takes against the typical household, and what the income buys at world-average prices (PPP). Every missing comparison comes back with a reason in `gaps`; nothing is guessed. Household size comes from the profile (1 adult, no children if none is saved).
+- Sources, all free and key-less, behind the `StatisticsProvider` port (`infrastructure/benchmarks`): Eurostat EU-SILC for European countries (income deciles `ilc_di01`, housing share `ilc_mded01`), INDEC via datos.gob.ar for Argentina (decile means), and the World Bank for every country (PPP factor, GNI per person). Earlier providers win; the World Bank only fills what they do not publish. Add a source by writing another provider and listing it in `mountProfileFeature`.
+- Statistics are public, so they are cached unencrypted in `CountryStatistics` (run `npx prisma db push` after pulling) and refreshed when older than 35 days: on demand, and by a daily job that only fetches what is stale, under a Postgres advisory lock so several servers do not repeat it. `BENCHMARK_REFRESH=off` disables the job. A provider outage never overwrites good data, and an outage is never cached as "no data".
+- An income in a currency other than the country's cannot be compared with national figures; the phase gets `CURRENCY_MISMATCH` instead of a wrong number. Not built yet: city-level indices (Numbeo, paid), a financial/MEP peso rate, OECD data.
+
 ### Tests
 - `npm test` (inside `apps/api` or `apps/web`) is hermetic: no network, no database.
 - `npm run test:integration` (inside `apps/api`) needs `TEST_DATABASE_URL` pointing at a disposable database, never your real data.
