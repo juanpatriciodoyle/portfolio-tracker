@@ -1,5 +1,6 @@
+// Must stay the first import: it loads apps/api/.env before any other module reads process.env.
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
-import dotenv from 'dotenv';
 import { OAuth2Client } from 'google-auth-library';
 import { db } from './lib/db';
 import {
@@ -10,13 +11,13 @@ import {
 } from './lib/pnlEngine';
 import { syncCountryInflationHistory } from './lib/inflationService';
 import { hashUserIdentity } from './lib/privacy';
-import { generateToken, authenticateToken, AuthenticatedRequest, verifyToken } from './lib/auth';
+import { assertJwtSecretConfigured, generateToken, authenticateToken, AuthenticatedRequest, verifyToken } from './lib/auth';
 import { getPasskeyOptions, verifyPasskeyCredential } from './lib/passkey';
 import { searchMarketTickers } from './lib/financialFetcher';
 import { ensureDemoUserWithData } from './lib/demoSeed';
 import { mountProfileFeature } from './routes/profileFeature';
 
-dotenv.config();
+assertJwtSecretConfigured();
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
