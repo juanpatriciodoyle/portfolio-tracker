@@ -1,5 +1,6 @@
 import { db } from './db';
 import { calculateHoldingPeriodInflation, syncCountryInflationHistory } from './inflationService';
+import { inflationLossAmount } from '../domain/inflation';
 
 export interface ProcessTransactionParams {
   userId?: string;
@@ -222,7 +223,7 @@ export async function getPortfolioOverview(userId?: string) {
 
     // Time-weighted inflation from purchase date to today for open holding
     const inflationPercent = await calculateHoldingPeriodInflation(country, pos.createdAt, new Date());
-    positionInflationEurosLoss += pos.investedAmount * (inflationPercent / 100);
+    positionInflationEurosLoss += inflationLossAmount(pos.investedAmount, inflationPercent);
   }
 
   // Calculate per-sold-asset holding period inflation
@@ -230,7 +231,7 @@ export async function getPortfolioOverview(userId?: string) {
   const soldAssetsWithInflation = [];
   for (const gain of realizedGains) {
     const inflationPercent = await calculateHoldingPeriodInflation(country, gain.createdAt, gain.date);
-    const inflationLoss = gain.investedAmount * (inflationPercent / 100);
+    const inflationLoss = inflationLossAmount(gain.investedAmount, inflationPercent);
     soldAssetsInflationEurosLoss += inflationLoss;
     const realGainEuros = gain.realizedPnl - inflationLoss;
 
