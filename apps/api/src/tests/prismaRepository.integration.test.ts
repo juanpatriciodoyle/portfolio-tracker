@@ -5,6 +5,8 @@ import { ProfileService } from '../application/profileService';
 import { createLivingPhaseRequest } from '../contracts';
 import { AesGcmFieldCipher } from '../infrastructure/aesGcmFieldCipher';
 import { HmacBillFingerprinter } from '../infrastructure/hmacBillFingerprinter';
+import { PrismaCountryStatisticsRepository } from '../infrastructure/prismaCountryStatisticsRepository';
+import { PrismaJobLock } from '../infrastructure/prismaJobLock';
 import { PrismaBillingRecordRepository } from '../infrastructure/prismaBillingRecordRepository';
 import { PrismaLivingPhaseRepository } from '../infrastructure/prismaLivingPhaseRepository';
 import { PrismaProfileRepository } from '../infrastructure/prismaProfileRepository';
@@ -65,6 +67,57 @@ if (!url) {
         await prisma.user.deleteMany({ where: { id: { in: [userA, userB] } } });
       },
     };
+  });
+
+  describe('country statistics and the job lock', () => {
+    const statistics = {
+      countryCode: 'ZZ',
+      incomeDistribution: { source: 'EUROSTAT' as const, period: '2025', currency: 'EUR', distribution: { period: 'YEAR' as const, basis: 'EQUIVALISED' as const, points: [{ percentile: 10, value: 909100 }] } },
+      housingCostShare: { source: 'EUROSTAT' as const, period: '2025', percent: 16 },
+      purchasing: null,
+    };
+
+    afterEach(async () => {
+      await prisma.countryStatistics.deleteMany({ where: { countryCode: 'ZZ' } });
+    });
+
+    it('stores statistics, overwrites them, and treats a row of the wrong shape as missing', async () => {
+      const repository = new PrismaCountryStatisticsRepository(prisma);
+      expect(await repository.find('ZZ')).toBeNull();
+
+      await repository.save({ statistics, fetchedAt: '2026-10-31T12:00:00.000Z' });
+      expect(await repository.find('ZZ')).toEqual({ statistics, fetchedAt: '2026-10-31T12:00:00.000Z' });
+
+      await repository.save({ statistics: { ...statistics, housingCostShare: null }, fetchedAt: '2026-12-01T00:00:00.000Z' });
+      expect((await repository.find('ZZ'))?.statistics.housingCostShare).toBeNull();
+
+      await prisma.countryStatistics.update({ where: { countryCode: 'ZZ' }, data: { payload: { nonsense: true } } });
+      expect(await repository.find('ZZ')).toBeNull();
+    });
+
+    it('lets only one server run a job at a time, and frees the lock afterwards', async () => {
+      const lock = new PrismaJobLock(prisma);
+      let releaseFirst: () => void = () => undefined;
+      const hold = new Promise<void>((resolve) => (releaseFirst = resolve));
+      const started: string[] = [];
+
+      const first = lock.runExclusive('integration-test-job', async () => {
+        started.push('first');
+        await hold;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const second = await lock.runExclusive('integration-test-job', async () => {
+        started.push('second');
+      });
+      const other = await lock.runExclusive('another-job', async () => undefined);
+      releaseFirst();
+
+      expect(second).toBe('skipped');
+      expect(other).toBe('ran');
+      expect(await first).toBe('ran');
+      expect(await lock.runExclusive('integration-test-job', async () => undefined)).toBe('ran');
+      expect(started).toEqual(['first']);
+    });
   });
 
   describe('end to end with a real database', () => {

@@ -1,3 +1,4 @@
+export * from './benchmark';
 export * from './billingRecord';
 export * from './document';
 export * from './errors';

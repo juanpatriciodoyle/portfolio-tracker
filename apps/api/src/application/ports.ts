@@ -1,4 +1,6 @@
 import type { BillingCadence, CalendarDate, CostCadence, FixedCostCategory, FxRateSource, HousingTenure } from '../contracts/vocabulary';
+import type { BenchmarkSource } from '../contracts/benchmark';
+import type { IncomeDistribution } from '../domain/benchmarks';
 import type { FxRates } from '../domain/phaseComparison';
 
 /** Where a stored value lives. Bound into every ciphertext so a value cannot be moved to another row or person. */
@@ -117,4 +119,46 @@ export interface BillFingerprinter {
  */
 export interface PdfTextExtractor {
   extract(pdf: Uint8Array): Promise<{ pages: number; text: string }>;
+}
+
+/** Which statistic, from whom, and for which period (such as "2025" or "2026-Q1"). */
+export interface StatisticOrigin {
+  readonly source: BenchmarkSource;
+  readonly period: string;
+}
+
+/** What is known about a country from public statistics. Each part is null when no provider published it. */
+export interface CountryStatistics {
+  readonly countryCode: string;
+  readonly incomeDistribution: (StatisticOrigin & { readonly currency: string; readonly distribution: IncomeDistribution }) | null;
+  /** Typical share of disposable income that households spend on housing, in percent. */
+  readonly housingCostShare: (StatisticOrigin & { readonly percent: number }) | null;
+  /** PPP conversion factor: local currency units per international dollar, and GNI per person in international dollars. */
+  readonly purchasing: (StatisticOrigin & { readonly lcuPerInternationalDollar: number; readonly gniPerPersonDollars: number | null }) | null;
+}
+
+export type StatisticsFragment = Partial<Omit<CountryStatistics, 'countryCode'>>;
+
+/** Port: one public source of statistics. Answers only what it publishes; throws when it cannot be reached. */
+export interface StatisticsProvider {
+  readonly name: string;
+  supports(countryCode: string): boolean;
+  fetch(countryCode: string): Promise<StatisticsFragment>;
+}
+
+export interface StoredCountryStatistics {
+  readonly statistics: CountryStatistics;
+  /** When the providers were last asked, as an ISO timestamp. */
+  readonly fetchedAt: string;
+}
+
+/** Port: the cache of country statistics. Public data, shared by everyone, so nothing here is personal. */
+export interface CountryStatisticsRepository {
+  find(countryCode: string): Promise<StoredCountryStatistics | null>;
+  save(stored: StoredCountryStatistics): Promise<void>;
+}
+
+/** Port: makes sure a task runs on one server at a time, across all of them. */
+export interface JobLock {
+  runExclusive(name: string, task: () => Promise<void>): Promise<'ran' | 'skipped'>;
 }

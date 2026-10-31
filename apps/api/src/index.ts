@@ -10,6 +10,7 @@ import { getPasskeyOptions, verifyPasskeyCredential } from './lib/passkey';
 import { searchMarketTickers } from './lib/financialFetcher';
 import { ensureDemoUserWithData } from './lib/demoSeed';
 import { mountProfileFeature } from './routes/profileFeature';
+import { scheduleBenchmarkRefresh } from './infrastructure/benchmarks/refreshSchedule';
 import { createPortfolioRouter } from './routes/portfolio';
 import { createPrismaPortfolioDeps } from './infrastructure/prismaPortfolioDeps';
 
@@ -21,7 +22,7 @@ const app = express();
 app.use(express.json());
 
 // Profile, living phases and fixed costs (field-level encrypted; see routes/profileFeature.ts).
-mountProfileFeature(app, { env: process.env, prisma: db });
+const { benchmarkRefresher } = mountProfileFeature(app, { env: process.env, prisma: db });
 
 // The original portfolio endpoints; every one acts for the bearer-token holder only.
 app.use('/api', createPortfolioRouter(createPrismaPortfolioDeps(db)));
@@ -198,5 +199,6 @@ app.post('/api/auth/demo', async (req: Request, res: Response) => {
 
 app.listen(PORT, async () => {
   await seedAdmin();
+  if (benchmarkRefresher && process.env.BENCHMARK_REFRESH !== 'off') scheduleBenchmarkRefresh(benchmarkRefresher);
   console.log(`🚀 Portfolio-Tracker Backend running on port ${PORT}`);
 });

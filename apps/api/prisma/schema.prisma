@@ -200,3 +200,12 @@ model UserProfile {
   payload   String
   updatedAt DateTime @updatedAt
 }
+
+/// What public statistics offices publish about a country (income deciles, housing-cost share, PPP). Shared by everyone and
+/// refreshed about monthly, so nothing here is personal and nothing is encrypted.
+model CountryStatistics {
+  countryCode String   @id
+  payload     Json
+  fetchedAt   DateTime
+  updatedAt   DateTime @updatedAt
+}

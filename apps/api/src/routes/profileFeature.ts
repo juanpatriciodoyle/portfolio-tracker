@@ -4,6 +4,8 @@ import type { PrismaClient } from '@prisma/client';
 import { BillingRecordService } from '../application/billingRecordService';
 import { LivingPhaseService } from '../application/livingPhaseService';
 import { ProfileService } from '../application/profileService';
+import { BenchmarkService } from '../application/benchmarkService';
+import { BenchmarkRefresher, CountryStatisticsService } from '../application/countryStatisticsService';
 import { DocumentExtractionService } from '../application/documentExtractionService';
 import { ConcurrencyGate, SlidingWindowRateLimiter } from '../application/limits';
 import type { BillFingerprinter, BillingRecordRepository, FieldCipher, FxRateProvider, LivingPhaseRepository, PdfTextExtractor, ProfileRepository } from '../application/ports';
@@ -16,10 +18,16 @@ import { WorkerPdfTextExtractor } from '../infrastructure/pdf/workerPdfTextExtra
 import { HmacBillFingerprinter } from '../infrastructure/hmacBillFingerprinter';
 import { LiveFxRateProvider } from '../infrastructure/fx/liveFxRateProvider';
 import { ReferenceFxRateProvider } from '../infrastructure/fx/referenceFxRates';
+import { EurostatStatisticsProvider } from '../infrastructure/benchmarks/eurostatStatistics';
+import { IndecStatisticsProvider } from '../infrastructure/benchmarks/indecStatistics';
+import { WorldBankStatisticsProvider } from '../infrastructure/benchmarks/worldBankStatistics';
 import { PrismaBillingRecordRepository } from '../infrastructure/prismaBillingRecordRepository';
+import { PrismaCountryStatisticsRepository } from '../infrastructure/prismaCountryStatisticsRepository';
+import { PrismaJobLock } from '../infrastructure/prismaJobLock';
 import { PrismaLivingPhaseRepository } from '../infrastructure/prismaLivingPhaseRepository';
 import { PrismaProfileRepository } from '../infrastructure/prismaProfileRepository';
 import { noStore, requireUser } from './http';
+import { createBenchmarksRouter } from './benchmarks';
 import { createBillingRecordsRouter } from './billingRecords';
 import { createDocumentsRouter } from './documents';
 import { createLivingPhasesRouter } from './livingPhases';
@@ -33,6 +41,8 @@ export interface ProfileFeatureDeps {
   readonly billingRecordRepository: BillingRecordRepository;
   /** Reads bill PDFs. Without it the document routes are not mounted. */
   readonly pdfTextExtractor?: PdfTextExtractor;
+  /** Public country statistics for the benchmarks. Without it the benchmark route is not mounted. */
+  readonly statistics?: CountryStatisticsService;
   readonly documentLimits?: { readonly limit?: number; readonly windowMs?: number; readonly maxConcurrent?: number; readonly now?: () => number };
   readonly today?: () => CalendarDate;
   readonly newId?: () => string;
@@ -57,8 +67,12 @@ export function buildProfileFeature(deps: ProfileFeatureDeps): Router[] {
         }),
       ]
     : [];
+  const benchmarks = deps.statistics
+    ? [createBenchmarksRouter({ service: new BenchmarkService({ phases, profiles: new ProfileService({ repository: deps.profileRepository, cipher: deps.cipher }), statistics: deps.statistics }), today })]
+    : [];
   return [
     ...documents,
+    ...benchmarks,
     createLivingPhasesRouter({ service: phases, today }),
     createBillingRecordsRouter({
       service: new BillingRecordService({ repository: deps.billingRecordRepository, phases, cipher: deps.cipher, fingerprinter: deps.fingerprinter, newId: deps.newId }),
@@ -90,16 +104,23 @@ function encryptionUnavailableRouter(): Router {
 export function mountProfileFeature(
   app: Express,
   { env, prisma }: { env: Readonly<Record<string, string | undefined>>; prisma: PrismaClient }
-): void {
+): { benchmarkRefresher: BenchmarkRefresher | null } {
   try {
     const key = loadFieldCipherKey(env);
     const cipher = new AesGcmFieldCipher(key);
+    const statistics = new CountryStatisticsService({
+      repository: new PrismaCountryStatisticsRepository(prisma),
+      // Specific sources first, so the World Bank only fills in what they do not publish.
+      providers: [new EurostatStatisticsProvider(), new IndecStatisticsProvider(), new WorldBankStatisticsProvider()],
+      now: Date.now,
+    });
     app.use(
       '/api',
       ...buildProfileFeature({
         cipher,
         fingerprinter: new HmacBillFingerprinter(key),
         pdfTextExtractor: new WorkerPdfTextExtractor(),
+        statistics,
         livingPhaseRepository: new PrismaLivingPhaseRepository(prisma),
         profileRepository: new PrismaProfileRepository(prisma),
         billingRecordRepository: new PrismaBillingRecordRepository(prisma),
@@ -110,9 +131,17 @@ export function mountProfileFeature(
         }),
       })
     );
+    return {
+      benchmarkRefresher: new BenchmarkRefresher({
+        statistics,
+        lock: new PrismaJobLock(prisma),
+        countriesInUse: async () => (await prisma.livingPhase.findMany({ distinct: ['countryCode'], select: { countryCode: true } })).map((row) => row.countryCode),
+      }),
+    };
   } catch (error) {
     if (env.NODE_ENV === 'production') throw error;
     console.warn(`⚠️  ${(error as Error).message}\n   Profile and living-phase routes answer 503 until it is set.`);
     app.use('/api', encryptionUnavailableRouter());
+    return { benchmarkRefresher: null };
   }
 }
