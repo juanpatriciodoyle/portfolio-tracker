@@ -22,3 +22,13 @@ export const costPayloadSchema = z
   })
   .strict();
 export type CostPayload = z.infer<typeof costPayloadSchema>;
+
+/** What is sealed inside a billing record row. */
+export const billingPayloadSchema = z
+  .object({
+    vendor: z.string(),
+    amountMinor: amountMinorSchema,
+    notes: z.string().nullable(),
+  })
+  .strict();
+export type BillingPayload = z.infer<typeof billingPayloadSchema>;

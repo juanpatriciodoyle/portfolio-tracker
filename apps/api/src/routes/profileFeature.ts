@@ -1,15 +1,22 @@
 import type { Express, Router } from 'express';
 import { Router as createRouter } from 'express';
 import type { PrismaClient } from '@prisma/client';
+import { BillingRecordService } from '../application/billingRecordService';
 import { LivingPhaseService } from '../application/livingPhaseService';
 import { ProfileService } from '../application/profileService';
-import type { FieldCipher, LivingPhaseRepository, ProfileRepository } from '../application/ports';
+import type { BillingRecordRepository, FieldCipher, FxRateProvider, LivingPhaseRepository, ProfileRepository } from '../application/ports';
 import { ENCRYPTION_NOT_CONFIGURED, type ApiErrorResponse, type CalendarDate } from '../contracts';
 import { calendarDateOf } from '../domain/calendarDate';
 import { AesGcmFieldCipher, loadFieldCipherKey } from '../infrastructure/aesGcmFieldCipher';
+import { BcraOfficialRateSource } from '../infrastructure/fx/bcraOfficialRates';
+import { FrankfurterFxRateProvider } from '../infrastructure/fx/frankfurterFxRates';
+import { LiveFxRateProvider } from '../infrastructure/fx/liveFxRateProvider';
+import { ReferenceFxRateProvider } from '../infrastructure/fx/referenceFxRates';
+import { PrismaBillingRecordRepository } from '../infrastructure/prismaBillingRecordRepository';
 import { PrismaLivingPhaseRepository } from '../infrastructure/prismaLivingPhaseRepository';
 import { PrismaProfileRepository } from '../infrastructure/prismaProfileRepository';
 import { noStore, requireUser } from './http';
+import { createBillingRecordsRouter } from './billingRecords';
 import { createLivingPhasesRouter } from './livingPhases';
 import { createProfileRouter } from './profile';
 
@@ -17,16 +24,20 @@ export interface ProfileFeatureDeps {
   readonly cipher: FieldCipher;
   readonly livingPhaseRepository: LivingPhaseRepository;
   readonly profileRepository: ProfileRepository;
+  readonly billingRecordRepository: BillingRecordRepository;
   readonly today?: () => CalendarDate;
   readonly newId?: () => string;
+  readonly fx?: FxRateProvider;
 }
 
 /** Wires services to routes. Pure composition: easy to run with in-memory repositories in tests. */
 export function buildProfileFeature(deps: ProfileFeatureDeps): Router[] {
   const today = deps.today ?? (() => calendarDateOf(new Date()));
+  const phases = new LivingPhaseService({ repository: deps.livingPhaseRepository, cipher: deps.cipher, newId: deps.newId, fx: deps.fx });
   return [
-    createLivingPhasesRouter({
-      service: new LivingPhaseService({ repository: deps.livingPhaseRepository, cipher: deps.cipher, newId: deps.newId }),
+    createLivingPhasesRouter({ service: phases, today }),
+    createBillingRecordsRouter({
+      service: new BillingRecordService({ repository: deps.billingRecordRepository, phases, cipher: deps.cipher, newId: deps.newId }),
       today,
     }),
     createProfileRouter({
@@ -39,7 +50,7 @@ export function buildProfileFeature(deps: ProfileFeatureDeps): Router[] {
 /** What the routes answer while no encryption key is configured: nothing is stored, nothing is guessed. */
 function encryptionUnavailableRouter(): Router {
   const router = createRouter();
-  router.use(['/living-phases', '/profile'], noStore, requireUser, (_req, res) => {
+  router.use(['/living-phases', '/billing-records', '/insights', '/profile'], noStore, requireUser, (_req, res) => {
     res.status(503).json({
       error: 'Profile data cannot be stored until the server has a PROFILE_ENCRYPTION_KEY (see apps/api/.env.example).',
       code: ENCRYPTION_NOT_CONFIGURED,
@@ -64,6 +75,12 @@ export function mountProfileFeature(
         cipher,
         livingPhaseRepository: new PrismaLivingPhaseRepository(prisma),
         profileRepository: new PrismaProfileRepository(prisma),
+        billingRecordRepository: new PrismaBillingRecordRepository(prisma),
+        fx: new LiveFxRateProvider({
+          ecb: new FrankfurterFxRateProvider(),
+          bcra: new BcraOfficialRateSource(),
+          reference: new ReferenceFxRateProvider(),
+        }),
       })
     );
   } catch (error) {

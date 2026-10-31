@@ -1,10 +1,13 @@
 import { PrismaClient } from '@prisma/client';
+import { BillingRecordService } from '../application/billingRecordService';
 import { LivingPhaseService } from '../application/livingPhaseService';
 import { ProfileService } from '../application/profileService';
 import { createLivingPhaseRequest } from '../contracts';
 import { AesGcmFieldCipher } from '../infrastructure/aesGcmFieldCipher';
+import { PrismaBillingRecordRepository } from '../infrastructure/prismaBillingRecordRepository';
 import { PrismaLivingPhaseRepository } from '../infrastructure/prismaLivingPhaseRepository';
 import { PrismaProfileRepository } from '../infrastructure/prismaProfileRepository';
+import { billingRecordRepositoryContract } from './support/billingRecordRepositoryContract';
 import { livingPhaseRepositoryContract } from './support/livingPhaseRepositoryContract';
 
 /**
@@ -49,7 +52,47 @@ if (!url) {
     };
   });
 
+  billingRecordRepositoryContract('Prisma / Postgres', async () => {
+    const userA = await newUser();
+    const userB = await newUser();
+    return {
+      repository: new PrismaBillingRecordRepository(prisma),
+      phases: new PrismaLivingPhaseRepository(prisma),
+      userA,
+      userB,
+      teardown: async () => {
+        await prisma.user.deleteMany({ where: { id: { in: [userA, userB] } } });
+      },
+    };
+  });
+
   describe('end to end with a real database', () => {
+    it('keeps a bill’s vendor, amount and notes unreadable in the table', async () => {
+      const cipher = new AesGcmFieldCipher(Buffer.alloc(32, 3));
+      const userId = await newUser();
+      const phases = new LivingPhaseService({ repository: new PrismaLivingPhaseRepository(prisma), cipher });
+      const bills = new BillingRecordService({ repository: new PrismaBillingRecordRepository(prisma), phases, cipher });
+      const { id: phaseId } = await phases.createPhase(
+        userId,
+        createLivingPhaseRequest.parse({ name: 'Home', city: 'Town', countryCode: 'ES', tenure: 'RENT', startDate: '2020-01-01', currency: 'EUR', monthlyIncomeMinor: 1 })
+      );
+
+      await bills.createRecord(userId, {
+        phaseId,
+        category: 'ELECTRICITY',
+        cadence: 'BIMONTHLY',
+        periodStart: '2026-07-15',
+        periodEnd: '2026-09-14',
+        amountMinor: 8765432,
+        vendor: 'Compañía Eléctrica Zephyr',
+        notes: 'Meter behind the boiler',
+      });
+
+      const rows = JSON.stringify(await prisma.$queryRaw`SELECT * FROM "BillingRecord" WHERE "userId" = ${userId}`);
+      for (const secret of ['Zephyr', 'Compa', '8765432', 'boiler']) expect(rows).not.toContain(secret);
+      expect((await bills.listRecords(userId)).records[0]).toMatchObject({ vendor: 'Compañía Eléctrica Zephyr', amountMinor: 8765432 });
+    });
+
     const cipher = new AesGcmFieldCipher(Buffer.alloc(32, 3));
 
     it('leaves nothing personal readable in the stored rows', async () => {

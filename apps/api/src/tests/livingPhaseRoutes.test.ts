@@ -3,17 +3,24 @@ import express from 'express';
 import request from 'supertest';
 import {
   ENCRYPTION_NOT_CONFIGURED,
+  listBillingRecordsResponse,
   listLivingPhasesResponse,
   phaseComparisonResponse,
   phaseOverlapErrorResponse,
   profileResponse,
   timelineResponse,
+  trendsResponse,
   validationErrorResponse,
 } from '../contracts';
 import { generateToken } from '../lib/auth';
 import { AesGcmFieldCipher, FieldCipherConfigError } from '../infrastructure/aesGcmFieldCipher';
 import { buildProfileFeature, mountProfileFeature } from '../routes/profileFeature';
-import { InMemoryLivingPhaseRepository, InMemoryProfileRepository } from './support/inMemoryRepositories';
+import type { FxRateProvider } from '../application/ports';
+import {
+  InMemoryBillingRecordRepository,
+  InMemoryLivingPhaseRepository,
+  InMemoryProfileRepository,
+} from './support/inMemoryRepositories';
 
 const TODAY = '2026-10-31';
 
@@ -46,8 +53,9 @@ const lisbon = {
   fixedCosts: [{ category: 'RENT', cadence: 'MONTHLY', amountMinor: 90000 }],
 };
 
-function build() {
+function build(fx?: FxRateProvider) {
   const livingPhaseRepository = new InMemoryLivingPhaseRepository();
+  const billingRecordRepository = new InMemoryBillingRecordRepository(livingPhaseRepository);
   const profileRepository = new InMemoryProfileRepository();
   let ids = 0;
   let iv = 0;
@@ -59,11 +67,13 @@ function build() {
       cipher: new AesGcmFieldCipher(Buffer.alloc(32, 4), (size) => Buffer.alloc(size, (++iv % 250) + 1)),
       livingPhaseRepository,
       profileRepository,
+      billingRecordRepository,
+      fx,
       today: () => TODAY,
       newId: () => `id-${++ids}`,
     })
   );
-  return { app, livingPhaseRepository, profileRepository };
+  return { app, livingPhaseRepository, profileRepository, billingRecordRepository };
 }
 
 const as = (userId: string) => ({ Authorization: `Bearer ${generateToken(userId)}` });
@@ -82,6 +92,11 @@ describe('who is asking', () => {
     ['post', '/api/living-phases/x/fixed-costs'],
     ['patch', '/api/living-phases/x/fixed-costs/y'],
     ['delete', '/api/living-phases/x/fixed-costs/y'],
+    ['get', '/api/billing-records'],
+    ['post', '/api/billing-records'],
+    ['patch', '/api/billing-records/x'],
+    ['delete', '/api/billing-records/x'],
+    ['get', '/api/insights/trends'],
     ['get', '/api/profile'],
     ['put', '/api/profile'],
   ];
@@ -309,6 +324,93 @@ describe('living phases over HTTP', () => {
   });
 });
 
+describe('bills and trends over HTTP', () => {
+  const bill = (phaseId: string, change: Record<string, unknown> = {}) => ({
+    phaseId,
+    category: 'RENT',
+    cadence: 'MONTHLY',
+    periodStart: '2026-09-01',
+    periodEnd: '2026-09-30',
+    amountMinor: 120000,
+    vendor: 'Landlord Marta',
+    ...change,
+  });
+  const setup = async () => {
+    const world = build();
+    const { id } = (await request(world.app).post('/api/living-phases').set(ALICE).send(madrid)).body;
+    return { ...world, phaseId: id as string };
+  };
+
+  it('records a bill (id only), lists it decrypted with its currency, and keeps it encrypted', async () => {
+    const { app, phaseId, billingRecordRepository } = await setup();
+
+    const created = await request(app).post('/api/billing-records').set(ALICE).send(bill(phaseId));
+    const listed = listBillingRecordsResponse.parse((await request(app).get('/api/billing-records').query({ phaseId }).set(ALICE)).body);
+
+    expect(created.status).toBe(201);
+    expect(Object.keys(created.body)).toEqual(['id']);
+    expect(listed.records[0]).toMatchObject({ vendor: 'Landlord Marta', amountMinor: 120000, currency: 'EUR' });
+    expect(JSON.stringify(billingRecordRepository.dump())).not.toContain('Marta');
+  });
+
+  it('changes and removes a bill', async () => {
+    const { app, phaseId } = await setup();
+    const { id } = (await request(app).post('/api/billing-records').set(ALICE).send(bill(phaseId))).body;
+
+    await request(app).patch(`/api/billing-records/${id}`).set(ALICE).send({ amountMinor: 125000, notes: null }).expect(204);
+    expect((await request(app).get('/api/billing-records').set(ALICE)).body.records[0].amountMinor).toBe(125000);
+    await request(app).delete(`/api/billing-records/${id}`).set(ALICE).expect(204);
+
+    expect((await request(app).delete(`/api/billing-records/${id}`).set(ALICE)).status).toBe(404);
+  });
+
+  it('rejects bad input with 400, a broken business rule with 422, and a foreign phase with 404', async () => {
+    const { app, phaseId } = await setup();
+
+    expect((await request(app).post('/api/billing-records').set(ALICE).send(bill(phaseId, { periodEnd: '2026-08-01' }))).status).toBe(400);
+    expect((await request(app).post('/api/billing-records').set(ALICE).send(bill(phaseId, { userId: 'x' }))).status).toBe(400);
+    expect((await request(app).post('/api/billing-records').set(ALICE).send(bill(phaseId, { periodStart: '2023-01-01', periodEnd: '2026-01-01' }))).status).toBe(422);
+    expect((await request(app).post('/api/billing-records').set(BOB).send(bill(phaseId))).status).toBe(404);
+  });
+
+  it('shows nobody else’s bills or trends', async () => {
+    const { app, phaseId } = await setup();
+    await request(app).post('/api/billing-records').set(ALICE).send(bill(phaseId)).expect(201);
+
+    expect((await request(app).get('/api/billing-records').query({ userId: 'alice' }).set(BOB)).body).toEqual({ records: [] });
+    expect(trendsResponse.parse((await request(app).get('/api/insights/trends').set(BOB)).body).phases).toEqual([]);
+  });
+
+  it('serves trends that match the contract, defaulting to today', async () => {
+    const { app, phaseId } = await setup();
+    await request(app).post('/api/billing-records').set(ALICE).send(bill(phaseId)).expect(201);
+
+    const trends = trendsResponse.parse((await request(app).get('/api/insights/trends').set(ALICE)).body);
+
+    expect(trends).toMatchObject({ asOf: TODAY, lastCompleteMonth: '2026-09' });
+    expect(trends.fixedCosts[0].windows[0]).toMatchObject({ windowMonths: 3, coveredMonths: 1, averageMinor: 120000 });
+    expect((await request(app).get('/api/insights/trends').query({ asOf: 'nope' }).set(ALICE)).status).toBe(400);
+  });
+});
+
+describe('comparing across currencies over HTTP', () => {
+  it('converts with the rates it is given and labels the source', async () => {
+    const fx: FxRateProvider = { ratesFor: async () => ({ rates: { EUR: 1, ARS: 0.0006 }, sources: { ARS: 'BCRA_OFFICIAL' } }) };
+    const { app } = build(fx);
+    const first = (await request(app).post('/api/living-phases').set(ALICE).send({ ...madrid, fixedCosts: [{ category: 'RENT', cadence: 'MONTHLY', amountMinor: 120000 }] })).body.id;
+    const second = (
+      await request(app)
+        .post('/api/living-phases')
+        .set(ALICE)
+        .send({ ...lisbon, name: 'Buenos Aires', countryCode: 'AR', currency: 'ARS', fixedCosts: [{ category: 'RENT', cadence: 'MONTHLY', amountMinor: 40000000 }] })
+    ).body.id;
+
+    const result = phaseComparisonResponse.parse((await request(app).get('/api/living-phases/compare').query({ from: first, to: second }).set(ALICE)).body);
+
+    expect(result).toMatchObject({ comparable: true, currency: 'ARS', rateSources: [{ currency: 'ARS', source: 'BCRA_OFFICIAL' }] });
+  });
+});
+
 describe('the profile over HTTP', () => {
   const profile = {
     fullName: 'Juan Patricio Doyle',
@@ -384,6 +486,8 @@ describe('mounting the feature', () => {
     expect(response.status).toBe(503);
     expect(response.body.code).toBe(ENCRYPTION_NOT_CONFIGURED);
     expect((await request(app).put('/api/profile').set(ALICE).send({})).status).toBe(503);
+    expect((await request(app).get('/api/billing-records').set(ALICE)).status).toBe(503);
+    expect((await request(app).get('/api/insights/trends').set(ALICE)).status).toBe(503);
     expect((await request(app).get('/api/living-phases')).status).toBe(401);
   });
 

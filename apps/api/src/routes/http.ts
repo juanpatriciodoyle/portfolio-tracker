@@ -2,7 +2,7 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { z } from 'zod';
 import { ResourceNotFoundError } from '../application/errors';
 import type { ApiErrorResponse, PhaseOverlapErrorResponse, ValidationErrorResponse } from '../contracts';
-import { InvalidLivingPhaseError, InvalidProfileError, PhaseOverlapError } from '../domain/errors';
+import { InvalidBillingRecordError, InvalidLivingPhaseError, InvalidProfileError, PhaseOverlapError } from '../domain/errors';
 import { verifyToken, type AuthenticatedRequest } from '../lib/auth';
 
 /** A request body, query or parameter that does not match its contract. Carries paths and rules, never values. */
@@ -70,7 +70,11 @@ export function respondWithError(error: unknown, res: Response): void {
     res
       .status(409)
       .json({ error: error.message, conflictingPhaseIds: [...error.conflictingPhaseIds] } satisfies PhaseOverlapErrorResponse);
-  } else if (error instanceof InvalidLivingPhaseError || error instanceof InvalidProfileError) {
+  } else if (
+    error instanceof InvalidLivingPhaseError ||
+    error instanceof InvalidBillingRecordError ||
+    error instanceof InvalidProfileError
+  ) {
     res.status(422).json({ error: error.message } satisfies ApiErrorResponse);
   } else {
     // Only the kind of failure is logged: never request bodies, never decrypted data.

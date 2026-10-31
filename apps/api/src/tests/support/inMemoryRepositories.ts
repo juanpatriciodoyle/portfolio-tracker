@@ -1,6 +1,9 @@
 import type {
+  BillingRecordRepository,
   LivingPhaseRepository,
   ProfileRepository,
+  StoredBillingRecord,
+  StoredBillingRecordChange,
   StoredCostChange,
   StoredFixedCost,
   StoredLivingPhase,
@@ -107,5 +110,56 @@ export class InMemoryProfileRepository implements ProfileRepository {
 
   async save(userId: string, payload: string): Promise<void> {
     this.profiles.set(userId, { payload });
+  }
+}
+
+/** Bills in memory. A bill whose phase is gone (or belongs to someone else) simply does not exist, like the database cascade. */
+export class InMemoryBillingRecordRepository implements BillingRecordRepository {
+  private readonly rows = new Map<string, { userId: string; record: StoredBillingRecord }>();
+
+  constructor(private readonly phases: InMemoryLivingPhaseRepository) {}
+
+  dump(): unknown {
+    return copy([...this.rows.values()]);
+  }
+
+  corruptPayload(recordId: string): void {
+    const row = this.rows.get(recordId);
+    if (row) row.record = { ...row.record, payload: 'v1:AAAA:AAAA:AAAA' };
+  }
+
+  async list(userId: string, filter: { phaseId?: string } = {}): Promise<StoredBillingRecord[]> {
+    const alive: StoredBillingRecord[] = [];
+    for (const row of this.rows.values()) {
+      if (row.userId !== userId) continue;
+      if (filter.phaseId !== undefined && row.record.phaseId !== filter.phaseId) continue;
+      if (await this.phases.find(userId, row.record.phaseId)) alive.push(copy(row.record));
+    }
+    return alive.sort((a, b) => b.periodStart.localeCompare(a.periodStart) || a.id.localeCompare(b.id));
+  }
+
+  async find(userId: string, recordId: string): Promise<StoredBillingRecord | null> {
+    const row = this.rows.get(recordId);
+    if (!row || row.userId !== userId || !(await this.phases.find(userId, row.record.phaseId))) return null;
+    return copy(row.record);
+  }
+
+  async create(userId: string, record: StoredBillingRecord): Promise<boolean> {
+    if (!(await this.phases.find(userId, record.phaseId))) return false;
+    if (this.rows.has(record.id)) throw new Error('Duplicate billing record id');
+    this.rows.set(record.id, { userId, record: copy(record) });
+    return true;
+  }
+
+  async update(userId: string, recordId: string, change: StoredBillingRecordChange): Promise<boolean> {
+    const row = this.rows.get(recordId);
+    if (!row || !(await this.find(userId, recordId))) return false;
+    const defined = Object.fromEntries(Object.entries(change).filter(([, value]) => value !== undefined));
+    row.record = { ...row.record, ...defined };
+    return true;
+  }
+
+  async delete(userId: string, recordId: string): Promise<boolean> {
+    return (await this.find(userId, recordId)) ? this.rows.delete(recordId) : false;
   }
 }
