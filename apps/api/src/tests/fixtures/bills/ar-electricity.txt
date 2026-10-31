@@ -1,0 +1,10 @@
+EDENOR S.A.
+CUIT 30-65511620-2
+Factura de servicio de energía eléctrica
+Fecha de emisión: 05/10/2026
+Período facturado: 01/08/2026 al 30/09/2026
+Consumo total: 380 kWh
+Cargo variable $ 28.102,15
+Impuestos y tasas municipales $ 17.218,35
+Total a pagar $ 45.320,50
+Vencimiento: 20/10/2026

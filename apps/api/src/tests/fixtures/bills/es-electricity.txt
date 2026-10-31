@@ -1,0 +1,16 @@
+IBERDROLA CLIENTES, S.A.U.
+CIF A-95758389
+Factura de electricidad
+Nº de factura: 2026-0098765432
+Fecha de emisión: 18/09/2026
+Periodo de facturación: del 15/07/2026 al 14/09/2026 (62 días)
+Potencia contratada: 4,6 kW
+Término de potencia 24,10 €
+Consumo 245,50 kWh
+Término de energía 38,40 €
+Impuesto eléctrico 3,12 €
+Alquiler de equipos 1,35 €
+Base imponible 79,75 €
+IVA 21% 16,75 €
+TOTAL A PAGAR 96,50 €
+Domiciliación bancaria: ES91 2100 0418 4502 0005 1332

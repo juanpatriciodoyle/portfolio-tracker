@@ -1,4 +1,5 @@
 export * from './billingRecord';
+export * from './document';
 export * from './errors';
 export * from './fixedCost';
 export * from './livingPhase';
