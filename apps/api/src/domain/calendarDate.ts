@@ -21,6 +21,40 @@ export function compareCalendarDates(a: CalendarDate, b: CalendarDate): number {
   return a > b ? 1 : 0;
 }
 
+/** A calendar month as 'YYYY-MM'. */
+export type CalendarMonth = string;
+
+export const monthOf = (date: CalendarDate): CalendarMonth => date.slice(0, 7);
+
+export function previousMonth(month: CalendarMonth): CalendarMonth {
+  const [year, number] = month.split('-').map(Number);
+  return number === 1 ? `${year - 1}-12` : `${year}-${String(number - 1).padStart(2, '0')}`;
+}
+
+export function nextMonth(month: CalendarMonth): CalendarMonth {
+  const [year, number] = month.split('-').map(Number);
+  return number === 12 ? `${year + 1}-01` : `${year}-${String(number + 1).padStart(2, '0')}`;
+}
+
+/** The `count` months up to and including `month`, oldest first. */
+export function monthsEndingAt(month: CalendarMonth, count: number): CalendarMonth[] {
+  const months = [month];
+  for (let index = 1; index < count; index++) months.unshift(previousMonth(months[0]));
+  return months;
+}
+
+export function daysInMonth(month: CalendarMonth): number {
+  const [year, number] = month.split('-').map(Number);
+  return new Date(Date.UTC(year, number, 0)).getUTCDate();
+}
+
+export const firstDayOf = (month: CalendarMonth): CalendarDate => `${month}-01`;
+export const lastDayOf = (month: CalendarMonth): CalendarDate => `${month}-${String(daysInMonth(month)).padStart(2, '0')}`;
+
+export function addDays(date: CalendarDate, days: number): CalendarDate {
+  return calendarDateOf(new Date((epochDay(date) + days) * MS_PER_DAY));
+}
+
 /** The UTC calendar day an instant falls on. The imperative shell uses this to turn "now" into a CalendarDate. */
 export function calendarDateOf(instant: Date): CalendarDate {
   return instant.toISOString().slice(0, 10);

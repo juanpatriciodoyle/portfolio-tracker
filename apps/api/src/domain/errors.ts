@@ -12,6 +12,10 @@ export class InvalidLivingPhaseError extends DomainError {
   readonly code = 'INVALID_LIVING_PHASE';
 }
 
+export class InvalidBillingRecordError extends DomainError {
+  readonly code = 'INVALID_BILLING_RECORD';
+}
+
 export class InvalidProfileError extends DomainError {
   readonly code = 'INVALID_PROFILE';
 }
