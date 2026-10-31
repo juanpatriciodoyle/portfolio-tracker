@@ -99,6 +99,26 @@
   --chart-line-portfolio: #3B82F6;
   --chart-line-cost: #71717A;
 
+  /* Fixed-cost categories (Profile & living phases) */
+  --color-cost-rent: var(--chart-color-1);
+  --color-cost-electricity: var(--chart-color-3);
+  --color-cost-gas: var(--chart-color-7);
+  --color-cost-water: var(--chart-color-6);
+  --color-cost-internet: var(--chart-color-4);
+  --color-cost-phone: var(--chart-color-5);
+  --color-cost-subscriptions: var(--chart-color-8);
+  --color-cost-taxes: var(--chart-color-10);
+  --color-cost-other: var(--text-muted);
+
+  /* Living phase status */
+  --color-phase-current: var(--color-profit);
+  --color-phase-upcoming: var(--color-warning);
+  --color-phase-past: var(--text-muted);
+
+  /* Motion (the Profile view); components switch these off for prefers-reduced-motion */
+  --motion-quick: 0.15s;
+  --motion-base: 0.2s;
+
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   color-scheme: dark;
   background-color: var(--bg-canvas);

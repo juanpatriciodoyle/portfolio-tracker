@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, LogOut } from 'lucide-react';
+import { Plus, LogOut, UserRound } from 'lucide-react';
 import TransactionForm from './components/TransactionForm';
 import SideDrawer from './components/SideDrawer';
 import LoginModal from './components/LoginModal';
@@ -12,6 +12,8 @@ import HoldingsTable, { type PositionItem, type SoldAssetItem } from './componen
 import CashBalancesTable, { type CashBalanceItem } from './components/CashBalancesTable';
 import PerformanceBreakdown from './components/PerformanceBreakdown';
 import AllocationBreakdown from './components/AllocationBreakdown';
+import ProfilePage from './components/profile/ProfilePage';
+import { PROFILE_PATH, useHashRoute } from './hooks/useHashRoute';
 import { type ChartDataPoint, type ReportingPeriod, type DateRange } from './data/sampleChartData';
 
 interface User {
@@ -56,6 +58,8 @@ function App() {
     const saved = localStorage.getItem('auth_user');
     return saved ? JSON.parse(saved) : null;
   });
+
+  const { path, navigate } = useHashRoute();
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isInflationModalOpen, setIsInflationModalOpen] = useState(false);
@@ -180,6 +184,10 @@ function App() {
     );
   }
 
+  if (path === PROFILE_PATH) {
+    return <ProfilePage onBack={() => navigate('/')} onSignedOut={handleLogout} />;
+  }
+
   // Active ROI and Profit Euros based on toggle state
   const activeProfitEuros = isRealInflationMode ? stats.realProfitEuros : stats.totalProfit;
   const activeRoiPercent = isRealInflationMode ? stats.realRoiPercent : stats.allTimeRoiPercent;
@@ -263,6 +271,16 @@ function App() {
             }}
           >
             <Plus size={16} /> Log Transaction
+          </button>
+
+          {/* Profile & living phases */}
+          <button
+            onClick={() => navigate(PROFILE_PATH)}
+            className="profile-entry-button"
+            aria-label="Profile and living phases"
+            title="Profile"
+          >
+            <UserRound size={16} />
           </button>
 
           {/* Logout */}
