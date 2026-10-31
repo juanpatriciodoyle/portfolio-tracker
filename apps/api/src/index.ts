@@ -22,7 +22,7 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3000;
 
 function getUserIdFromReq(req: Request): string | undefined {
   if (req.query.userId && typeof req.query.userId === 'string') {
