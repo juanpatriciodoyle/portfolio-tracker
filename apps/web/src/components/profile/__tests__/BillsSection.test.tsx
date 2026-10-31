@@ -158,3 +158,30 @@ describe('BillsSection changing and removing', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('That item no longer exists.');
   });
 });
+
+describe('BillsSection adding from a PDF', () => {
+  const extraction = {
+    draft: { amountMinor: 4500, currency: 'EUR', vendor: 'Canal', category: 'WATER', cadence: 'QUARTERLY', periodStart: '2026-01-01', periodEnd: '2026-03-31' },
+    textFound: true,
+    pages: 1,
+    suggestedPhaseId: 'p1',
+  };
+
+  it('offers the PDF picker, opens the review for the chosen file and logs the bill through the same path as a typed one', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, statusText: '', json: async () => extraction } as Response));
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:x', revokeObjectURL: () => undefined }));
+    const { billing, announce } = renderSection([]);
+
+    const input = screen.getByLabelText('Choose a bill PDF') as HTMLInputElement;
+    expect(input).toHaveAttribute('accept', 'application/pdf');
+    expect(screen.getByRole('button', { name: /Add from a PDF/ })).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { files: [new File(['%PDF'], 'agua.pdf', { type: 'application/pdf' })] } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Log bill' }));
+
+    await waitFor(() => expect(billing.onAdd).toHaveBeenCalledWith(expect.objectContaining({ phaseId: 'p1', vendor: 'Canal', amountMinor: 4500, category: 'WATER' })));
+    await waitFor(() => expect(announce).toHaveBeenCalledWith('Bill logged'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    vi.unstubAllGlobals();
+  });
+});

@@ -1,4 +1,11 @@
-import { ENCRYPTION_NOT_CONFIGURED, phaseOverlapErrorResponse, validationErrorResponse } from '../contracts';
+import {
+  DOCUMENT_ERROR_CODES,
+  ENCRYPTION_NOT_CONFIGURED,
+  duplicateBillingRecordErrorResponse,
+  phaseOverlapErrorResponse,
+  validationErrorResponse,
+  type DocumentErrorCode,
+} from '../contracts';
 import { ApiContractError, ApiError } from './apiClient';
 
 /** What a failed call means for the screen, so components never inspect status codes. */
@@ -7,6 +14,8 @@ export type ApiFailure =
   | { kind: 'encryption-unavailable'; message: string }
   | { kind: 'validation'; message: string; issues: { path: string; message: string }[] }
   | { kind: 'overlap'; message: string; conflictingPhaseIds: string[] }
+  | { kind: 'duplicate'; message: string; existingRecordId: string }
+  | { kind: 'document'; message: string; code: DocumentErrorCode }
   | { kind: 'not-found'; message: string }
   | { kind: 'network'; message: string }
   | { kind: 'unknown'; message: string };
@@ -27,7 +36,12 @@ export function classifyApiError(error: unknown): ApiFailure {
       const parsed = validationErrorResponse.safeParse(error.body);
       if (parsed.success) return { kind: 'validation', message: parsed.data.error, issues: parsed.data.issues };
     }
+    const code = (error.body as { code?: unknown } | null)?.code;
+    const documentCode = DOCUMENT_ERROR_CODES.find((known) => known === code);
+    if (documentCode) return { kind: 'document', code: documentCode, message: error.message };
     if (error.status === 409) {
+      const duplicate = duplicateBillingRecordErrorResponse.safeParse(error.body);
+      if (duplicate.success) return { kind: 'duplicate', message: duplicate.data.error, existingRecordId: duplicate.data.existingRecordId };
       const parsed = phaseOverlapErrorResponse.safeParse(error.body);
       if (parsed.success) {
         return { kind: 'overlap', message: parsed.data.error, conflictingPhaseIds: parsed.data.conflictingPhaseIds };

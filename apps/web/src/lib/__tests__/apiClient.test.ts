@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ENCRYPTION_NOT_CONFIGURED, idResponse } from '../../contracts';
-import { ApiContractError, ApiError, apiCommand, apiRequest } from '../apiClient';
+import { DUPLICATE_BILLING_RECORD, ENCRYPTION_NOT_CONFIGURED, extractionResponse, idResponse } from '../../contracts';
+import { ApiContractError, ApiError, apiCommand, apiRequest, apiUpload } from '../apiClient';
 import { createMemoryStorage } from '../../test/memoryStorage';
 import { attempt, classifyApiError, combineStatuses, statusFromFailure } from '../apiErrors';
 
@@ -187,5 +187,74 @@ describe('attempt and statuses', () => {
     expect(combineStatuses('error', 'loading')).toBe('error');
     expect(combineStatuses('ready', 'encryption-unavailable', 'error')).toBe('encryption-unavailable');
     expect(combineStatuses('signed-out', 'encryption-unavailable')).toBe('signed-out');
+  });
+});
+
+describe('apiUpload', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const pdf = () => new Blob(['%PDF-1.4 synthetic'], { type: 'application/pdf' });
+  const extraction = {
+    draft: { amountMinor: null, currency: null, vendor: null, category: null, cadence: null, periodStart: null, periodEnd: null },
+    textFound: false,
+    pages: 1,
+    suggestedPhaseId: null,
+  };
+
+  it('sends the file itself as the body, with its content type and the bearer token, and parses the answer', async () => {
+    vi.stubGlobal('localStorage', createMemoryStorage({ auth_token: 'tok' }));
+    const fetchMock = vi.fn().mockResolvedValue(reply(200, extraction));
+    vi.stubGlobal('fetch', fetchMock);
+    const file = pdf();
+
+    const result = await apiUpload('/api/documents/extract', file, 'application/pdf', extractionResponse);
+
+    expect(result).toEqual(extraction);
+    const [path, init] = fetchMock.mock.calls[0];
+    expect(path).toBe('/api/documents/extract');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(file);
+    expect(init.headers['Content-Type']).toBe('application/pdf');
+    expect(init.headers['Authorization']).toBe('Bearer tok');
+  });
+
+  it('throws an ApiError with the body for a rejected document', async () => {
+    vi.stubGlobal('localStorage', createMemoryStorage());
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(reply(413, { error: 'Too big', code: 'DOCUMENT_TOO_LARGE' })));
+
+    await expect(apiUpload('/api/documents/extract', pdf(), 'application/pdf', extractionResponse)).rejects.toMatchObject({
+      status: 413,
+      body: { code: 'DOCUMENT_TOO_LARGE' },
+    });
+  });
+
+  it('throws a contract error when the answer is not an extraction', async () => {
+    vi.stubGlobal('localStorage', createMemoryStorage());
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(reply(200, { nope: true })));
+
+    await expect(apiUpload('/api/documents/extract', pdf(), 'application/pdf', extractionResponse)).rejects.toBeInstanceOf(ApiContractError);
+  });
+});
+
+describe('classifyApiError for documents and duplicates', () => {
+  it.each(['NOT_A_PDF', 'DOCUMENT_TOO_LARGE', 'TOO_MANY_PAGES', 'UNREADABLE_DOCUMENT', 'EXTRACTION_BUSY', 'RATE_LIMITED'])(
+    'recognises the %s document code',
+    (code) => {
+      const failure = classifyApiError(new ApiError(422, 'x', { error: 'x', code }));
+
+      expect(failure).toMatchObject({ kind: 'document', code });
+    }
+  );
+
+  it('recognises a bill that is already recorded', () => {
+    const failure = classifyApiError(new ApiError(409, 'dup', { error: 'dup', code: DUPLICATE_BILLING_RECORD, existingRecordId: 'b9' }));
+
+    expect(failure).toMatchObject({ kind: 'duplicate', existingRecordId: 'b9' });
+  });
+
+  it('keeps an unknown code as an ordinary error', () => {
+    expect(classifyApiError(new ApiError(422, 'x', { error: 'x', code: 'SOMETHING_ELSE' })).kind).toBe('unknown');
   });
 });

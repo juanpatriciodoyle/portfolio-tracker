@@ -1,5 +1,6 @@
 import type {
   BillingRecordDto,
+  LivingPhaseDto,
   CreateBillingRecordRequest,
   PhaseObservedDto,
   UpdateBillingRecordRequest,
@@ -10,6 +11,8 @@ import type { MutationResult } from '../../lib/apiErrors';
 export interface BillingView {
   /** Today as the server sees it; the "Log a bill" form starts with the month before. */
   asOf: string | null;
+  /** Every living phase, so a bill read from a PDF can be assigned to the one its dates fall in. */
+  phases?: readonly LivingPhaseDto[];
   recordsFor: (phaseId: string) => readonly BillingRecordDto[];
   observedFor: (phaseId: string) => PhaseObservedDto | undefined;
   onAdd: (input: CreateBillingRecordRequest) => Promise<MutationResult<unknown>>;

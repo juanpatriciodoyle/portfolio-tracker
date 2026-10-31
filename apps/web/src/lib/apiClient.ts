@@ -34,16 +34,27 @@ export interface RequestOptions {
   signal?: AbortSignal;
 }
 
-async function send(path: string, { method = 'GET', body, signal }: RequestOptions): Promise<Response> {
+/** A file sent as it is (no JSON, no form): the body is the file's own bytes. */
+interface RawUpload {
+  file: Blob;
+  contentType: string;
+}
+
+async function send(
+  path: string,
+  { method = 'GET', body, signal }: RequestOptions,
+  upload?: RawUpload
+): Promise<Response> {
   const headers: Record<string, string> = { Accept: 'application/json' };
   const token = readAuthToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (upload) headers['Content-Type'] = upload.contentType;
+  else if (body !== undefined) headers['Content-Type'] = 'application/json';
 
   const response = await fetch(path, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: upload ? upload.file : body === undefined ? undefined : JSON.stringify(body),
     signal,
   });
 
@@ -66,6 +77,20 @@ export async function apiRequest<T>(path: string, schema: z.ZodType<T>, options:
       parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`)
     );
   }
+  return parsed.data;
+}
+
+/** Sends one file as the raw request body (POST) and returns the answer parsed with its contract schema. */
+export async function apiUpload<T>(
+  path: string,
+  file: Blob,
+  contentType: string,
+  schema: z.ZodType<T>,
+  options: { signal?: AbortSignal } = {}
+): Promise<T> {
+  const response = await send(path, { method: 'POST', signal: options.signal }, { file, contentType });
+  const parsed = schema.safeParse(await response.json());
+  if (!parsed.success) throw new ApiContractError(path, parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`));
   return parsed.data;
 }
 

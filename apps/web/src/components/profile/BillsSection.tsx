@@ -1,11 +1,12 @@
-import { Pencil, Plus, Trash2 } from 'lucide-react';
-import { useId, useState } from 'react';
+import { FileUp, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useId, useRef, useState, type ChangeEvent } from 'react';
 import type { CreateBillingRecordRequest, LivingPhaseDto } from '../../contracts';
 import { formatMinor, formatPhaseRange } from '../../lib/money';
 import BillEditor from './BillEditor';
 import { toUpdate } from './billForm';
 import type { BillingView } from './billingView';
 import { describeDrift } from './describeTrends';
+import DocumentReviewModal from './DocumentReviewModal';
 import { describeFailure } from './failureMessage';
 import { BILLING_CADENCE_PHRASES, CATEGORY_LABELS } from './labels';
 
@@ -25,6 +26,8 @@ export default function BillsSection({ phase, billing, announce }: BillsSectionP
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [pickedFile, setPickedFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const records = [...billing.recordsFor(phase.id)].sort(
     (a, b) => b.periodEnd.localeCompare(a.periodEnd) || b.periodStart.localeCompare(a.periodStart)
@@ -39,6 +42,18 @@ export default function BillsSection({ phase, billing, announce }: BillsSectionP
       announce('Bill logged');
     }
     return result;
+  };
+
+  const saveFromDocument = async (input: CreateBillingRecordRequest) => {
+    const result = await billing.onAdd(input);
+    if (result.ok) announce('Bill logged');
+    return result;
+  };
+
+  const choosePdf = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = '';
+    if (file) setPickedFile(file);
   };
 
   const updateBill = (recordId: string) => async (input: CreateBillingRecordRequest) => {
@@ -68,17 +83,23 @@ export default function BillsSection({ phase, billing, announce }: BillsSectionP
           Bills received
         </h4>
         {!adding && (
-          <button
-            type="button"
-            className="profile-text-button"
-            onClick={() => {
-              setAdding(true);
-              setEditingId(null);
-            }}
-          >
-            <Plus size={14} aria-hidden="true" /> Log a bill
-          </button>
+          <div className="bills-section__actions">
+            <button type="button" className="profile-text-button" onClick={() => fileInput.current?.click()}>
+              <FileUp size={14} aria-hidden="true" /> Add from a PDF
+            </button>
+            <button
+              type="button"
+              className="profile-text-button"
+              onClick={() => {
+                setAdding(true);
+                setEditingId(null);
+              }}
+            >
+              <Plus size={14} aria-hidden="true" /> Log a bill
+            </button>
+          </div>
         )}
+        <input ref={fileInput} type="file" accept="application/pdf" className="visually-hidden" tabIndex={-1} aria-label="Choose a bill PDF" onChange={choosePdf} />
       </div>
 
       {drift && (
@@ -173,6 +194,16 @@ export default function BillsSection({ phase, billing, announce }: BillsSectionP
 
       {adding && (
         <BillEditor phaseId={phase.id} currency={phase.currency} asOf={billing.asOf} onSubmit={addBill} onCancel={() => setAdding(false)} />
+      )}
+
+      {pickedFile && (
+        <DocumentReviewModal
+          file={pickedFile}
+          phases={billing.phases ?? [phase]}
+          openedFromPhaseId={phase.id}
+          onSave={saveFromDocument}
+          onClose={() => setPickedFile(null)}
+        />
       )}
 
       {removeError && (

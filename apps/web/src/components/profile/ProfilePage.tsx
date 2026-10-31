@@ -45,6 +45,7 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
   const billsApi = useBillingRecords(dataReady, entries, trendsApi.reload);
   const billing: BillingView = {
     asOf: phasesApi.asOf,
+    phases,
     recordsFor: (phaseId) => billsApi.records.filter((record) => record.phaseId === phaseId),
     observedFor: (phaseId) => trendsApi.trends?.phases.find((observed) => observed.phaseId === phaseId),
     onAdd: billsApi.createBill,

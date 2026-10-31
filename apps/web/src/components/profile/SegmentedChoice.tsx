@@ -3,7 +3,8 @@ interface SegmentedChoiceProps<T extends string> {
   name: string;
   legend: string;
   options: readonly { value: T; label: string }[];
-  value: T;
+  /** Null while nothing is picked yet. */
+  value: T | null;
   onChange: (value: T) => void;
 }
 
