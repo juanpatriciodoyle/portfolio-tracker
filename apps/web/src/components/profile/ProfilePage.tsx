@@ -5,6 +5,7 @@ import { useBillingRecords } from '../../hooks/useBillingRecords';
 import { useLivingPhases } from '../../hooks/useLivingPhases';
 import { usePhaseComparison } from '../../hooks/usePhaseComparison';
 import { useProfile } from '../../hooks/useProfile';
+import { useBenchmarks } from '../../hooks/useBenchmarks';
 import { useTrends } from '../../hooks/useTrends';
 import { combineStatuses, type MutationResult } from '../../lib/apiErrors';
 import type { BillingView } from './billingView';
@@ -42,6 +43,7 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
   // Bills and trends depend on the phases: they load once those are ready and again whenever they change.
   const dataReady = phasesApi.status === 'ready';
   const trendsApi = useTrends(dataReady, entries);
+  const benchmarksApi = useBenchmarks(dataReady, entries);
   const billsApi = useBillingRecords(dataReady, entries, trendsApi.reload);
   const billing: BillingView = {
     asOf: phasesApi.asOf,
@@ -51,6 +53,13 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
     onAdd: billsApi.createBill,
     onUpdate: billsApi.updateBill,
     onDelete: billsApi.deleteBill,
+    benchmarks: {
+      status: benchmarksApi.status,
+      message: benchmarksApi.message,
+      benchmarks: benchmarksApi.benchmarks,
+      onRetry: benchmarksApi.reload,
+      nameOf: (phaseId) => phases.find((phase) => phase.id === phaseId)?.name,
+    },
   };
   // Where a person is most likely to log a bill: the home they live in now, else the latest one.
   const billPhase = phases.find((phase) => entries.find((entry) => entry.phaseId === phase.id)?.status === 'current') ?? phases.at(-1);

@@ -1,11 +1,22 @@
 import type {
+  BenchmarksResponse,
   BillingRecordDto,
   LivingPhaseDto,
   CreateBillingRecordRequest,
   PhaseObservedDto,
   UpdateBillingRecordRequest,
 } from '../../contracts';
-import type { MutationResult } from '../../lib/apiErrors';
+import type { LoadStatus, MutationResult } from '../../lib/apiErrors';
+
+/** How each phase compares with its country, as the phase card needs it. */
+export interface BenchmarksView {
+  status: LoadStatus;
+  message: string | null;
+  benchmarks: BenchmarksResponse | null;
+  onRetry: () => void;
+  /** A phase's name from its id, for "1.59x what you had in Madrid". */
+  nameOf: (phaseId: string) => string | undefined;
+}
 
 /** What a phase card needs to show and change the bills of its phase, bundled so it travels as one prop. */
 export interface BillingView {
@@ -18,4 +29,6 @@ export interface BillingView {
   onAdd: (input: CreateBillingRecordRequest) => Promise<MutationResult<unknown>>;
   onUpdate: (recordId: string, input: UpdateBillingRecordRequest) => Promise<MutationResult<unknown>>;
   onDelete: (recordId: string) => Promise<MutationResult<unknown>>;
+  /** Comparisons with the country; absent where they are not shown. */
+  benchmarks?: BenchmarksView;
 }

@@ -4,6 +4,7 @@ import type { CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFi
 import type { MutationResult } from '../../lib/apiErrors';
 import { formatMonths } from '../../lib/duration';
 import { formatMinor } from '../../lib/money';
+import BenchmarksCard from './BenchmarksCard';
 import BillsSection from './BillsSection';
 import type { BillingView } from './billingView';
 import { describeFailure } from './failureMessage';
@@ -209,6 +210,7 @@ export default function PhaseDetails({ phase, entry, onAddCost, onUpdateCost, on
       </section>
 
       {billing && <BillsSection phase={phase} billing={billing} announce={announce} />}
+      {billing?.benchmarks && <BenchmarksCard phaseId={phase.id} view={billing.benchmarks} />}
     </div>
   );
 }
