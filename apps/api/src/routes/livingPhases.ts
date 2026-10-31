@@ -50,7 +50,7 @@ export function createLivingPhasesRouter({ service, today }: LivingPhasesRouterD
     '/living-phases/compare',
     handle(async (req, res) => {
       const { from, to } = parseRequest(compareQuery, req.query);
-      res.json(await service.compare(userIdOf(req), from, to));
+      res.json(await service.compare(userIdOf(req), from, to, today()));
     })
   );
 

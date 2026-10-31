@@ -1,4 +1,5 @@
-import type { CalendarDate, CostCadence, FixedCostCategory, HousingTenure } from '../contracts/vocabulary';
+import type { BillingCadence, CalendarDate, CostCadence, FixedCostCategory, FxRateSource, HousingTenure } from '../contracts/vocabulary';
+import type { FxRates } from '../domain/phaseComparison';
 
 /** Where a stored value lives. Bound into every ciphertext so a value cannot be moved to another row or person. */
 export interface CipherContext {
@@ -51,6 +52,44 @@ export interface LivingPhaseRepository {
   addFixedCost(userId: string, phaseId: string, cost: StoredFixedCost): Promise<boolean>;
   updateFixedCost(userId: string, phaseId: string, costId: string, change: StoredCostChange): Promise<boolean>;
   deleteFixedCost(userId: string, phaseId: string, costId: string): Promise<boolean>;
+}
+
+/** A bill as persisted: category, cadence and period stay readable, vendor, amount and notes are sealed in `payload`. */
+export interface StoredBillingRecord {
+  readonly id: string;
+  readonly phaseId: string;
+  readonly category: FixedCostCategory;
+  readonly cadence: BillingCadence;
+  readonly periodStart: CalendarDate;
+  readonly periodEnd: CalendarDate;
+  readonly payload: string;
+}
+
+/** Fields left out are unchanged. A bill never moves to another phase. */
+export type StoredBillingRecordChange = Partial<Omit<StoredBillingRecord, 'id' | 'phaseId'>>;
+
+/** Port: persistence of bills. Scoped to one user; bills of a deleted phase are gone with it. */
+export interface BillingRecordRepository {
+  /** Newest period first. */
+  list(userId: string, filter?: { phaseId?: string }): Promise<StoredBillingRecord[]>;
+  find(userId: string, recordId: string): Promise<StoredBillingRecord | null>;
+  /** False when the user has no such phase. */
+  create(userId: string, record: StoredBillingRecord): Promise<boolean>;
+  update(userId: string, recordId: string, change: StoredBillingRecordChange): Promise<boolean>;
+  delete(userId: string, recordId: string): Promise<boolean>;
+}
+
+/** Exchange rates for some currencies on some day, each with where it came from. */
+export interface FxQuote {
+  /** The value of one unit of each currency in euros (EUR itself is 1). */
+  readonly rates: FxRates;
+  /** Only for the currencies that needed a rate; says whether it is an ECB, official BCRA or approximate reference rate. */
+  readonly sources: Readonly<Record<string, FxRateSource>>;
+}
+
+/** Port: where exchange rates come from. Never throws for a currency it cannot price: it leaves it out. */
+export interface FxRateProvider {
+  ratesFor(currencies: readonly string[], on: CalendarDate): Promise<FxQuote>;
 }
 
 export interface StoredProfile {

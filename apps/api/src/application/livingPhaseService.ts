@@ -9,7 +9,7 @@ import type {
   UpdateFixedCostRequest,
   UpdateLivingPhaseRequest,
 } from '../contracts';
-import { PhaseOverlapError } from '../domain/errors';
+import { InvalidFxRateError, MissingFxRateError, PhaseOverlapError } from '../domain/errors';
 import {
   buildTimeline,
   createFixedCost,
@@ -22,7 +22,7 @@ import {
 import { comparePhases } from '../domain/phaseComparison';
 import { ResourceNotFoundError } from './errors';
 import { PayloadVault } from './payloadVault';
-import type { CipherContext, FieldCipher, LivingPhaseRepository, StoredLivingPhase } from './ports';
+import type { CipherContext, FieldCipher, FxRateProvider, LivingPhaseRepository, StoredLivingPhase } from './ports';
 import { costPayloadSchema, phasePayloadSchema, type CostPayload, type PhasePayload } from './storedPayloads';
 
 const phaseContext = (userId: string, phaseId: string): CipherContext => ({ table: 'LivingPhase', rowId: phaseId, userId });
@@ -33,9 +33,11 @@ export interface LivingPhaseServiceDeps {
   readonly cipher: FieldCipher;
   /** Ids are made here (not by the database) because they are bound into each ciphertext. */
   readonly newId?: () => string;
+  /** Without it, phases in different currencies cannot be compared. */
+  readonly fx?: FxRateProvider;
 }
 
-interface LoadedPhase {
+export interface LoadedPhase {
   readonly dto: LivingPhaseDto;
   readonly phase: LivingPhase;
 }
@@ -48,9 +50,11 @@ export class LivingPhaseService {
   private readonly repository: LivingPhaseRepository;
   private readonly vault: PayloadVault;
   private readonly newId: () => string;
+  private readonly fx?: FxRateProvider;
 
-  constructor({ repository, cipher, newId = () => randomUUID() }: LivingPhaseServiceDeps) {
+  constructor({ repository, cipher, newId = () => randomUUID(), fx }: LivingPhaseServiceDeps) {
     this.repository = repository;
+    this.fx = fx;
     this.vault = new PayloadVault(cipher);
     this.newId = newId;
   }
@@ -58,11 +62,11 @@ export class LivingPhaseService {
   // ---- queries -------------------------------------------------------------------------------
 
   async listPhases(userId: string): Promise<LivingPhaseDto[]> {
-    return (await this.loadAll(userId)).map(({ dto }) => dto);
+    return (await this.loadPhases(userId)).map(({ dto }) => dto);
   }
 
   async timeline(userId: string, asOf: CalendarDate): Promise<TimelineResponse> {
-    const loaded = await this.loadAll(userId);
+    const loaded = await this.loadPhases(userId);
     const entries = buildTimeline(loaded.map(({ phase }) => phase), asOf).map((entry) => {
       const { dto } = loaded.find(({ phase }) => phase.id === entry.phaseId)!;
       return { ...entry, name: dto.name, city: dto.city, countryCode: dto.countryCode };
@@ -70,18 +74,31 @@ export class LivingPhaseService {
     return { asOf, entries };
   }
 
-  /** Changes from `fromPhaseId` to `toPhaseId`. Phases in different currencies need exchange rates first. */
-  async compare(userId: string, fromPhaseId: string, toPhaseId: string): Promise<PhaseComparisonResponse> {
-    const loaded = await this.loadAll(userId);
+  /**
+   * Changes from `fromPhaseId` to `toPhaseId`, in the later phase's currency. Phases in different
+   * currencies are converted with the rates of `asOf`; without a usable rate they are not comparable.
+   */
+  async compare(userId: string, fromPhaseId: string, toPhaseId: string, asOf: CalendarDate): Promise<PhaseComparisonResponse> {
+    const loaded = await this.loadPhases(userId);
     const from = loaded.find(({ phase }) => phase.id === fromPhaseId);
     const to = loaded.find(({ phase }) => phase.id === toPhaseId);
     if (!from || !to) throw new ResourceNotFoundError('living phase');
 
-    if (from.phase.currency !== to.phase.currency) {
-      return { comparable: false, reason: 'FX_REQUIRED', currencies: [from.phase.currency, to.phase.currency] };
+    const currencies: [string, string] = [from.phase.currency, to.phase.currency];
+    const needsRates = currencies[0] !== currencies[1];
+    const fxRequired: PhaseComparisonResponse = { comparable: false, reason: 'FX_REQUIRED', currencies };
+
+    const quote = needsRates ? await this.fx?.ratesFor(currencies, asOf).catch(() => undefined) : undefined;
+    if (needsRates && !quote) return fxRequired;
+
+    let result;
+    try {
+      result = comparePhases(phaseSnapshot(from.phase), phaseSnapshot(to.phase), { fx: quote?.rates });
+    } catch (error) {
+      if (error instanceof MissingFxRateError || error instanceof InvalidFxRateError) return fxRequired;
+      throw error;
     }
 
-    const result = comparePhases(phaseSnapshot(from.phase), phaseSnapshot(to.phase));
     return {
       comparable: true,
       fromPhaseId,
@@ -92,6 +109,13 @@ export class LivingPhaseService {
       savingsCapacityDeltaMinor: result.savingsCapacityDeltaMinor,
       fixedCostsDeltaFraction: result.fixedCostsDeltaFraction,
       categories: [...result.categories],
+      ...(quote
+        ? {
+            rateSources: currencies.flatMap((currency) =>
+              quote.sources[currency] ? [{ currency, source: quote.sources[currency] }] : []
+            ),
+          }
+        : {}),
     };
   }
 
@@ -197,7 +221,8 @@ export class LivingPhaseService {
 
   // ---- internals -----------------------------------------------------------------------------
 
-  private async loadAll(userId: string): Promise<LoadedPhase[]> {
+  /** Every phase of the person, decrypted: the display form and the domain form. */
+  async loadPhases(userId: string): Promise<LoadedPhase[]> {
     return (await this.repository.list(userId)).map((stored) => {
       const dto = this.toDto(userId, stored);
       const phase = createLivingPhase({

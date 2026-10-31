@@ -1,4 +1,5 @@
 import { ResourceNotFoundError } from '../application/errors';
+import type { FxQuote, FxRateProvider } from '../application/ports';
 import { LivingPhaseService } from '../application/livingPhaseService';
 import { createLivingPhaseRequest, type CreateLivingPhaseInput } from '../contracts';
 import { InvalidLivingPhaseError, PhaseOverlapError } from '../domain/errors';
@@ -40,7 +41,7 @@ const lisbonInput: CreateLivingPhaseInput = {
 const request = (input: CreateLivingPhaseInput, change: Partial<CreateLivingPhaseInput> = {}) =>
   createLivingPhaseRequest.parse({ ...input, ...change });
 
-function build() {
+function build(fx?: FxRateProvider) {
   const repository = new InMemoryLivingPhaseRepository();
   let ids = 0;
   let iv = 0;
@@ -49,6 +50,7 @@ function build() {
     // Fixed, distinct IVs keep these tests deterministic; production uses random ones.
     cipher: new AesGcmFieldCipher(Buffer.alloc(32, 9), (size) => Buffer.alloc(size, (++iv % 250) + 1)),
     newId: () => `id-${++ids}`,
+    fx,
   });
   return { service, repository };
 }
@@ -425,7 +427,7 @@ describe('comparing two phases', () => {
     const { id: madrid } = await service.createPhase(USER, request(madridInput));
     const { id: lisbon } = await service.createPhase(USER, request(lisbonInput));
 
-    const result = await service.compare(USER, madrid, lisbon);
+    const result = await service.compare(USER, madrid, lisbon, '2026-10-31');
 
     expect(result).toEqual({
       comparable: true,
@@ -451,7 +453,7 @@ describe('comparing two phases', () => {
       request(lisbonInput, { name: 'Buenos Aires', city: 'Buenos Aires', countryCode: 'AR', currency: 'ARS' })
     );
 
-    expect(await service.compare(USER, madrid, buenosAires)).toEqual({
+    expect(await service.compare(USER, madrid, buenosAires, '2026-10-31')).toEqual({
       comparable: false,
       reason: 'FX_REQUIRED',
       currencies: ['EUR', 'ARS'],
@@ -462,7 +464,73 @@ describe('comparing two phases', () => {
     const { service } = build();
     const { id } = await service.createPhase(USER, request(madridInput));
 
-    await expect(service.compare(USER, id, 'missing')).rejects.toBeInstanceOf(ResourceNotFoundError);
-    await expect(service.compare(OTHER_USER, id, id)).rejects.toBeInstanceOf(ResourceNotFoundError);
+    await expect(service.compare(USER, id, 'missing', '2026-10-31')).rejects.toBeInstanceOf(ResourceNotFoundError);
+    await expect(service.compare(OTHER_USER, id, id, '2026-10-31')).rejects.toBeInstanceOf(ResourceNotFoundError);
+  });
+});
+
+describe('comparing phases in different currencies', () => {
+  const buenosAires = (change: Partial<CreateLivingPhaseInput> = {}) =>
+    request(lisbonInput, {
+      name: 'Buenos Aires',
+      city: 'Buenos Aires',
+      countryCode: 'AR',
+      currency: 'ARS',
+      monthlyIncomeMinor: 90000000,
+      fixedCosts: [{ category: 'RENT', cadence: 'MONTHLY', amountMinor: 40000000 }],
+      ...change,
+    });
+  const official: FxQuote = { rates: { EUR: 1, ARS: 0.0006 }, sources: { ARS: 'BCRA_OFFICIAL' } };
+  const providerAnswering = (quote: FxQuote | Error) => {
+    const ratesFor = jest.fn(async () => {
+      if (quote instanceof Error) throw quote;
+      return quote;
+    });
+    return { ratesFor } satisfies FxRateProvider;
+  };
+
+  it('converts into the later phase’s currency and says where the rate came from', async () => {
+    const fx = providerAnswering(official);
+    const { service } = build(fx);
+    const { id: madrid } = await service.createPhase(USER, request(madridInput));
+    const { id: ba } = await service.createPhase(USER, buenosAires());
+
+    const result = await service.compare(USER, madrid, ba, '2026-10-31');
+
+    expect(fx.ratesFor).toHaveBeenCalledWith(['EUR', 'ARS'], '2026-10-31');
+    expect(result).toMatchObject({
+      comparable: true,
+      currency: 'ARS',
+      monthlyFixedCostsDeltaMinor: 40000000 - 208000000, // 124,800 EUR / 0.0006 = 208,000,000 ARS
+      rateSources: [{ currency: 'ARS', source: 'BCRA_OFFICIAL' }],
+    });
+  });
+
+  it.each([
+    ['has no rate for one of the currencies', () => providerAnswering({ rates: { EUR: 1 }, sources: {} })],
+    ['gives an unusable rate', () => providerAnswering({ rates: { EUR: 1, ARS: 0 }, sources: { ARS: 'BCRA_OFFICIAL' } })],
+    ['is unreachable', () => providerAnswering(new Error('network down'))],
+  ])('still asks for exchange rates when the provider %s', async (_label, makeProvider) => {
+    const { service } = build(makeProvider());
+    const { id: madrid } = await service.createPhase(USER, request(madridInput));
+    const { id: ba } = await service.createPhase(USER, buenosAires());
+
+    expect(await service.compare(USER, madrid, ba, '2026-10-31')).toEqual({
+      comparable: false,
+      reason: 'FX_REQUIRED',
+      currencies: ['EUR', 'ARS'],
+    });
+  });
+
+  it('never asks for rates, or labels any, when the currencies match', async () => {
+    const fx = providerAnswering(official);
+    const { service } = build(fx);
+    const { id: madrid } = await service.createPhase(USER, request(madridInput));
+    const { id: lisbon } = await service.createPhase(USER, request(lisbonInput));
+
+    const result = await service.compare(USER, madrid, lisbon, '2026-10-31');
+
+    expect(fx.ratesFor).not.toHaveBeenCalled();
+    expect(result).not.toHaveProperty('rateSources');
   });
 });

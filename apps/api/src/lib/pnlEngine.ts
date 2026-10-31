@@ -1,6 +1,7 @@
 import { db } from './db';
 import { calculateHoldingPeriodInflation, syncCountryInflationHistory } from './inflationService';
 import { inflationLossAmount } from '../domain/inflation';
+import { REFERENCE_EUR_RATES } from '../infrastructure/fx/referenceFxRates';
 
 export interface ProcessTransactionParams {
   userId?: string;
@@ -295,13 +296,13 @@ export async function getPortfolioOverview(userId?: string) {
   const realRoiPercent = totalInvested > 0 ? (realProfitEuros / totalInvested) * 100 : 0;
 
   const CURRENCY_METADATA: Record<string, { name: string; symbol: string; rateToEur: number }> = {
-    EUR: { name: 'Euro', symbol: '€', rateToEur: 1.0 },
-    USD: { name: 'US Dollar', symbol: '$', rateToEur: 0.86236 },
-    GBP: { name: 'British Pound', symbol: '£', rateToEur: 1.176 },
-    CHF: { name: 'Swiss Franc', symbol: 'CHF', rateToEur: 1.052 },
-    JPY: { name: 'Japanese Yen', symbol: '¥', rateToEur: 0.0061 },
-    CAD: { name: 'Canadian Dollar', symbol: 'CA$', rateToEur: 0.68 },
-    AUD: { name: 'Australian Dollar', symbol: 'A$', rateToEur: 0.61 },
+    EUR: { name: 'Euro', symbol: '€', rateToEur: REFERENCE_EUR_RATES.EUR },
+    USD: { name: 'US Dollar', symbol: '$', rateToEur: REFERENCE_EUR_RATES.USD },
+    GBP: { name: 'British Pound', symbol: '£', rateToEur: REFERENCE_EUR_RATES.GBP },
+    CHF: { name: 'Swiss Franc', symbol: 'CHF', rateToEur: REFERENCE_EUR_RATES.CHF },
+    JPY: { name: 'Japanese Yen', symbol: '¥', rateToEur: REFERENCE_EUR_RATES.JPY },
+    CAD: { name: 'Canadian Dollar', symbol: 'CA$', rateToEur: REFERENCE_EUR_RATES.CAD },
+    AUD: { name: 'Australian Dollar', symbol: 'A$', rateToEur: REFERENCE_EUR_RATES.AUD },
   };
 
   const userTransactions = targetUserId
