@@ -42,6 +42,11 @@ Execute commands in this specific sequence[cite: 6, 11]:
 ### Exchange Rates
 - Comparing living phases in different currencies converts with live rates from free, key-less public APIs: ECB reference rates (Frankfurter) and the official BCRA wholesale rate for Argentine pesos (priced through the ECB dollar). Every converted amount is labelled with its source ("Official rate", "ECB rate" or "Approximate rate"). A built-in approximate table in `infrastructure/fx/referenceFxRates.ts` is only the fallback when a live source is down. A financial/MEP peso rate is planned as a separate provider.
 
+### Bill PDFs
+- `POST /api/documents/extract` takes a PDF as the raw request body (`Content-Type: application/pdf`, max 5 MB, max 15 pages). It is read in memory by a worker thread with a time and memory limit; nothing is written to disk and nothing from the document is kept. The browser keeps its own copy for the preview. The answer is a draft (`BillingDraft`); every field the text did not state clearly is `null` and stays mandatory in the review form. A scanned PDF (no text layer) returns an empty draft: there is no OCR.
+- The extraction rules are pure code in `apps/api/src/domain/documentExtraction` (locale-aware amounts, dates, vendor dictionary, categories, cadence). New senders go in `vendors.ts`.
+- Saving goes through `POST /api/billing-records`. A bill that matches one already recorded (same living phase, category, period, amount and sender) answers 409 `DUPLICATE_BILLING_RECORD`; matching uses a keyed HMAC fingerprint derived from `PROFILE_ENCRYPTION_KEY`. After pulling this change run `npx prisma db push` in `apps/api` (adds `BillingRecord.fingerprint`).
+
 ### Tests
 - `npm test` (inside `apps/api` or `apps/web`) is hermetic: no network, no database.
 - `npm run test:integration` (inside `apps/api`) needs `TEST_DATABASE_URL` pointing at a disposable database, never your real data.
