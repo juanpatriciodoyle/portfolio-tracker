@@ -31,6 +31,18 @@ Execute commands in this specific sequence[cite: 6, 11]:
 4. `npm run dev` (inside `apps/web`) — Starts the Vite frontend dev server on port `5173` with the local proxy bridge[cite: 6, 11].
 5. Access the application in browser at `http://localhost:5173`[cite: 6, 11].
 
+### First-Time Setup (fresh checkout)
+1. `cp apps/api/.env.example apps/api/.env`, then fill in the values. `.env` is git-ignored.
+2. Generate the field-encryption key and paste it into `PROFILE_ENCRYPTION_KEY`: `openssl rand -base64 32`. Back it up: losing it makes stored profile data unreadable. Without it the profile routes answer 503.
+3. `npm install` inside `apps/api` and `apps/web`, then `npx prisma generate` and `npx prisma db push` inside `apps/api`.
+
+### Shared Contracts (Zod)
+- Request/response schemas are written once in `apps/api/src/contracts`. `apps/web/src/contracts` is a generated, read-only mirror: after changing a contract run `npm run contracts:sync` at the repo root. `npm run contracts:check` (also run in CI) fails if the mirror drifted.
+
+### Tests
+- `npm test` (inside `apps/api` or `apps/web`) is hermetic: no network, no database.
+- `npm run test:integration` (inside `apps/api`) needs `TEST_DATABASE_URL` pointing at a disposable database, never your real data.
+
 ### Stopping the Environment
 1. Terminate frontend and backend processes via `Ctrl+C`[cite: 7, 11].
 2. `docker compose down` — Tears down the PostgreSQL container[cite: 7, 11].
