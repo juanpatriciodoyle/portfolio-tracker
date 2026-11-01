@@ -1,4 +1,4 @@
-import { Pencil } from 'lucide-react';
+import { ChevronDown, Pencil } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { EMPLOYMENT_STATUSES, type EmploymentStatus, type ProfileData } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
@@ -25,62 +25,81 @@ interface ProfileFormProps {
 const adults = (count: number) => `${count} ${count === 1 ? 'adult' : 'adults'}`;
 const children = (count: number) => `${count} ${count === 1 ? 'child' : 'children'}`;
 
+const DEMOGRAPHICS_TITLE = 'Demographics & Household Settings';
+
+/** Collapsed by default: administrative setup data stays out of sight until the person asks to see or change it. */
 function Summary({ profile, onEdit }: { profile: ProfileData; onEdit: () => void }) {
+  const id = useId();
+  const [open, setOpen] = useState(false);
   const unset = <span className="profile-facts__unset">Not set</span>;
   const household =
     profile.dependentChildren > 0
       ? `${adults(profile.householdAdults)}, ${children(profile.dependentChildren)}`
       : adults(profile.householdAdults);
+  const empty = isProfileEmpty(profile);
 
   return (
     <>
       <div className="profile-section__header">
-        <h2 className="profile-section__title">About you</h2>
+        <h2 className="profile-section__title">
+          <button
+            type="button"
+            className="profile-disclosure"
+            aria-expanded={open}
+            aria-controls={`${id}-facts`}
+            onClick={() => setOpen((current) => !current)}
+          >
+            <span>{DEMOGRAPHICS_TITLE}</span>
+            <ChevronDown className="profile-disclosure__chevron" size={16} aria-hidden="true" />
+          </button>
+        </h2>
         <button type="button" className="profile-text-button" onClick={onEdit}>
-          <Pencil size={14} aria-hidden="true" /> {isProfileEmpty(profile) ? 'Add details' : 'Edit'}
+          <Pencil size={14} aria-hidden="true" /> {empty ? 'Add details' : 'Edit'}
         </button>
       </div>
-      {isProfileEmpty(profile) ? (
-        <p className="profile-section__hint">
-          Tell us a little about yourself. Age, household and work let us compare your numbers with people like you.
-        </p>
-      ) : (
-        <dl className="profile-facts">
-          <div>
-            <dt>Name</dt>
-            <dd>{profile.fullName ?? unset}</dd>
-          </div>
-          <div>
-            <dt>Born</dt>
-            <dd>{profile.birthYear ?? unset}</dd>
-          </div>
-          <div>
-            <dt>Nationality</dt>
-            <dd>
-              {profile.nationalities.length > 0
-                ? profile.nationalities.map((code) => `${flagEmoji(code)} ${countryName(code)}`).join(', ')
-                : unset}
-            </dd>
-          </div>
-          <div>
-            <dt>Tax residence</dt>
-            <dd>{profile.taxResidence ? `${flagEmoji(profile.taxResidence)} ${countryName(profile.taxResidence)}` : unset}</dd>
-          </div>
-          <div>
-            <dt>Household</dt>
-            <dd>{household}</dd>
-          </div>
-          <div>
-            <dt>Work</dt>
-            <dd>{profile.employmentStatus ? EMPLOYMENT_LABELS[profile.employmentStatus] : unset}</dd>
-          </div>
-        </dl>
-      )}
+      <div id={`${id}-facts`} hidden={!open}>
+        {empty ? (
+          <p className="profile-section__hint">
+            Tell us a little about yourself. Age, household and work let us compare your numbers with people like you.
+          </p>
+        ) : (
+          <dl className="profile-facts">
+            <div>
+              <dt>Name</dt>
+              <dd>{profile.fullName ?? unset}</dd>
+            </div>
+            <div>
+              <dt>Born</dt>
+              <dd>{profile.birthYear ?? unset}</dd>
+            </div>
+            <div>
+              <dt>Nationality</dt>
+              <dd>
+                {profile.nationalities.length > 0
+                  ? profile.nationalities.map((code) => `${flagEmoji(code)} ${countryName(code)}`).join(', ')
+                  : unset}
+              </dd>
+            </div>
+            <div>
+              <dt>Tax residence</dt>
+              <dd>{profile.taxResidence ? `${flagEmoji(profile.taxResidence)} ${countryName(profile.taxResidence)}` : unset}</dd>
+            </div>
+            <div>
+              <dt>Household</dt>
+              <dd>{household}</dd>
+            </div>
+            <div>
+              <dt>Work</dt>
+              <dd>{profile.employmentStatus ? EMPLOYMENT_LABELS[profile.employmentStatus] : unset}</dd>
+            </div>
+          </dl>
+        )}
+      </div>
     </>
   );
 }
 
-/** "About you": a calm summary that opens into an editor. Everything here is stored encrypted. */
+/** "Demographics & Household Settings": a collapsed card that opens into a summary or an editor. Everything here is stored encrypted. */
 export default function ProfileForm({ profile, onSave, announce }: ProfileFormProps) {
   const id = useId();
   const [editing, setEditing] = useState(false);
@@ -120,16 +139,16 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
 
   if (!editing) {
     return (
-      <section className="profile-card" aria-label="About you">
+      <section className="profile-card" aria-label={DEMOGRAPHICS_TITLE}>
         <Summary profile={profile} onEdit={startEditing} />
       </section>
     );
   }
 
   return (
-    <section className="profile-card" aria-label="About you">
+    <section className="profile-card" aria-label={DEMOGRAPHICS_TITLE}>
       <div className="profile-section__header">
-        <h2 className="profile-section__title">About you</h2>
+        <h2 className="profile-section__title">{DEMOGRAPHICS_TITLE}</h2>
       </div>
       <form className="profile-form" onSubmit={handleSubmit} noValidate>
         <div className="profile-form__grid">

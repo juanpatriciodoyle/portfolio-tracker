@@ -1,10 +1,10 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { ENCRYPTION_NOT_CONFIGURED, type BillingRecordDto, type LivingPhaseDto, type ProfileData, type TimelineEntryDto, type TrendsResponse } from '../../../contracts';
+import { ENCRYPTION_NOT_CONFIGURED, type BillingRecordDto, type LivingPhaseDto, type ProfileData, type TimelineEntryDto } from '../../../contracts';
 import * as client from '../../../lib/apiClient';
 import { ApiError, type RequestOptions } from '../../../lib/apiClient';
-import { makeBill, makeEmptyTrends, makeEntry, makePhase, makeProfile, makeTrends } from '../../../test/fixtures';
+import { makeBill, makeEntry, makePhase, makeProfile } from '../../../test/fixtures';
 import { chooseCountry, clickContinue } from '../../../test/wizardHelpers';
 import ProfilePage from '../ProfilePage';
 
@@ -45,7 +45,6 @@ interface World {
   phases: LivingPhaseDto[];
   entries: TimelineEntryDto[];
   records: BillingRecordDto[];
-  trends: TrendsResponse;
   failures: Record<string, Error>;
 }
 
@@ -56,7 +55,6 @@ function serve(initial: Partial<World> = {}) {
     phases: [madrid, lisbon],
     entries: [madridEntry, lisbonEntry],
     records: [],
-    trends: makeEmptyTrends(),
     failures: {},
     ...initial,
   };
@@ -70,7 +68,6 @@ function serve(initial: Partial<World> = {}) {
     if (key === 'POST /api/living-phases') return { id: 'new-phase' };
     if (key === '/api/billing-records') return { records: world.records };
     if (key === 'POST /api/billing-records') return { id: 'new-bill' };
-    if (key === '/api/insights/trends') return world.trends;
     if (key === '/api/living-phases/compare') {
       return {
         comparable: true,
@@ -387,43 +384,17 @@ describe('ProfilePage changes', () => {
   });
 });
 
-const trendLoads = () => apiRequest.mock.calls.filter(([path]) => path === '/api/insights/trends').length;
 const timelineLoads = () => apiRequest.mock.calls.filter(([path]) => path === '/api/living-phases/timeline').length;
 const billLoads = () =>
   apiRequest.mock.calls.filter(([path, , options]) => path === '/api/billing-records' && !options?.method).length;
 
-describe('ProfilePage trends and bills', () => {
-  it('shows the trends card above the phase cards, from what the server calculated', async () => {
-    serve({ trends: makeTrends(), records: [makeBill({ phaseId: 'p1' })] });
-    renderPage();
-
-    const row = await screen.findByRole('row', { name: /^Fixed costs/ });
-
-    const trends = screen.getByRole('heading', { level: 2, name: 'Trends' });
-    expect(trends.closest('section')).toContainElement(row);
-    const list = screen.getByRole('list', { name: 'Living phases' });
-    expect(trends.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it('invites the first bill when there are none, and opens the home to log it in', async () => {
-    serve();
-    renderPage();
-    await screen.findByText(/No bills yet\./);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open 🇪🇸 Madrid' }));
-
-    expect(within(cardFor('Madrid')).getByRole('button', { name: /Madrid/ })).toHaveAttribute('aria-expanded', 'true');
-    expect(within(cardFor('Madrid')).getByRole('button', { name: /Add an expense/ })).toBeInTheDocument();
-    expect(within(cardFor('Madrid')).getByRole('button', { name: /Manage bills & documents/ })).toBeInTheDocument();
-  });
-
+describe('ProfilePage bills', () => {
   it('shows each phase its own bills in the ledger, with no banner comparing them to what was declared', async () => {
     serve({
       records: [makeBill({ id: 'mine', phaseId: 'p1', vendor: 'Iberdrola' }), makeBill({ id: 'other', phaseId: 'p2', vendor: 'EDP' })],
-      trends: makeTrends(),
     });
     renderPage();
-    await screen.findByRole('row', { name: /^Fixed costs/ });
+    await screen.findByRole('heading', { name: 'Living phases' });
     await waitFor(() => expect(billLoads()).toBe(1));
     fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Madrid/ }));
 
@@ -435,12 +406,11 @@ describe('ProfilePage trends and bills', () => {
     expect(screen.queryByText(/Bills say about/)).not.toBeInTheDocument();
   });
 
-  it('logs a bill and reloads the trends and the bills, so the numbers are never stale', async () => {
+  it('logs a bill and reloads the timeline and the bills, so the numbers are never stale', async () => {
     serve();
     renderPage();
-    await screen.findByText(/No bills yet\./);
-    await waitFor(() => expect(trendLoads()).toBe(1));
-    expect(billLoads()).toBe(1);
+    await screen.findByRole('heading', { name: 'Living phases' });
+    await waitFor(() => expect(billLoads()).toBe(1));
     fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Madrid/ }));
     fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Add an expense/ }));
 
@@ -468,53 +438,23 @@ describe('ProfilePage trends and bills', () => {
         })
       )
     );
-    await waitFor(() => expect(trendLoads()).toBe(2));
     await waitFor(() => expect(billLoads()).toBeGreaterThanOrEqual(2));
     // The monthly costs of the home come from its bills, so the timeline is read again too.
     await waitFor(() => expect(timelineLoads()).toBeGreaterThanOrEqual(2));
   });
 
-  it('shows the new averages once they arrive', async () => {
-    const world = serve();
-    renderPage();
-    await screen.findByText(/No bills yet\./);
-    world.trends = makeTrends();
-    world.records = [makeBill({ phaseId: 'p1' })];
-    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Madrid/ }));
-    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Add an expense/ }));
-    fireEvent.change(screen.getByLabelText('Who sent it?'), { target: { value: 'Iberdrola' } });
-    fireEvent.click(screen.getByRole('radio', { name: 'Electricity' }));
-    fireEvent.change(screen.getByLabelText('Total on the bill'), { target: { value: '96' } });
-    fireEvent.click(screen.getByRole('radio', { name: 'Monthly' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add expense' }));
-
-    expect(await screen.findByRole('row', { name: /^Fixed costs/ })).toBeInTheDocument();
-    expect(screen.queryByText(/No bills yet\./)).not.toBeInTheDocument();
-  });
-
-  it('refreshes trends and bills after a living phase changes (a deleted phase takes its bills with it)', async () => {
+  it('refreshes the timeline and bills after a living phase changes (a deleted phase takes its bills with it)', async () => {
     const world = serve();
     renderPage();
     await screen.findByRole('heading', { name: 'Living phases' });
-    await waitFor(() => expect(trendLoads()).toBe(1));
+    await waitFor(() => expect(billLoads()).toBe(1));
     world.entries = [madridEntry, { ...lisbonEntry, monthlyFixedCostsMinor: 100000 }];
 
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: /Lisbon/ }));
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: /Delete phase/ }));
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Delete' }));
 
-    await waitFor(() => expect(trendLoads()).toBe(2));
-    expect(billLoads()).toBe(2);
-  });
-
-  it('does not break the page when the trends cannot be loaded', async () => {
-    serve({ failures: { '/api/insights/trends': new ApiError(500, 'Internal Server Error', null) } });
-    renderPage();
-
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent(/try again/i);
-    expect(alert).not.toHaveTextContent(/internal server error/i);
-    expect(screen.getByRole('heading', { level: 3, name: '🇪🇸 Madrid' })).toBeInTheDocument();
+    await waitFor(() => expect(billLoads()).toBe(2));
   });
 });
 

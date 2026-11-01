@@ -106,6 +106,35 @@
   cursor: pointer;
 }
 
+.profile-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-subtle-color);
+  border-radius: 999px;
+  color: var(--text-heading);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: box-shadow var(--motion-base) ease, border-color var(--motion-base) ease;
+}
+
+.profile-avatar:hover,
+.profile-avatar:focus-visible {
+  border-color: var(--accent-blue-light);
+  box-shadow: 0 0 12px var(--avatar-hover-glow);
+}
+
+.profile-avatar:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
 .profile-back {
   padding: 8px 12px;
   font-size: 13px;
@@ -347,7 +376,38 @@
   color: var(--text-secondary);
 }
 
-/* ---------- About you ---------- */
+/* ---------- Demographics & Household Settings ---------- */
+
+.profile-card .profile-section__header:has(+ [hidden]) {
+  margin-bottom: 0;
+}
+
+.profile-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  background: none;
+  border: none;
+  color: var(--text-heading);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.profile-disclosure:hover {
+  color: var(--text-primary);
+}
+
+.profile-disclosure__chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform var(--motion-base) ease;
+}
+
+.profile-disclosure[aria-expanded='true'] .profile-disclosure__chevron {
+  transform: rotate(180deg);
+}
 
 .profile-facts {
   margin: 0;
@@ -613,49 +673,6 @@
   filter: none;
 }
 
-.phase-chip {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 10px;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
-  background: var(--bg-input);
-  border: none;
-  border-radius: 999px;
-  cursor: pointer;
-}
-
-.phase-chip.is-positive {
-  color: var(--color-profit);
-}
-
-.phase-chip.is-negative {
-  color: var(--color-loss);
-}
-
-.phase-chip__chevron {
-  transition: transform var(--motion-quick) ease;
-}
-
-.phase-chip[aria-expanded='true'] .phase-chip__chevron {
-  transform: rotate(180deg);
-}
-
-.phase-card__figures {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.phase-card__figures[hidden] {
-  display: none;
-}
-
 .compare-table {
   width: 100%;
   table-layout: fixed;
@@ -813,12 +830,28 @@
   transition: width var(--motion-base) ease;
 }
 
-.phase-bar__fill--income {
+.phase-bar__fill--saved {
   background-color: var(--color-profit);
 }
 
-.phase-bar__fill--costs {
+.phase-bar__fill--housing {
   background-color: var(--accent-blue-light);
+}
+
+.phase-bar__fill--loss {
+  background-color: var(--color-loss);
+}
+
+.phase-card__ratios {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.phase-card__address {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
 }
 
 .phase-card__leftover {
@@ -970,6 +1003,16 @@
   color: var(--text-muted);
 }
 
+/* The buttons of a lone declared cost sit on the row itself, in the width the other rows keep free for them. */
+.phase-breakdown__row--editable {
+  padding-right: 0;
+}
+
+.phase-breakdown__row--editable .cost-row__actions {
+  width: 62px;
+  justify-content: flex-end;
+}
+
 /* Declared lines sit quietly under their category. Their amounts line up with the category's: both leave room for the hidden buttons (62px and a 12px gap). */
 .cost-list--nested {
   margin-left: 20px;
@@ -1046,7 +1089,9 @@
 }
 
 .cost-row:hover .cost-row__actions,
-.cost-row:focus-within .cost-row__actions {
+.cost-row:focus-within .cost-row__actions,
+.phase-breakdown__row--editable:hover .cost-row__actions,
+.phase-breakdown__row--editable:focus-within .cost-row__actions {
   opacity: 1;
 }
 

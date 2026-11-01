@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, LogOut, UserRound } from 'lucide-react';
+import { Plus, LogOut } from 'lucide-react';
 import TransactionForm from './components/TransactionForm';
 import Modal from './components/Modal';
 import LoginModal from './components/LoginModal';
+import ProfileAvatar from './components/ProfileAvatar';
 import InflationSettingsModal from './components/InflationSettingsModal';
 import TransactionHistoryTable from './components/TransactionHistoryTable';
 import ReportingPeriodBar from './components/ReportingPeriodBar';
@@ -284,14 +285,7 @@ function App() {
           </button>
 
           {/* Profile & living phases */}
-          <button
-            onClick={() => navigate(PROFILE_PATH)}
-            className="profile-entry-button"
-            aria-label="Profile and living phases"
-            title="Profile"
-          >
-            <UserRound size={16} />
-          </button>
+          <ProfileAvatar onOpen={() => navigate(PROFILE_PATH)} />
 
           {/* Logout */}
           <button

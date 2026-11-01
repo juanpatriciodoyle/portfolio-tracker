@@ -80,8 +80,8 @@ describe('validatePhaseForm', () => {
   it('names the phase after its flag, city and address, so nobody has to type a name', () => {
     const result = validate({ ...filled, address: ' Calle Mayor 1 ' });
 
-    expect(result.ok && result.payload.create.name).toBe('🇪🇸 Madrid Calle Mayor 1');
-    expect(result.ok && result.payload.update.name).toBe('🇪🇸 Madrid Calle Mayor 1');
+    expect(result.ok && result.payload.create.name).toBe('🇪🇸 Madrid');
+    expect(result.ok && result.payload.update.name).toBe('🇪🇸 Madrid');
   });
 
   it('sends the bills given along with a new phase', () => {

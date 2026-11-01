@@ -22,12 +22,16 @@ function clamp(text: string, budget: number): string {
   return `${kept.trimEnd()}…`;
 }
 
-/** A home's header, always built from where it is: "🇪🇸 Madrid Calle Mayor 1". People never type a name. */
-export function phaseDisplayName({ countryCode, city, address }: PhasePlace): string {
+/** A home's header, always built from where it is: "🇪🇸 Madrid". The street address is a muted subtitle (`phaseAddress`), not part of the name. */
+export function phaseDisplayName({ countryCode, city }: PhasePlace): string {
   const flag = flagEmoji(countryCode);
   const prefix = flag === '' ? '' : `${flag} `;
-  const place = [tidy(city), tidy(address)].filter((part) => part !== '').join(' ');
-  return `${prefix}${clamp(place, PHASE_NAME_MAX_LENGTH - prefix.length)}`;
+  return `${prefix}${clamp(tidy(city), PHASE_NAME_MAX_LENGTH - prefix.length)}`;
+}
+
+/** The street address shown quietly under a home's header; null when none was given. */
+export function phaseAddress({ address }: Pick<PhasePlace, 'address'>): string | null {
+  return tidy(address) || null;
 }
 
 /**

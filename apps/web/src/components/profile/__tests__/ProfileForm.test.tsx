@@ -13,11 +13,26 @@ function renderForm(profile = makeProfile(), onSave = vi.fn<() => Promise<Mutati
   return { onSave, announce };
 }
 
+const show = () => fireEvent.click(screen.getByRole('button', { name: 'Demographics & Household Settings' }));
 const edit = () => fireEvent.click(screen.getByRole('button', { name: /Edit|Add details/ }));
 
 describe('ProfileForm summary', () => {
+  it('keeps the raw answers out of sight until asked', () => {
+    renderForm();
+
+    expect(screen.getByRole('button', { name: 'Demographics & Household Settings' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByText('Juan Doyle')).not.toBeVisible();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeVisible();
+
+    show();
+
+    expect(screen.getByRole('button', { name: 'Demographics & Household Settings' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Juan Doyle')).toBeVisible();
+  });
+
   it('shows what is saved', () => {
     renderForm();
+    show();
 
     expect(screen.getByText('Juan Doyle')).toBeInTheDocument();
     expect(screen.getByText('1990')).toBeInTheDocument();
@@ -29,11 +44,13 @@ describe('ProfileForm summary', () => {
 
   it('counts a household with children', () => {
     renderForm(makeProfile({ householdAdults: 2, dependentChildren: 1 }));
+    show();
     expect(screen.getByText('2 adults, 1 child')).toBeInTheDocument();
   });
 
   it('says "Not set" for what is missing', () => {
     renderForm(makeProfile({ taxResidence: null, employmentStatus: null }));
+    show();
 
     expect(screen.getAllByText('Not set')).toHaveLength(2);
   });
@@ -43,7 +60,9 @@ describe('ProfileForm summary', () => {
       makeProfile({ fullName: null, birthYear: null, nationalities: [], taxResidence: null, employmentStatus: null })
     );
 
-    expect(screen.getByText(/Tell us a little about yourself/)).toBeInTheDocument();
+    show();
+
+    expect(screen.getByText(/Tell us a little about yourself/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Add details' })).toBeInTheDocument();
   });
 });
@@ -138,6 +157,8 @@ describe('ProfileForm editing', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(onSave).not.toHaveBeenCalled();
-    expect(screen.getByText('Juan Doyle')).toBeInTheDocument();
+    expect(screen.getByText('Juan Doyle')).not.toBeVisible();
+    show();
+    expect(screen.getByText('Juan Doyle')).toBeVisible();
   });
 });

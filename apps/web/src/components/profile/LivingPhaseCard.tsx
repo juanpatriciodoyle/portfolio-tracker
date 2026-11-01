@@ -3,11 +3,13 @@ import { useId, useState } from 'react';
 import type { CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest, UpdateLivingPhaseRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import { formatMinor, formatPercent, formatPhaseRange } from '../../lib/money';
+import { phaseAddress } from '../../lib/phaseName';
 import { barWidthPercent } from '../../lib/scale';
 import type { BillingView } from './billingView';
 import { describeFailure } from './failureMessage';
 import { STATUS_LABELS } from './labels';
 import PhaseDetails from './PhaseDetails';
+import { housingBurden } from './phaseRatios';
 
 interface LivingPhaseCardProps {
   phase: LivingPhaseDto;
@@ -27,7 +29,7 @@ interface LivingPhaseCardProps {
   announce: (message: string) => void;
 }
 
-/** One home: at a glance what it brings in and costs, and everything else on request. */
+/** One home: at a glance what is left each month and the shares behind it, and every raw figure on request. */
 export default function LivingPhaseCard({
   phase,
   entry,
@@ -48,10 +50,11 @@ export default function LivingPhaseCard({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [showFigures, setShowFigures] = useState(false);
 
   const status = entry?.status;
-  const largest = entry ? Math.max(entry.monthlyIncomeMinor, entry.monthlyFixedCostsMinor) : 0;
+  const address = phaseAddress(phase);
+  const housing = entry ? housingBurden(entry) : null;
+  const savingsRate = entry?.savingsRate ?? null;
 
   const confirmDelete = async () => {
     setDeleting(true);
@@ -89,6 +92,7 @@ export default function LivingPhaseCard({
         </button>
       </header>
 
+      {address && <p className="phase-card__address">{address}</p>}
       <p className="phase-card__meta">
         {formatPhaseRange(phase.startDate, phase.endDate, undefined, status === 'upcoming' ? 'open' : 'now')}
       </p>
@@ -99,42 +103,33 @@ export default function LivingPhaseCard({
             <strong>{formatMinor(Math.abs(entry.savingsCapacityMinor), entry.currency)}</strong>{' '}
             {entry.savingsCapacityMinor >= 0 ? 'left each month' : 'short each month'}
           </p>
-          <button
-            type="button"
-            className={`phase-chip ${entry.savingsCapacityMinor >= 0 ? 'is-positive' : 'is-negative'}`}
-            aria-expanded={showFigures}
-            aria-controls={`${id}-figures`}
-            onClick={() => setShowFigures((open) => !open)}
-          >
-            {entry.savingsRate === null
-              ? 'Per month'
-              : entry.savingsRate >= 0
-                ? `${formatPercent(entry.savingsRate)} saved`
-                : `${formatPercent(entry.savingsRate)} of income`}
-            <ChevronDown className="phase-chip__chevron" size={12} aria-hidden="true" />
-          </button>
-          <div id={`${id}-figures`} className="phase-card__figures" hidden={!showFigures}>
-            <div className="phase-bar-row">
-              <span className="phase-bar-row__label">Income</span>
-              <span className="phase-bar" aria-hidden="true">
-                <span
-                  className="phase-bar__fill phase-bar__fill--income"
-                  style={{ width: `${barWidthPercent(entry.monthlyIncomeMinor, largest)}%` }}
-                />
-              </span>
-              <span className="phase-bar-row__value">{formatMinor(entry.monthlyIncomeMinor, entry.currency)}</span>
+          {(savingsRate !== null || housing !== null) && (
+            <div className="phase-card__ratios">
+              {savingsRate !== null && (
+                <div className="phase-bar-row" data-ratio="saved">
+                  <span className="phase-bar-row__label">{savingsRate >= 0 ? 'Saved' : 'Over budget'}</span>
+                  <span className="phase-bar" aria-hidden="true">
+                    <span
+                      className={`phase-bar__fill ${savingsRate >= 0 ? 'phase-bar__fill--saved' : 'phase-bar__fill--loss'}`}
+                      style={{ width: `${barWidthPercent(Math.abs(savingsRate), 1)}%` }}
+                    />
+                  </span>
+                  <span className="phase-bar-row__value">
+                    {savingsRate >= 0 ? formatPercent(savingsRate) : `${formatPercent(Math.abs(savingsRate))} of income`}
+                  </span>
+                </div>
+              )}
+              {housing !== null && (
+                <div className="phase-bar-row" data-ratio="housing" title="Rent and utilities, as a share of income">
+                  <span className="phase-bar-row__label">Housing</span>
+                  <span className="phase-bar" aria-hidden="true">
+                    <span className="phase-bar__fill phase-bar__fill--housing" style={{ width: `${barWidthPercent(housing, 1)}%` }} />
+                  </span>
+                  <span className="phase-bar-row__value">{formatPercent(housing)}</span>
+                </div>
+              )}
             </div>
-            <div className="phase-bar-row">
-              <span className="phase-bar-row__label">Fixed costs</span>
-              <span className="phase-bar" aria-hidden="true">
-                <span
-                  className="phase-bar__fill phase-bar__fill--costs"
-                  style={{ width: `${barWidthPercent(entry.monthlyFixedCostsMinor, largest)}%` }}
-                />
-              </span>
-              <span className="phase-bar-row__value">{formatMinor(entry.monthlyFixedCostsMinor, entry.currency)}</span>
-            </div>
-          </div>
+          )}
         </div>
       )}
 

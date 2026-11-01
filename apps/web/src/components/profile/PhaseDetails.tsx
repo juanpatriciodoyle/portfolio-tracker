@@ -1,5 +1,5 @@
 import { FileText, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import type { CreateBillingRecordRequest, CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest, UpdateLivingPhaseRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import { formatMonths } from '../../lib/duration';
@@ -15,7 +15,7 @@ import ExpenseModal from './ExpenseModal';
 import { describeFailure } from './failureMessage';
 import FixedCostEditor from './FixedCostEditor';
 import IncomeSection from './IncomeSection';
-import { CATEGORY_GROUPS, CATEGORY_LABELS } from './labels';
+import { CADENCE_LABELS, CATEGORY_GROUPS, CATEGORY_LABELS } from './labels';
 
 interface PhaseDetailsProps {
   phase: LivingPhaseDto;
@@ -112,6 +112,39 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onAddCost, o
     }
   };
 
+  /** Edit and remove for one declared cost, or the question that confirms removing it. */
+  const costControls = (cost: LivingPhaseDto['fixedCosts'][number]): ReactNode => {
+    const name = `${CATEGORY_LABELS[cost.category]}${cost.label ? ` ${cost.label}` : ''}`;
+    return confirmingId === cost.id ? (
+      <div className="confirm-inline" role="group" aria-label={`Confirm removing ${name}`}>
+        <span>Remove this cost?</span>
+        <button type="button" className="profile-danger-button" onClick={() => removeCost(cost.id)}>
+          Remove
+        </button>
+        <button type="button" className="profile-text-button" onClick={() => setConfirmingId(null)}>
+          Keep
+        </button>
+      </div>
+    ) : (
+      <div className="cost-row__actions">
+        <button
+          type="button"
+          className="profile-icon-button"
+          aria-label={`Edit ${name}`}
+          onClick={() => {
+            setEditingId(cost.id);
+            setConfirmingId(null);
+          }}
+        >
+          <Pencil size={14} aria-hidden="true" />
+        </button>
+        <button type="button" className="profile-icon-button" aria-label={`Remove ${name}`} onClick={() => setConfirmingId(cost.id)}>
+          <Trash2 size={14} aria-hidden="true" />
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className="phase-details">
       {entry && (
@@ -158,75 +191,61 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onAddCost, o
               <div key={group.id} className="phase-breakdown__group">
                 {group.label && <p className="phase-breakdown__group-label">{group.label}</p>}
                 <ul className="phase-breakdown__list">
-                  {group.rows.map((row) => (
-                    <li key={row.category} className="phase-breakdown__item" data-category={row.category}>
-                      <div className="phase-breakdown__row">
-                        <span className="category-dot" aria-hidden="true" />
-                        <span className="phase-breakdown__name">
-                          {CATEGORY_LABELS[row.category]}
-                          {row.note && <span className="phase-breakdown__note">{row.note}</span>}
-                        </span>
-                        <span className="phase-breakdown__amount">{formatMinor(row.amountMinor, phase.currency)}</span>
-                      </div>
+                  {group.rows.map((row) => {
+                    // One declared cost that no bill has replaced is the row itself: nothing is repeated underneath it.
+                    const sole = row.declared.length === 1 && !row.replaced ? row.declared[0] : null;
+                    const cadence = sole && sole.category !== 'TAXES' ? CADENCE_LABELS[sole.cadence] : null;
+                    return (
+                      <li key={row.category} className="phase-breakdown__item" data-category={row.category}>
+                        {sole && editingId === sole.id ? (
+                          <FixedCostEditor initial={sole} currency={phase.currency} onSubmit={updateCost(sole.id)} onCancel={() => setEditingId(null)} />
+                        ) : (
+                          <div className={`phase-breakdown__row${sole ? ' phase-breakdown__row--editable' : ''}`} title={row.note ?? undefined}>
+                            <span className="category-dot" aria-hidden="true" />
+                            <span className="phase-breakdown__name">
+                              <span>{CATEGORY_LABELS[row.category]}</span>
+                              {cadence && <span className="phase-breakdown__note">{cadence}</span>}
+                            </span>
+                            <span className="phase-breakdown__amount">{formatMinor(row.amountMinor, phase.currency)}</span>
+                            {sole && costControls(sole)}
+                          </div>
+                        )}
 
-                      {row.declared.length > 0 && (
-                        <ul className="cost-list cost-list--nested" aria-label={`Declared ${CATEGORY_LABELS[row.category]} costs`}>
-                          {row.declared.map((cost) => {
-                            const name = `${CATEGORY_LABELS[cost.category]}${cost.label ? ` ${cost.label}` : ''}`;
-                            const cadence = describeDeclaredCadence(cost.category, cost.cadence);
-                            return (
-                              <li key={cost.id} className={`cost-row${row.replaced ? ' is-replaced' : ''}`} data-category={cost.category}>
-                                {editingId === cost.id ? (
-                                  <FixedCostEditor initial={cost} currency={phase.currency} onSubmit={updateCost(cost.id)} onCancel={() => setEditingId(null)} />
-                                ) : (
-                                  <>
-                                    <div className="cost-row__main">
-                                      <span className="cost-row__name">
-                                        <span className="cost-row__struck">{cost.label ?? 'Declared'}</span>
-                                        {row.replaced && <span className="cost-row__label"> · replaced by your bills</span>}
+                        {!sole && row.declared.length > 0 && (
+                          <ul className="cost-list cost-list--nested" aria-label={`Declared ${CATEGORY_LABELS[row.category]} costs`}>
+                            {row.declared.map((cost) => {
+                              const declaredCadence = describeDeclaredCadence(cost.category, cost.cadence);
+                              return (
+                                <li
+                                  key={cost.id}
+                                  className={`cost-row${row.replaced ? ' is-replaced' : ''}`}
+                                  data-category={cost.category}
+                                  title={row.replaced ? 'Replaced by your bills' : undefined}
+                                >
+                                  {editingId === cost.id ? (
+                                    <FixedCostEditor initial={cost} currency={phase.currency} onSubmit={updateCost(cost.id)} onCancel={() => setEditingId(null)} />
+                                  ) : (
+                                    <>
+                                      <div className="cost-row__main">
+                                        <span className="cost-row__name">
+                                          <span className="cost-row__struck">{cost.label ?? 'Declared'}</span>
+                                        </span>
+                                      </div>
+                                      <span className="cost-row__amount">
+                                        {formatMinor(cost.amountMinor, phase.currency)}
+                                        {declaredCadence && <span className="cost-row__cadence"> {declaredCadence}</span>}
                                       </span>
-                                    </div>
-                                    <span className="cost-row__amount">
-                                      {formatMinor(cost.amountMinor, phase.currency)}
-                                      {cadence && <span className="cost-row__cadence"> {cadence}</span>}
-                                    </span>
-                                    {confirmingId === cost.id ? (
-                                      <div className="confirm-inline" role="group" aria-label={`Confirm removing ${name}`}>
-                                        <span>Remove this cost?</span>
-                                        <button type="button" className="profile-danger-button" onClick={() => removeCost(cost.id)}>
-                                          Remove
-                                        </button>
-                                        <button type="button" className="profile-text-button" onClick={() => setConfirmingId(null)}>
-                                          Keep
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <div className="cost-row__actions">
-                                        <button
-                                          type="button"
-                                          className="profile-icon-button"
-                                          aria-label={`Edit ${name}`}
-                                          onClick={() => {
-                                            setEditingId(cost.id);
-                                            setConfirmingId(null);
-                                          }}
-                                        >
-                                          <Pencil size={14} aria-hidden="true" />
-                                        </button>
-                                        <button type="button" className="profile-icon-button" aria-label={`Remove ${name}`} onClick={() => setConfirmingId(cost.id)}>
-                                          <Trash2 size={14} aria-hidden="true" />
-                                        </button>
-                                      </div>
-                                    )}
-                                  </>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </li>
-                  ))}
+                                      {costControls(cost)}
+                                    </>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}

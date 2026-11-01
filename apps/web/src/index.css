@@ -55,6 +55,7 @@
   --accent-blue-light: #3B82F6;
   --accent-blue-subtle: rgba(37, 99, 235, 0.16);
   --accent-blue-glow: rgba(37, 99, 235, 0.35);
+  --avatar-hover-glow: rgba(59, 130, 246, 0.35);
 
   /* Financial Semantics (PnL) */
   --color-profit: #10B981;

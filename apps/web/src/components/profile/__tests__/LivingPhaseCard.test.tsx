@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { makeCost, makeEntry, makePhase } from '../../../test/fixtures';
 import LivingPhaseCard from '../LivingPhaseCard';
@@ -33,36 +33,38 @@ function renderCard(overrides: Partial<React.ComponentProps<typeof LivingPhaseCa
 }
 
 describe('LivingPhaseCard at a glance', () => {
-  it('shows the home, its dates, its status and the monthly picture', () => {
+  it('shows the home, its dates, its status and what is left each month', () => {
     const { container } = renderCard();
 
     expect(screen.getByRole('heading', { level: 3, name: 'Madrid' })).toBeInTheDocument();
     expect(screen.getByText('Sep 2022 – now')).toBeInTheDocument();
     expect(screen.getByText('Current')).toBeInTheDocument();
-    expect(screen.getByText('Income').nextElementSibling?.nextElementSibling).toHaveTextContent('€3,200');
-    expect(screen.getByText('Fixed costs').nextElementSibling?.nextElementSibling).toHaveTextContent('€1,500');
     expect(container.querySelector('.phase-card__leftover')).toHaveTextContent('€1,700 left each month');
-    expect(screen.getByRole('button', { name: '53% saved' })).toBeInTheDocument();
   });
 
-  it('keeps income and fixed costs behind the chip until it is pressed', () => {
-    renderCard();
-    const chip = screen.getByRole('button', { name: '53% saved' });
+  it('shows the street address as a quiet subtitle, outside the title', () => {
+    const { container } = renderCard({ phase: makePhase({ address: 'Calle Mayor 1' }) });
 
-    expect(chip).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText('Fixed costs')).not.toBeVisible();
-
-    fireEvent.click(chip);
-
-    expect(chip).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('Fixed costs')).toBeVisible();
+    expect(container.querySelector('.phase-card__address')).toHaveTextContent('Calle Mayor 1');
+    expect(screen.getByRole('heading', { level: 3 })).not.toHaveTextContent('Calle Mayor');
   });
 
-  it('scales the bars against the larger of the two', () => {
+  it('has no subtitle without an address', () => {
     const { container } = renderCard();
 
-    expect(container.querySelector<HTMLElement>('.phase-bar__fill--income')?.style.width).toBe('100%');
-    expect(container.querySelector<HTMLElement>('.phase-bar__fill--costs')?.style.width).toBe('46.875%');
+    expect(container.querySelector('.phase-card__address')).not.toBeInTheDocument();
+  });
+
+  it('leads with ratios, not raw income and cost figures', () => {
+    const { container } = renderCard();
+
+    expect(container.querySelector('[data-ratio="saved"]')).toHaveTextContent('Saved53%');
+    // €1,200 rent + €150 electricity + €50 water of €3,200
+    expect(container.querySelector('[data-ratio="housing"]')).toHaveTextContent('Housing44%');
+    expect(container.querySelector<HTMLElement>('[data-ratio="saved"] .phase-bar__fill')?.style.width).toBe('53.125%');
+    expect(screen.queryByText('Income')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fixed costs')).not.toBeInTheDocument();
+    expect(screen.queryByText('€3,200')).not.toBeInTheDocument();
   });
 
   it('says so, in red, when fixed costs exceed income', () => {
@@ -73,15 +75,14 @@ describe('LivingPhaseCard at a glance', () => {
     const leftover = container.querySelector('.phase-card__leftover');
     expect(leftover).toHaveTextContent('€150 short each month');
     expect(leftover).toHaveClass('is-negative');
-    expect(screen.getByRole('button', { name: '-5% of income' })).toHaveClass('is-negative');
+    expect(container.querySelector('[data-ratio="saved"]')).toHaveTextContent('Over budget5% of income');
+    expect(container.querySelector('[data-ratio="saved"] .phase-bar__fill')).toHaveClass('phase-bar__fill--loss');
   });
 
-  it('leaves the percentage out when there is no income to compare with', () => {
-    const { container } = renderCard({ entry: makeEntry({ savingsRate: null }) });
+  it('leaves the ratios out when there is no income to compare with', () => {
+    const { container } = renderCard({ entry: makeEntry({ savingsRate: null, monthlyIncomeMinor: 0 }) });
 
-    expect(screen.queryByRole('button', { name: /saved|of income/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Per month' })).toBeInTheDocument();
-    expect(container.querySelector('.phase-card__leftover')).not.toHaveTextContent('of income');
+    expect(container.querySelector('[data-ratio]')).not.toBeInTheDocument();
   });
 
   it('marks an upcoming home as open-ended', () => {
@@ -95,10 +96,10 @@ describe('LivingPhaseCard at a glance', () => {
   });
 
   it('still renders before the timeline numbers arrive', () => {
-    renderCard({ entry: undefined });
+    const { container } = renderCard({ entry: undefined });
 
     expect(screen.getByRole('heading', { level: 3, name: 'Madrid' })).toBeInTheDocument();
-    expect(screen.queryByText('Per month')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-ratio]')).not.toBeInTheDocument();
   });
 });
 
@@ -123,7 +124,7 @@ describe('LivingPhaseCard expanding and comparing', () => {
 
     expect(screen.getByRole('button', { name: 'Madrid' })).toHaveAttribute('aria-expanded', 'true');
     const rows = [...container.querySelectorAll('.phase-breakdown__row')].map((row) => row.textContent);
-    expect(rows).toEqual(['Rent€1,200', 'Electricity€150', 'Water€50', 'Internet€50', 'Subscriptions€50']);
+    expect(rows).toEqual(['RentMonthly€1,200', 'Electricity€150', 'WaterEvery 2 months€50', 'Internet€50', 'Subscriptions€50']);
     expect(screen.getByText('Utilities')).toBeInTheDocument();
   });
 
@@ -160,15 +161,15 @@ describe('LivingPhaseCard expanding and comparing', () => {
 });
 
 describe('LivingPhaseCard costs', () => {
-  it('lists each declared cost under its category, with what one payment costs and how often it is paid', () => {
-    renderCard({ expanded: true });
+  it('keeps a line item to its category, its monthly figure and how often it is paid, without repeating the declared cost', () => {
+    const { container } = renderCard({ expanded: true });
 
-    const rent = within(screen.getByRole('list', { name: 'Declared Rent costs' })).getAllByRole('listitem');
-    expect(rent).toHaveLength(1);
-    expect(rent[0]).toHaveTextContent('Landlord');
-    expect(rent[0]).toHaveTextContent('€1,200 every month');
-    const water = within(screen.getByRole('list', { name: 'Declared Water costs' })).getAllByRole('listitem');
-    expect(water[0]).toHaveTextContent('€42 every 2 months');
+    const rent = container.querySelector('[data-category="RENT"]');
+    expect(rent).toHaveTextContent('RentMonthly€1,200');
+    expect(rent).not.toHaveTextContent('Landlord');
+    expect(rent).not.toHaveTextContent('every month');
+    expect(screen.queryByRole('list', { name: 'Declared Rent costs' })).not.toBeInTheDocument();
+    expect(container.querySelector('[data-category="WATER"]')).toHaveTextContent('WaterEvery 2 months€50');
   });
 
   it('has no separate "add a cost" or "add a bill" buttons, and no "your bills" or "bills received" sections', () => {

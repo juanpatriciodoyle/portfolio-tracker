@@ -240,15 +240,17 @@ describe('the monthly breakdown', () => {
     expect(screen.getByText('Utilities')).toBeInTheDocument();
   });
 
-  it('says a variable cost is the average of the bills logged, and a fixed one comes from the latest bills', () => {
-    renderDetails({
+  it('keeps where a number comes from out of sight, in a tooltip', () => {
+    const { container } = renderDetails({
       entry: makeEntry({
         costBasisByCategory: noBasis({ ELECTRICITY: { basis: 'BILLS', billCount: 3 }, INTERNET: { basis: 'BILLS', billCount: 2 } }),
       }),
     });
 
-    expect(screen.getByText('Average of 3 bills')).toBeInTheDocument();
-    expect(screen.getByText('From your latest 2 bills')).toBeInTheDocument();
+    expect(screen.queryByText('Average of 3 bills')).not.toBeInTheDocument();
+    expect(screen.queryByText('From your latest 2 bills')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-category="ELECTRICITY"] .phase-breakdown__row')).toHaveAttribute('title', 'Average of 3 bills');
+    expect(container.querySelector('[data-category="INTERNET"] .phase-breakdown__row')).toHaveAttribute('title', 'From your latest 2 bills');
   });
 
   it('crosses out a declared cost the bills have replaced, without hiding it', () => {
@@ -259,11 +261,12 @@ describe('the monthly breakdown', () => {
 
     const row = within(screen.getByRole('list', { name: 'Declared Internet costs' })).getByRole('listitem');
     expect(row).toHaveClass('is-replaced');
-    expect(row).toHaveTextContent('replaced by your bills');
+    expect(row).toHaveAttribute('title', 'Replaced by your bills');
+    expect(row).not.toHaveTextContent('replaced by your bills');
   });
 
-  it('never says "every year" next to a tax, but still does for other yearly costs', () => {
-    renderDetails({
+  it('never says "every year" next to a tax, and names the cadence of other yearly costs', () => {
+    const { container } = renderDetails({
       phase: makePhase({
         fixedCosts: [
           makeCost({ id: 't1', category: 'TAXES', cadence: 'ANNUAL', amountMinor: 36000, label: 'IBI' }),
@@ -273,10 +276,10 @@ describe('the monthly breakdown', () => {
       entry: makeEntry({ fixedCostsByCategoryMinor: { ...makeEntry().fixedCostsByCategoryMinor, TAXES: 3000 } }),
     });
 
-    const taxes = screen.getByRole('list', { name: 'Declared Taxes costs' });
-    expect(taxes).toHaveTextContent('€360');
-    expect(taxes).not.toHaveTextContent('every year');
-    expect(screen.getByRole('list', { name: 'Declared Subscriptions costs' })).toHaveTextContent('€120 every year');
+    const taxes = container.querySelector('[data-category="TAXES"]');
+    expect(taxes).toHaveTextContent('Taxes€30');
+    expect(taxes).not.toHaveTextContent(/year|Yearly/);
+    expect(container.querySelector('[data-category="SUBSCRIPTIONS"]')).toHaveTextContent('SubscriptionsYearly');
   });
 
   it('still lets a declared cost be edited and removed', async () => {
@@ -295,7 +298,7 @@ describe('the monthly breakdown', () => {
   it('keeps edit and remove buttons in the page for keyboard users, whatever the hover', () => {
     renderDetails();
 
-    const row = screen.getByRole('button', { name: 'Edit Rent Landlord' }).closest('.cost-row');
+    const row = screen.getByRole('button', { name: 'Edit Rent Landlord' }).closest('.phase-breakdown__row');
     expect(row).not.toBeNull();
     expect(row?.querySelector('.cost-row__actions')).toContainElement(screen.getByRole('button', { name: 'Remove Rent Landlord' }));
   });

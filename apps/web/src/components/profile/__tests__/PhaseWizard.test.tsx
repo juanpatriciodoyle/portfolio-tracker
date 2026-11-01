@@ -81,7 +81,7 @@ describe('PhaseWizard', () => {
     await fillPlace('Madrid', ['spa', /Spain/]);
     fireEvent.change(screen.getByLabelText('Address (optional)'), { target: { value: 'Calle Mayor 1' } });
 
-    expect(screen.getByText('🇪🇸 Madrid Calle Mayor 1')).toBeInTheDocument();
+    expect(screen.getByText('🇪🇸 Madrid')).toBeInTheDocument();
   });
 
   it('confirms each answer with a checkmark once it passes', async () => {
