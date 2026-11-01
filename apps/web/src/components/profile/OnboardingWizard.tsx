@@ -181,7 +181,6 @@ export default function OnboardingWizard({
       steps={steps}
       stepIndex={step}
       heading={copy.heading}
-      hint={copy.hint}
       resumed={resumedAtStep === step}
       error={formError}
       busy={saving}

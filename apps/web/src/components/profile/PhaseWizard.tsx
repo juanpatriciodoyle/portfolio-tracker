@@ -89,7 +89,6 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
       steps={steps}
       stepIndex={step}
       heading={copy.heading}
-      hint={copy.hint}
       resumed={resumedAtStep === step}
       error={formError}
       busy={saving}
@@ -107,6 +106,7 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
         today={today}
         costs={costs}
         onCostsChange={changeCosts}
+        includeIncome={phase === null}
       />
     </WizardModal>
   );

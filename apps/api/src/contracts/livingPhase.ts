@@ -8,30 +8,29 @@ import {
   hasAtLeastOneKey,
   optionalTextSchema,
 } from './primitives';
-import { HOUSING_TENURES, INCOME_REASONS } from './vocabulary';
+import { HOUSING_TENURES } from './vocabulary';
 
 export const housingTenureSchema = z.enum(HOUSING_TENURES);
-export const incomeReasonSchema = z.enum(INCOME_REASONS);
 
 /**
- * From `startDate` the monthly income is `amountMinor` (0 for a stretch without work), until `endDate` or, when
- * that is null, until a later change takes over or the phase ends.
+ * One source of income: `amountMinor` a month, net, in the living phase's currency, from `startDate` until
+ * `endDate` (null while it still pays). Streams of one phase add up day by day and may overlap.
  */
-export const incomeChangeSchema = z
+export const incomeStreamSchema = z
   .object({
+    label: z.string().trim().min(1).max(60),
+    amountMinor: amountMinorSchema,
     startDate: calendarDateSchema,
     endDate: calendarDateSchema.nullable().default(null),
-    amountMinor: amountMinorSchema,
-    reason: incomeReasonSchema.nullable().default(null),
   })
   .strict()
   .superRefine((value, ctx) => {
     if (value.endDate !== null && value.endDate < value.startDate) {
-      ctx.addIssue({ code: 'custom', message: 'An income change cannot end before it starts', path: ['endDate'] });
+      ctx.addIssue({ code: 'custom', message: 'An income stream cannot end before it starts', path: ['endDate'] });
     }
   });
-export type IncomeChangeDto = z.infer<typeof incomeChangeSchema>;
-export type IncomeChangeInput = z.input<typeof incomeChangeSchema>;
+export type IncomeStreamDto = z.infer<typeof incomeStreamSchema>;
+export type IncomeStreamInput = z.input<typeof incomeStreamSchema>;
 
 const livingPhaseFields = {
   name: z.string().trim().min(1).max(80),
@@ -43,10 +42,8 @@ const livingPhaseFields = {
   /** null means "still living here": the current phase. */
   endDate: calendarDateSchema.nullable(),
   currency: currencyCodeSchema,
-  /** What came in each month before any income change. */
-  monthlyIncomeMinor: amountMinorSchema,
-  /** Raises, new jobs and stretches without work. Sending the list replaces the one stored. */
-  incomeChanges: z.array(incomeChangeSchema).max(50),
+  /** Jobs and other sources of income; none is fine. Sending the list replaces the one stored. */
+  incomeStreams: z.array(incomeStreamSchema).max(50),
   notes: optionalTextSchema(500),
 };
 
@@ -55,7 +52,7 @@ export const createLivingPhaseRequest = z
   .object({
     ...livingPhaseFields,
     endDate: calendarDateSchema.nullable().default(null),
-    incomeChanges: z.array(incomeChangeSchema).max(50).default([]),
+    incomeStreams: z.array(incomeStreamSchema).max(50).default([]),
     fixedCosts: z.array(createFixedCostRequest).max(50).default([]),
   })
   .strict()
@@ -89,8 +86,7 @@ export const livingPhaseDto = z.object({
   startDate: calendarDateSchema,
   endDate: calendarDateSchema.nullable(),
   currency: currencyCodeSchema,
-  monthlyIncomeMinor: amountMinorSchema,
-  incomeChanges: z.array(incomeChangeSchema),
+  incomeStreams: z.array(incomeStreamSchema),
   notes: z.string().nullable(),
   fixedCosts: z.array(fixedCostDto),
 });

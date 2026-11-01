@@ -42,10 +42,6 @@ export const VARIABLE_COST_CATEGORIES = ['ELECTRICITY', 'GAS', 'WATER', 'HEATING
 export const COST_BASES = ['DECLARED', 'BILLS', 'MIXED'] as const;
 export type CostBasis = (typeof COST_BASES)[number];
 
-/** Why an income changed during a living phase. */
-export const INCOME_REASONS = ['PROMOTION', 'NEW_JOB', 'UNEMPLOYMENT', 'OTHER'] as const;
-export type IncomeReason = (typeof INCOME_REASONS)[number];
-
 /** Rolling-average windows, in complete months. */
 export const ROLLING_WINDOW_MONTHS = [3, 6, 12] as const;
 export type RollingWindowMonths = (typeof ROLLING_WINDOW_MONTHS)[number];

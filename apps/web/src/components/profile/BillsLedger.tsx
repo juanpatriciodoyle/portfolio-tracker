@@ -55,13 +55,12 @@ export default function BillsLedger({ phase, records, context, onUpdate, onDelet
       <div className="expense-modal">
         <div>
           <h2 className="dialog__title">Bills &amp; documents</h2>
-          <p className="dialog__hint">Every bill logged for {phase.name}, newest first.</p>
         </div>
 
         <PdfPicker onFiles={onPickPdfs} />
 
         {sorted.length === 0 ? (
-          <p className="phase-details__hint">No bills yet. Add an expense, or drop your PDFs above.</p>
+          <p className="phase-details__hint">No bills yet.</p>
         ) : (
           <ul className="cost-list bill-list" aria-label="Bills received">
             {sorted.map((record) => {

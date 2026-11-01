@@ -55,7 +55,6 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
   return (
     <Modal label={onDelete ? 'Edit milestone' : 'Set a milestone target'} onClose={onClose}>
       <h2 className="dialog__title">{onDelete ? 'Edit milestone' : 'Set a milestone target'}</h2>
-      <p className="dialog__hint">Pick a goal and how much capital it asks for. The date is worked out from what your life leaves over each month.</p>
 
       <form className="cost-editor" onSubmit={handleSubmit} noValidate aria-label="Milestone">
         <fieldset className="profile-segmented">

@@ -187,7 +187,7 @@ describe('ProfilePage comparing', () => {
     serve();
     renderPage();
     await screen.findByRole('heading', { name: 'Living phases' });
-    expect(screen.getByText('Pick two to four phases to compare them.')).toBeInTheDocument();
+    expect(screen.queryByText(/Pick two to four phases/)).not.toBeInTheDocument();
 
     fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: 'Compare' }));
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Compare' }));
@@ -281,7 +281,6 @@ describe('ProfilePage comparing', () => {
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: /Edit phase/ }));
     clickContinue();
     clickContinue();
-    fireEvent.change(screen.getByLabelText('Monthly net income'), { target: { value: '2900' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     expect(await screen.findByText(/Fixed costs in 🇪🇸 Madrid are €400 more per month/)).toBeInTheDocument();
@@ -298,7 +297,7 @@ describe('ProfilePage changes', () => {
     fireEvent.change(screen.getByLabelText('Moved in'), { target: { value: '2017-01-01' } });
     fireEvent.change(screen.getByLabelText('Moved out'), { target: { value: '2019-12-31' } });
     clickContinue();
-    fireEvent.change(screen.getByLabelText('Monthly net income'), { target: { value: '2100' } });
+    fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '2100' } });
     clickContinue();
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
   }
@@ -315,7 +314,7 @@ describe('ProfilePage changes', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     const post = apiRequest.mock.calls.find(([, , options]) => options?.method === 'POST');
     expect(post?.[0]).toBe('/api/living-phases');
-    expect(post?.[2]?.body).toMatchObject({ name: '🇵🇹 Porto', city: 'Porto', countryCode: 'PT', monthlyIncomeMinor: 210000, endDate: '2019-12-31' });
+    expect(post?.[2]?.body).toMatchObject({ name: '🇵🇹 Porto', city: 'Porto', countryCode: 'PT', endDate: '2019-12-31', incomeStreams: [{ label: 'Salary', amountMinor: 210000, startDate: '2017-01-01', endDate: null }] });
     const card = await waitFor(() => cardFor('Porto'));
     expect(within(card).getByRole('button', { name: /Porto/ })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('Living phase added')).toBeInTheDocument();
@@ -346,15 +345,16 @@ describe('ProfilePage changes', () => {
     expect(screen.getByRole('dialog', { name: 'Edit living phase' })).toBeInTheDocument();
     clickContinue();
     clickContinue();
-    fireEvent.change(screen.getByLabelText('Monthly net income'), { target: { value: '2900' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() =>
       expect(apiCommand).toHaveBeenCalledWith('/api/living-phases/p2', {
         method: 'PATCH',
-        body: expect.objectContaining({ monthlyIncomeMinor: 290000, name: '🇵🇹 Lisbon' }),
+        body: expect.objectContaining({ name: '🇵🇹 Lisbon' }),
       })
     );
+    // Changing a home leaves its income list alone.
+    expect(apiCommand.mock.calls.find(([path]) => path === '/api/living-phases/p2')?.[1]?.body).not.toHaveProperty('incomeStreams');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
@@ -413,14 +413,14 @@ describe('ProfilePage bills', () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Living phases' });
     await waitFor(() => expect(billLoads()).toBe(1));
-    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Madrid/ }));
-    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Add an expense/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add expense/ }));
 
-    fireEvent.change(screen.getByLabelText('Who sent it?'), { target: { value: 'Iberdrola' } });
-    fireEvent.click(screen.getByRole('radio', { name: 'Electricity' }));
-    fireEvent.change(screen.getByLabelText('Total on the bill'), { target: { value: '96' } });
-    fireEvent.click(screen.getByRole('radio', { name: 'Every 2 months' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add expense' }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Add an expense' }));
+    fireEvent.change(dialog.getByLabelText('Who sent it?'), { target: { value: 'Iberdrola' } });
+    fireEvent.click(dialog.getByRole('radio', { name: 'Electricity' }));
+    fireEvent.change(dialog.getByLabelText('Total on the bill'), { target: { value: '96' } });
+    fireEvent.click(dialog.getByRole('radio', { name: 'Every 2 months' }));
+    fireEvent.click(dialog.getByRole('button', { name: 'Add expense' }));
 
     await waitFor(() =>
       expect(apiRequest).toHaveBeenCalledWith(
@@ -443,6 +443,44 @@ describe('ProfilePage bills', () => {
     await waitFor(() => expect(billLoads()).toBeGreaterThanOrEqual(2));
     // The monthly costs of the home come from its bills, so the timeline is read again too.
     await waitFor(() => expect(timelineLoads()).toBeGreaterThanOrEqual(2));
+  });
+
+  it('offers one Add expense for the whole page, and none on the cards', async () => {
+    serve();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Living phases' });
+
+    expect(screen.getAllByRole('button', { name: /Add expense/ })).toHaveLength(1);
+    expect(within(cardFor('Madrid')).queryByRole('button', { name: /Add (an )?expense/ })).not.toBeInTheDocument();
+  });
+
+  it('hides Add expense until there is a home to put it in', async () => {
+    serve({ phases: [], entries: [] });
+    renderPage();
+    await screen.findByRole('button', { name: 'Add your first living phase' });
+
+    expect(screen.queryByRole('button', { name: /Add expense/ })).not.toBeInTheDocument();
+  });
+
+  it('files a bill in the home its dates fall in, not the one that was open', async () => {
+    serve();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Living phases' });
+    fireEvent.click(screen.getByRole('button', { name: /Add expense/ }));
+
+    const dialog = within(screen.getByRole('dialog', { name: 'Add an expense' }));
+    fireEvent.change(dialog.getByLabelText('Who sent it?'), { target: { value: 'Iberdrola' } });
+    fireEvent.click(dialog.getByRole('radio', { name: 'Electricity' }));
+    fireEvent.change(dialog.getByLabelText('Total on the bill'), { target: { value: '70' } });
+    fireEvent.click(dialog.getByRole('radio', { name: 'Monthly' }));
+    fireEvent.change(dialog.getByLabelText('Covers from'), { target: { value: '2021-03-01' } });
+    fireEvent.change(dialog.getByLabelText('Until'), { target: { value: '2021-03-31' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Add expense' }));
+
+    await waitFor(() =>
+      expect(apiRequest).toHaveBeenCalledWith('/api/billing-records', expect.anything(), expect.objectContaining({ method: 'POST', body: expect.objectContaining({ phaseId: 'p2', periodStart: '2021-03-01' }) }))
+    );
+    expect(await screen.findByText('Expense added to 🇵🇹 Lisbon')).toBeInTheDocument();
   });
 
   it('refreshes the timeline and bills after a living phase changes (a deleted phase takes its bills with it)', async () => {
@@ -513,7 +551,7 @@ describe('ProfilePage first time', () => {
     clickContinue();
     fireEvent.change(screen.getByLabelText('Moved in'), { target: { value: '2024-01-01' } });
     clickContinue();
-    fireEvent.change(screen.getByLabelText('Monthly net income'), { target: { value: '1500' } });
+    fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '1500' } });
     clickContinue();
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Finish' }));
 

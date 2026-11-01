@@ -1,3 +1,4 @@
+import { salary } from './support/income';
 import express from 'express';
 import request from 'supertest';
 import { CountryStatisticsService } from '../application/countryStatisticsService';
@@ -39,7 +40,7 @@ function build() {
 
 const ALICE = { Authorization: `Bearer ${generateToken('alice')}` };
 const BOB = { Authorization: `Bearer ${generateToken('bob')}` };
-const madrid = { name: 'Madrid', city: 'Madrid', countryCode: 'ES', tenure: 'RENT', startDate: '2022-09-01', currency: 'EUR', monthlyIncomeMinor: 320000, fixedCosts: [{ category: 'RENT', cadence: 'MONTHLY', amountMinor: 120000 }] };
+const madrid = { name: 'Madrid', city: 'Madrid', countryCode: 'ES', tenure: 'RENT', startDate: '2022-09-01', currency: 'EUR', incomeStreams: salary(320000), fixedCosts: [{ category: 'RENT', cadence: 'MONTHLY', amountMinor: 120000 }] };
 
 describe('GET /api/insights/benchmarks', () => {
   it('needs a token, ignores a token or user id in the URL, and is never cached', async () => {

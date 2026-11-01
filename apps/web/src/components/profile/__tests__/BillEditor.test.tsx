@@ -3,12 +3,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { makeBill } from '../../../test/fixtures';
 import BillEditor from '../BillEditor';
+import type { BillingRecordDto, CreateBillingRecordRequest } from '../../../contracts';
+import type { MutationResult } from '../../../lib/apiErrors';
 import type { BillFormContext } from '../billForm';
 
 const ok = { ok: true as const, value: undefined };
 const context: BillFormContext = { today: '2026-10-31', countryCode: 'ES', history: [{ vendor: 'Octopus', category: 'ELECTRICITY', cadence: 'BIMONTHLY' }] };
 
-function renderEditor(props: Partial<React.ComponentProps<typeof BillEditor>> = {}) {
+function renderEditor(props: Partial<{ phaseId: string; currency: string; context: BillFormContext; initial: BillingRecordDto; onSubmit: (input: CreateBillingRecordRequest) => Promise<MutationResult<unknown>> }> = {}) {
   const onSubmit = vi.fn().mockResolvedValue(ok);
   const onCancel = vi.fn();
   render(<BillEditor phaseId="p1" currency="EUR" context={context} onSubmit={onSubmit} onCancel={onCancel} {...props} />);

@@ -1,3 +1,4 @@
+import { salary } from './support/income';
 import { ResourceNotFoundError } from '../application/errors';
 import type { FxQuote, FxRateProvider } from '../application/ports';
 import { LivingPhaseService } from '../application/livingPhaseService';
@@ -18,7 +19,7 @@ const madridInput: CreateLivingPhaseInput = {
   startDate: '2022-09-01',
   endDate: '2024-08-31',
   currency: 'EUR',
-  monthlyIncomeMinor: 320000,
+  incomeStreams: salary(320000),
   notes: 'Close to the office',
   fixedCosts: [
     { category: 'RENT', cadence: 'MONTHLY', amountMinor: 120000, label: 'Landlord Pérez' },
@@ -34,7 +35,7 @@ const lisbonInput: CreateLivingPhaseInput = {
   startDate: '2024-09-01',
   endDate: null,
   currency: 'EUR',
-  monthlyIncomeMinor: 350000,
+  incomeStreams: salary(350000),
   fixedCosts: [{ category: 'RENT', cadence: 'MONTHLY', amountMinor: 90000 }],
 };
 
@@ -78,7 +79,7 @@ describe('creating and listing phases', () => {
       startDate: '2022-09-01',
       endDate: '2024-08-31',
       currency: 'EUR',
-      monthlyIncomeMinor: 320000,
+      incomeStreams: salary(320000),
       notes: 'Close to the office',
     });
     expect(phase.fixedCosts).toEqual([
@@ -187,12 +188,12 @@ describe('updating a phase', () => {
     const { service } = build();
     const { id } = await service.createPhase(USER, request(madridInput));
 
-    await service.updatePhase(USER, id, { city: 'Getafe', monthlyIncomeMinor: 330000 });
+    await service.updatePhase(USER, id, { city: 'Getafe', incomeStreams: salary(330000) });
 
     expect((await service.listPhases(USER))[0]).toMatchObject({
       name: 'Madrid',
       city: 'Getafe',
-      monthlyIncomeMinor: 330000,
+      incomeStreams: salary(330000),
       address: 'Calle de Alcalá 123, 4ºB',
       startDate: '2022-09-01',
     });
@@ -476,7 +477,7 @@ describe('comparing phases in different currencies', () => {
       city: 'Buenos Aires',
       countryCode: 'AR',
       currency: 'ARS',
-      monthlyIncomeMinor: 90000000,
+      incomeStreams: salary(90000000),
       fixedCosts: [{ category: 'RENT', cadence: 'MONTHLY', amountMinor: 40000000 }],
       ...change,
     });
@@ -532,5 +533,57 @@ describe('comparing phases in different currencies', () => {
 
     expect(fx.ratesFor).not.toHaveBeenCalled();
     expect(result).not.toHaveProperty('rateSources');
+  });
+});
+
+describe('phases saved before income streams', () => {
+  /** Stores a phase the way the previous version did: one base income and changes that replace it. */
+  async function saveLegacyPhase() {
+    const repository = new InMemoryLivingPhaseRepository();
+    const cipher = new AesGcmFieldCipher(Buffer.alloc(32, 9));
+    const service = new LivingPhaseService({ repository, cipher, newId: () => 'legacy' });
+    const legacyPayload = {
+      name: 'Madrid',
+      city: 'Madrid',
+      address: null,
+      monthlyIncomeMinor: 300000,
+      incomeChanges: [{ startDate: '2026-04-01', endDate: null, amountMinor: 350000, reason: 'PROMOTION' }],
+      notes: null,
+    };
+    await repository.createMany(USER, [
+      {
+        id: 'legacy',
+        startDate: '2026-01-01',
+        endDate: null,
+        currency: 'EUR',
+        countryCode: 'ES',
+        tenure: 'RENT',
+        payload: cipher.encrypt(JSON.stringify(legacyPayload), { table: 'LivingPhase', rowId: 'legacy', userId: USER }),
+        fixedCosts: [],
+      },
+    ]);
+    return service;
+  }
+
+  it('list the same income on every day, as streams', async () => {
+    const service = await saveLegacyPhase();
+
+    const [phase] = await service.listPhases(USER);
+    expect(phase.incomeStreams).toEqual([
+      { label: 'Income', amountMinor: 300000, startDate: '2026-01-01', endDate: '2026-03-31' },
+      { label: 'Income', amountMinor: 350000, startDate: '2026-04-01', endDate: null },
+    ]);
+    expect(phase).not.toHaveProperty('monthlyIncomeMinor');
+    expect((await service.timeline(USER, '2026-05-01')).entries[0].monthlyIncomeMinor).toBe(350000);
+  });
+
+  it('stay readable after another field is edited, and keep their income', async () => {
+    const service = await saveLegacyPhase();
+
+    await service.updatePhase(USER, 'legacy', { city: 'Getafe' });
+
+    const [phase] = await service.listPhases(USER);
+    expect(phase.city).toBe('Getafe');
+    expect(phase.incomeStreams).toHaveLength(2);
   });
 });

@@ -1,3 +1,4 @@
+import { salary } from './support/income';
 import { DocumentExtractionService } from '../application/documentExtractionService';
 import { DocumentRejectedError, ResourceNotFoundError } from '../application/errors';
 import { ConcurrencyGate, SlidingWindowRateLimiter } from '../application/limits';
@@ -16,7 +17,7 @@ const pdf = (size = 100) => {
 };
 
 const phase = (name: string, change: Record<string, unknown>) =>
-  createLivingPhaseRequest.parse({ name, city: name, countryCode: 'ES', tenure: 'RENT', startDate: '2022-09-01', currency: 'EUR', monthlyIncomeMinor: 1, ...change });
+  createLivingPhaseRequest.parse({ name, city: name, countryCode: 'ES', tenure: 'RENT', startDate: '2022-09-01', currency: 'EUR', incomeStreams: salary(1), ...change });
 
 async function build(extractor: Partial<PdfTextExtractor> = {}, options: { limit?: number; slots?: number } = {}) {
   let ids = 0;

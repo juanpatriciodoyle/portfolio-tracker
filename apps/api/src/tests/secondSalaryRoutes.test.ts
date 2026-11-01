@@ -1,3 +1,4 @@
+import { salary } from './support/income';
 import express from 'express';
 import request from 'supertest';
 import type { PortfolioValueReader } from '../application/ports';
@@ -39,7 +40,7 @@ const madrid = {
   tenure: 'RENT',
   startDate: '2022-09-01',
   currency: 'EUR',
-  monthlyIncomeMinor: 320000,
+  incomeStreams: salary(320000),
   fixedCosts: [
     { category: 'RENT', cadence: 'MONTHLY', amountMinor: 90000 },
     { category: 'ELECTRICITY', cadence: 'MONTHLY', amountMinor: 8000 },

@@ -25,7 +25,6 @@ function renderDetails(overrides: Partial<React.ComponentProps<typeof PhaseDetai
     phase: makePhase({ fixedCosts: [makeCost({ id: 'c1', label: 'Landlord' })] }),
     entry: makeEntry(),
     onUpdatePhase: vi.fn().mockResolvedValue(ok),
-    onAddCost: vi.fn().mockResolvedValue(ok),
     onUpdateCost: vi.fn().mockResolvedValue(ok),
     onDeleteCost: vi.fn().mockResolvedValue(ok),
     billing: makeBilling(),
@@ -36,193 +35,19 @@ function renderDetails(overrides: Partial<React.ComponentProps<typeof PhaseDetai
   return { props, ...view };
 }
 
-describe('the one place to add an expense', () => {
-  it('offers a single "Add an expense" and a "Manage bills & documents", and nothing else for adding costs', () => {
+describe('managing the bills of a home', () => {
+  it('offers "Manage bills & documents" and no way to add costs from the card: that is one action for the whole page', () => {
     renderDetails();
 
-    expect(screen.getAllByRole('button', { name: /Add an expense/ })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: /Manage bills & documents/ })).toHaveLength(1);
-    expect(screen.queryByRole('button', { name: /Add a cost/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Add a bill|Log a bill/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add an expense|Add a cost|Add a bill|Log a bill/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Your bills|Bills received/i })).not.toBeInTheDocument();
   });
 
   it('is hidden where bills are not available', () => {
     renderDetails({ billing: undefined });
 
-    expect(screen.queryByRole('button', { name: /Add an expense/ })).not.toBeInTheDocument();
-  });
-
-  it('opens a dialog, preselects the category from the sender, and logs the expense', async () => {
-    const billing = makeBilling();
-    const { props } = renderDetails({ billing });
-    fireEvent.click(screen.getByRole('button', { name: /Add an expense/ }));
-
-    const dialog = screen.getByRole('dialog', { name: 'Add an expense' });
-    fireEvent.change(within(dialog).getByLabelText('Who sent it?'), { target: { value: 'Netflix' } });
-    expect(within(dialog).getByRole('radio', { name: 'Subscriptions' })).toBeChecked();
-    expect(within(dialog).getByRole('radio', { name: 'Monthly' })).toBeChecked();
-    fireEvent.change(within(dialog).getByLabelText('Total on the bill'), { target: { value: '12.99' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Add expense' }));
-
-    await waitFor(() =>
-      expect(billing.onAdd).toHaveBeenCalledWith({
-        phaseId: 'p1',
-        category: 'SUBSCRIPTIONS',
-        cadence: 'MONTHLY',
-        periodStart: '2026-10-01',
-        periodEnd: '2026-10-31',
-        amountMinor: 1299,
-        vendor: 'Netflix',
-      })
-    );
-    await waitFor(() => expect(props.announce).toHaveBeenCalledWith('Expense added'));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  it('recognises a sender the person already has, in the same home or another', () => {
-    renderDetails({ billing: makeBilling({ history: [{ vendor: 'Octopus', category: 'ELECTRICITY', cadence: 'BIMONTHLY' }] }) });
-    fireEvent.click(screen.getByRole('button', { name: /Add an expense/ }));
-
-    fireEvent.change(screen.getByLabelText('Who sent it?'), { target: { value: 'Octopus Energy' } });
-
-    expect(screen.getByRole('radio', { name: 'Electricity' })).toBeChecked();
-    expect(screen.getByRole('radio', { name: 'Every 2 months' })).toBeChecked();
-  });
-
-  it('closes with Cancel and keeps nothing', () => {
-    const billing = makeBilling();
-    renderDetails({ billing });
-    fireEvent.click(screen.getByRole('button', { name: /Add an expense/ }));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(billing.onAdd).not.toHaveBeenCalled();
-  });
-});
-
-describe('adding a fixed rate from the same button', () => {
-  const openRate = () => {
-    fireEvent.click(screen.getByRole('button', { name: /Add an expense/ }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Recurring fixed rate' }));
-  };
-
-  it('starts on a single bill receipt and offers the recurring fixed rate as the other choice', () => {
-    renderDetails();
-    fireEvent.click(screen.getByRole('button', { name: /Add an expense/ }));
-
-    expect(screen.getByRole('radio', { name: 'Single bill receipt' })).toBeChecked();
-    expect(screen.getByRole('radio', { name: 'Recurring fixed rate' })).not.toBeChecked();
-    expect(screen.getByLabelText('Covers from')).toBeInTheDocument();
-  });
-
-  it('saves a new subscription as a declared cost, with an amount and a cadence and no bill period', async () => {
-    const { props } = renderDetails();
-    openRate();
-
-    expect(screen.queryByLabelText('Covers from')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('radio', { name: 'Subscriptions' }));
-    fireEvent.change(screen.getByLabelText('Amount each time'), { target: { value: '9,99' } });
-    fireEvent.change(screen.getByLabelText('Label (optional)'), { target: { value: 'Spotify' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add recurring cost' }));
-
-    await waitFor(() => expect(props.onAddCost).toHaveBeenCalledWith('p1', { category: 'SUBSCRIPTIONS', cadence: 'MONTHLY', amountMinor: 999, label: 'Spotify' }));
-    await waitFor(() => expect(props.announce).toHaveBeenCalledWith('Cost added'));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(props.billing?.onAdd).not.toHaveBeenCalled();
-  });
-
-  it('offers only the fixed categories: the ones whose bill changes every time are logged as receipts', () => {
-    renderDetails();
-    openRate();
-
-    const offered = screen.getAllByRole('radio').map((radio) => radio.getAttribute('value'));
-    expect(offered).toEqual(expect.arrayContaining(['RENT', 'INTERNET', 'PHONE', 'SUBSCRIPTIONS', 'OTHER']));
-    for (const variable of ['ELECTRICITY', 'GAS', 'WATER', 'HEATING_COOLING', 'TAXES']) expect(offered).not.toContain(variable);
-  });
-
-  it('suggests the category and cadence from the label typed, until the person picks their own', () => {
-    renderDetails();
-    openRate();
-
-    fireEvent.change(screen.getByLabelText('Label (optional)'), { target: { value: 'Netflix' } });
-    expect(screen.getByRole('radio', { name: 'Subscriptions' })).toBeChecked();
-    expect(screen.getByRole('radio', { name: 'Monthly' })).toBeChecked();
-
-    fireEvent.click(screen.getByRole('radio', { name: 'Other' }));
-    fireEvent.change(screen.getByLabelText('Label (optional)'), { target: { value: 'Digi' } });
-    expect(screen.getByRole('radio', { name: 'Other' })).toBeChecked();
-  });
-
-  it('renews the declared cost of the same name instead of adding a second one', async () => {
-    const { props } = renderDetails({
-      phase: makePhase({ fixedCosts: [makeCost({ id: 'net', category: 'SUBSCRIPTIONS', label: 'Netflix', amountMinor: 1299 })] }),
-    });
-    openRate();
-
-    fireEvent.change(screen.getByLabelText('Label (optional)'), { target: { value: 'netflix' } });
-    fireEvent.change(screen.getByLabelText('Amount each time'), { target: { value: '17.99' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add recurring cost' }));
-
-    await waitFor(() => expect(props.onUpdateCost).toHaveBeenCalledWith('p1', 'net', { category: 'SUBSCRIPTIONS', cadence: 'MONTHLY', amountMinor: 1799, label: 'netflix' }));
-    expect(props.onAddCost).not.toHaveBeenCalled();
-    expect(props.announce).toHaveBeenCalledWith('Cost updated');
-  });
-
-  it('adds a second cost when the name is different, or when the same name is in another category', async () => {
-    const { props } = renderDetails({
-      phase: makePhase({ fixedCosts: [makeCost({ id: 'net', category: 'SUBSCRIPTIONS', label: 'Netflix', amountMinor: 1299 })] }),
-    });
-    openRate();
-
-    fireEvent.click(screen.getByRole('radio', { name: 'Internet' }));
-    fireEvent.change(screen.getByLabelText('Label (optional)'), { target: { value: 'Netflix' } });
-    fireEvent.change(screen.getByLabelText('Amount each time'), { target: { value: '30' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add recurring cost' }));
-
-    await waitFor(() => expect(props.onAddCost).toHaveBeenCalledWith('p1', expect.objectContaining({ category: 'INTERNET', amountMinor: 3000 })));
-    expect(props.onUpdateCost).not.toHaveBeenCalled();
-  });
-
-  it('asks for the category and the amount, and keeps the dialog open with the reason when saving fails', async () => {
-    const onAddCost = vi.fn().mockResolvedValue({ ok: false, failure: { kind: 'network', message: 'Could not reach the server.' } });
-    renderDetails({ onAddCost });
-    openRate();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add recurring cost' }));
-    expect(screen.getByText('Pick what this bill is for.')).toBeInTheDocument();
-    expect(onAddCost).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('radio', { name: 'Rent' }));
-    fireEvent.change(screen.getByLabelText('Amount each time'), { target: { value: '900' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add recurring cost' }));
-
-    expect(await screen.findByText('Could not reach the server.')).toBeInTheDocument();
-    expect(screen.getByRole('dialog', { name: 'Add an expense' })).toBeInTheDocument();
-  });
-
-  it('still logs a utility as a dated bill from the receipt side', async () => {
-    const { props } = renderDetails();
-    fireEvent.click(screen.getByRole('button', { name: /Add an expense/ }));
-
-    fireEvent.change(screen.getByLabelText('Who sent it?'), { target: { value: 'Iberdrola' } });
-    fireEvent.click(screen.getByRole('radio', { name: 'Electricity' }));
-    fireEvent.change(screen.getByLabelText('Total on the bill'), { target: { value: '80' } });
-    fireEvent.click(screen.getByRole('radio', { name: 'Monthly' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add expense' }));
-
-    await waitFor(() => expect(props.billing?.onAdd).toHaveBeenCalledWith(expect.objectContaining({ category: 'ELECTRICITY', cadence: 'MONTHLY', amountMinor: 8000 })));
-    expect(props.onAddCost).not.toHaveBeenCalled();
-  });
-
-  it('keeps the PDF drop zone for receipts, since a PDF is always a dated bill', () => {
-    renderDetails();
-    fireEvent.click(screen.getByRole('button', { name: /Add an expense/ }));
-    expect(screen.getByLabelText('Choose bill PDFs')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('radio', { name: 'Recurring fixed rate' }));
-    expect(screen.queryByLabelText('Choose bill PDFs')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Manage bills & documents/ })).not.toBeInTheDocument();
   });
 });
 
@@ -368,7 +193,7 @@ describe('adding bills from PDFs', () => {
 
   it('accepts several PDFs picked at once and reviews them one after another', () => {
     renderDetails();
-    fireEvent.click(screen.getByRole('button', { name: /Add an expense/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Manage bills & documents/ }));
 
     const input = screen.getByLabelText('Choose bill PDFs') as HTMLInputElement;
     expect(input).toHaveAttribute('multiple');
@@ -376,7 +201,7 @@ describe('adding bills from PDFs', () => {
 
     expect(screen.getByRole('dialog', { name: 'Add bills from PDFs' })).toBeInTheDocument();
     expect(screen.getByText('Bill 1 of 2 · enero.pdf')).toBeInTheDocument();
-    expect(screen.queryByRole('dialog', { name: 'Add an expense' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Manage bills and documents' })).not.toBeInTheDocument();
   });
 
   it('accepts PDFs dropped onto the drop zone, and ignores other files', () => {

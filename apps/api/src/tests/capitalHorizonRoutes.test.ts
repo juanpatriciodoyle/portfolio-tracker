@@ -1,3 +1,4 @@
+import { salary } from './support/income';
 import express from 'express';
 import request from 'supertest';
 import type { PortfolioValueReader } from '../application/ports';
@@ -42,7 +43,7 @@ const madrid = {
   tenure: 'RENT',
   startDate: '2022-09-01',
   currency: 'EUR',
-  monthlyIncomeMinor: 320_000,
+  incomeStreams: salary(320_000),
   fixedCosts: [{ category: 'RENT', cadence: 'MONTHLY', amountMinor: 120_000 }],
 };
 const property = { id: 'm1', title: 'Property Down Payment', targetAmountMinor: 350_000_00, capitalRequiredPercentage: 30, category: 'PROPERTY', enabled: true };

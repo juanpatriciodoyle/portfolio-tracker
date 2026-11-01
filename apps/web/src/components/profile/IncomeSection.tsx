@@ -1,11 +1,11 @@
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useId, useState } from 'react';
-import type { IncomeChangeDto, LivingPhaseDto, UpdateLivingPhaseRequest } from '../../contracts';
+import type { IncomeStreamDto, LivingPhaseDto, UpdateLivingPhaseRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import { formatMinor } from '../../lib/money';
 import { describeFailure } from './failureMessage';
-import IncomeChangeEditor from './IncomeChangeEditor';
-import { describeIncomeChange } from './incomeForm';
+import IncomeStreamEditor from './IncomeStreamEditor';
+import { describeIncomeStream } from './incomeForm';
 
 interface IncomeSectionProps {
   phase: LivingPhaseDto;
@@ -15,19 +15,20 @@ interface IncomeSectionProps {
 
 type Editing = { mode: 'add' } | { mode: 'edit'; index: number } | null;
 
-const byStart = (a: IncomeChangeDto, b: IncomeChangeDto) => a.startDate.localeCompare(b.startDate) || (a.endDate ?? '').localeCompare(b.endDate ?? '');
+const byStart = (a: IncomeStreamDto, b: IncomeStreamDto) =>
+  a.startDate.localeCompare(b.startDate) || (a.endDate ?? '').localeCompare(b.endDate ?? '') || a.label.localeCompare(b.label);
 
-/** What came in during a home, and when it changed: a raise, a new job, a stretch without work. */
+/** Every source of income during a home: jobs may overlap, and a stretch with none is simply a gap. */
 export default function IncomeSection({ phase, onUpdatePhase, announce }: IncomeSectionProps) {
   const id = useId();
   const [editing, setEditing] = useState<Editing>(null);
   const [confirmingIndex, setConfirmingIndex] = useState<number | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
-  const changes = [...phase.incomeChanges].sort(byStart);
+  const streams = [...phase.incomeStreams].sort(byStart);
 
-  const save = async (next: readonly IncomeChangeDto[], message: string) => {
-    const result = await onUpdatePhase(phase.id, { incomeChanges: [...next].sort(byStart) });
+  const save = async (next: readonly IncomeStreamDto[], message: string) => {
+    const result = await onUpdatePhase(phase.id, { incomeStreams: [...next].sort(byStart) });
     if (result.ok) {
       setEditing(null);
       setConfirmingIndex(null);
@@ -37,18 +38,18 @@ export default function IncomeSection({ phase, onUpdatePhase, announce }: Income
     return result;
   };
 
-  const submit = (change: IncomeChangeDto) =>
+  const submit = (stream: IncomeStreamDto) =>
     editing?.mode === 'edit'
       ? save(
-          changes.map((existing, index) => (index === editing.index ? change : existing)),
-          'Income change updated'
+          streams.map((existing, index) => (index === editing.index ? stream : existing)),
+          'Income updated'
         )
-      : save([...changes, change], 'Income change added');
+      : save([...streams, stream], 'Income added');
 
   const remove = async (index: number) => {
     const result = await save(
-      changes.filter((_, position) => position !== index),
-      'Income change removed'
+      streams.filter((_, position) => position !== index),
+      'Income removed'
     );
     if (!result.ok) setRemoveError(describeFailure(result.failure));
   };
@@ -57,52 +58,38 @@ export default function IncomeSection({ phase, onUpdatePhase, announce }: Income
     <section aria-labelledby={`${id}-income`}>
       <div className="phase-details__heading-row">
         <h4 className="phase-details__heading" id={`${id}-income`}>
-          Income over time
+          Income
         </h4>
         {editing === null && (
           <button type="button" className="profile-text-button" onClick={() => setEditing({ mode: 'add' })}>
-            <Plus size={14} aria-hidden="true" /> Add an income change
+            <Plus size={14} aria-hidden="true" /> Add income
           </button>
         )}
       </div>
 
-      {changes.length === 0 && editing === null && (
-        <p className="phase-details__hint">
-          {formatMinor(phase.monthlyIncomeMinor, phase.currency)} a month. Did it change here? Add a raise, a new job or a stretch without work.
-        </p>
-      )}
-
-      {changes.length > 0 && (
-        <ul className="cost-list" aria-label="Income over time">
-          <li className="cost-row income-row">
-            <div className="cost-row__main">
-              <span className="cost-row__name">Starting income</span>
-            </div>
-            <span className="cost-row__amount">
-              {formatMinor(phase.monthlyIncomeMinor, phase.currency)} <span className="cost-row__cadence">every month</span>
-            </span>
-          </li>
-          {changes.map((change, index) => {
-            const { when, reason } = describeIncomeChange(change);
-            const name = `income change ${when}`;
+      {streams.length > 0 && (
+        <ul className="cost-list" aria-label="Income">
+          {streams.map((stream, index) => {
+            const when = describeIncomeStream(stream);
+            const name = `${stream.label} ${when}`;
             return (
-              <li key={`${change.startDate}-${index}`} className="cost-row income-row">
+              <li key={`${stream.startDate}-${stream.label}-${index}`} className="cost-row income-row">
                 {editing?.mode === 'edit' && editing.index === index ? (
-                  <IncomeChangeEditor phase={phase} initial={change} onSubmit={submit} onCancel={() => setEditing(null)} />
+                  <IncomeStreamEditor phase={phase} initial={stream} onSubmit={submit} onCancel={() => setEditing(null)} />
                 ) : (
                   <>
                     <div className="cost-row__main">
                       <span className="bill-row__text">
-                        <span className="cost-row__name">{when}</span>
-                        {reason && <span className="bill-row__period">{reason}</span>}
+                        <span className="cost-row__name">{stream.label}</span>
+                        <span className="bill-row__period">{when}</span>
                       </span>
                     </div>
                     <span className="cost-row__amount">
-                      {formatMinor(change.amountMinor, phase.currency)} <span className="cost-row__cadence">every month</span>
+                      {formatMinor(stream.amountMinor, phase.currency)} <span className="cost-row__cadence">every month</span>
                     </span>
                     {confirmingIndex === index ? (
                       <div className="confirm-inline" role="group" aria-label={`Confirm removing ${name}`}>
-                        <span>Remove this change?</span>
+                        <span>Remove this income?</span>
                         <button type="button" className="profile-danger-button" onClick={() => remove(index)}>
                           Remove
                         </button>
@@ -136,7 +123,7 @@ export default function IncomeSection({ phase, onUpdatePhase, announce }: Income
         </ul>
       )}
 
-      {editing?.mode === 'add' && <IncomeChangeEditor phase={phase} onSubmit={submit} onCancel={() => setEditing(null)} />}
+      {editing?.mode === 'add' && <IncomeStreamEditor phase={phase} onSubmit={submit} onCancel={() => setEditing(null)} />}
 
       {removeError && (
         <p className="form-error-text" role="alert">

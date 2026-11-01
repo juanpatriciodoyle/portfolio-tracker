@@ -1,3 +1,4 @@
+import { salary } from './support/income';
 import { createLivingPhase, type LivingPhase } from '../domain/livingPhase';
 import type { BillingRecord } from '../domain/billing';
 import { buildTrends, lastCompleteMonth, monthlyTotals, rollingAverage } from '../domain/trends';
@@ -18,7 +19,7 @@ const madrid: LivingPhase = createLivingPhase({
   startDate: '2022-09-01',
   endDate: null,
   currency: 'EUR',
-  monthlyIncomeMinor: 320000,
+  incomeStreams: salary(320000),
   fixedCosts: [
     { id: 'c1', category: 'RENT', cadence: 'MONTHLY', amountMinor: 120000 },
     { id: 'c2', category: 'ELECTRICITY', cadence: 'BIMONTHLY', amountMinor: 9600 },
@@ -140,7 +141,7 @@ describe('buildTrends', () => {
       startDate: '2026-06-01',
       endDate: null,
       currency: 'ARS',
-      monthlyIncomeMinor: 90000000,
+      incomeStreams: salary(90000000),
       fixedCosts: [],
     });
     const arsBill = bill('r9', '2026-09-01', '2026-09-30', 40000000, { phaseId: 'ba' });

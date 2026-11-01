@@ -47,7 +47,7 @@ async function completeFirstHome() {
   clickContinue();
   fireEvent.change(screen.getByLabelText('Moved in'), { target: { value: '2022-09-01' } });
   clickContinue();
-  fireEvent.change(screen.getByLabelText('Monthly net income'), { target: { value: '3200' } });
+  fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '3200' } });
   clickContinue();
 }
 
@@ -132,7 +132,7 @@ describe('OnboardingWizard', () => {
       name: '🇪🇸 Madrid',
       startDate: '2022-09-01',
       endDate: null,
-      monthlyIncomeMinor: 320000,
+      incomeStreams: [{ label: 'Salary', amountMinor: 320000, startDate: '2022-09-01', endDate: null }],
       fixedCosts: [expect.objectContaining({ category: 'RENT', amountMinor: 120000 })],
     });
     expect(sessionStorage.getItem('draft:onboarding')).toBeNull();

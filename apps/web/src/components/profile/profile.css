@@ -1685,3 +1685,49 @@
   padding: 8px 10px;
   border-radius: 10px;
 }
+
+/* Current rate | Phase average: a quiet two-option switch above a phase's monthly figures. */
+.income-view-toggle {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 2px;
+  gap: 2px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-subtle-color);
+  border-radius: 999px;
+}
+
+.income-view-toggle__option {
+  padding: 3px 12px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--motion-quick) ease, color var(--motion-quick) ease;
+}
+
+.income-view-toggle__option:hover {
+  color: var(--text-primary);
+}
+
+.income-view-toggle__option.is-selected {
+  background-color: var(--accent-blue-subtle);
+  color: var(--text-accent-hover);
+}
+
+.income-view-toggle__option:has(input:focus-visible) {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+}
+
+.phase-card__burn {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: var(--bg-input);
+  color: var(--color-loss);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

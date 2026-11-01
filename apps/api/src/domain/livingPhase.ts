@@ -3,7 +3,7 @@ import { AVERAGE_DAYS_PER_MONTH, compareCalendarDates, daysInclusive } from './c
 import { InvalidLivingPhaseError } from './errors';
 import { effectiveMonthlyCosts, type BilledCost, type CategoryCost } from './effectiveCosts';
 import { baselineSavingsCapacity, type FixedCost } from './fixedCosts';
-import { activeIncomeMinor, earnedIncomeMinor, type IncomeChange } from './income';
+import { averageMonthlyIncomeMinor, earnedIncomeMinor, monthlyIncomeOn, type IncomeStream } from './income';
 import { roundHalfAwayFromZero } from './money';
 import type { PhaseSnapshot } from './phaseComparison';
 
@@ -20,10 +20,8 @@ export interface LivingPhase {
   /** null means "still living here". */
   readonly endDate: CalendarDate | null;
   readonly currency: string;
-  /** What came in each month before any income change. */
-  readonly monthlyIncomeMinor: number;
-  /** Raises, new jobs and stretches without work, each from its own day. */
-  readonly incomeChanges?: readonly IncomeChange[];
+  /** Every source of income, added up day by day. None at all is a valid phase: a sabbatical, a gap year. */
+  readonly incomeStreams: readonly IncomeStream[];
   readonly fixedCosts: readonly FixedCostItem[];
   /** The bills received for this phase: they move the monthly costs away from what was declared. */
   readonly bills?: readonly BilledCost[];
@@ -42,18 +40,18 @@ export function createLivingPhase(input: LivingPhase): LivingPhase {
   if (!/^[A-Z]{3}$/.test(input.currency)) {
     throw new InvalidLivingPhaseError('A living phase needs a three-letter ISO currency code');
   }
-  if (!isMinorAmount(input.monthlyIncomeMinor)) {
-    throw new InvalidLivingPhaseError('Monthly income must be a whole, non-negative amount of minor units');
-  }
   if (input.endDate !== null && input.endDate < input.startDate) {
     throw new InvalidLivingPhaseError('A living phase cannot end before it starts');
   }
-  for (const change of input.incomeChanges ?? []) {
-    if (!isMinorAmount(change.amountMinor)) {
-      throw new InvalidLivingPhaseError('An income change must be a whole, non-negative amount of minor units');
+  for (const stream of input.incomeStreams) {
+    if (stream.label.trim() === '') {
+      throw new InvalidLivingPhaseError('An income stream needs a label');
     }
-    if (change.endDate !== null && change.endDate < change.startDate) {
-      throw new InvalidLivingPhaseError('An income change cannot end before it starts');
+    if (!isMinorAmount(stream.amountMinor)) {
+      throw new InvalidLivingPhaseError('An income stream must be a whole, non-negative amount of minor units');
+    }
+    if (stream.endDate !== null && stream.endDate < stream.startDate) {
+      throw new InvalidLivingPhaseError('An income stream cannot end before it starts');
     }
   }
   return { ...input, fixedCosts: input.fixedCosts.map(createFixedCost) };
@@ -121,6 +119,10 @@ export interface TimelineEntry {
   readonly monthlyFixedCostsMinor: number;
   readonly savingsCapacityMinor: number;
   readonly savingsRate: number | null;
+  /** The same picture with the average month of the stay in place of the current rate. */
+  readonly averageMonthlyIncomeMinor: number;
+  readonly averageSavingsCapacityMinor: number;
+  readonly averageSavingsRate: number | null;
   readonly fixedCostsByCategoryMinor: Readonly<Record<FixedCostCategory, number>>;
   /** Where each category's monthly cost comes from: what was declared, or the bills received. */
   readonly costBasisByCategory: Readonly<Record<FixedCostCategory, Pick<CategoryCost, 'basis' | 'billCount'>>>;
@@ -137,21 +139,18 @@ function referenceDay(phase: DateRange, asOf: CalendarDate): CalendarDate {
 
 /**
  * A phase's monthly picture: what comes in on the as-of day (the phase's own first or last day when it is
- * upcoming or past; without a day, the income before any change) and what each category costs per month,
- * declared rates and bills together. Comparisons and the timeline are built from it.
+ * upcoming or past) and what each category costs per month, declared rates and bills together.
+ * Comparisons and the timeline are built from it.
  */
 export function phaseSnapshot(
   phase: LivingPhase,
-  asOf?: CalendarDate
+  asOf: CalendarDate
 ): PhaseSnapshot & { readonly savingsRate: number | null; readonly costBasisByCategory: TimelineEntry['costBasisByCategory'] } {
   const costs = effectiveMonthlyCosts({
     declared: phase.fixedCosts.map(({ category, cadence, amountMinor, label }) => ({ category, cadence, amountMinor, label: label ?? null })),
     bills: phase.bills ?? [],
   });
-  const monthlyIncomeMinor =
-    asOf === undefined
-      ? phase.monthlyIncomeMinor
-      : activeIncomeMinor({ baseMinor: phase.monthlyIncomeMinor, changes: phase.incomeChanges ?? [] }, referenceDay(phase, asOf));
+  const monthlyIncomeMinor = monthlyIncomeOn(phase.incomeStreams, referenceDay(phase, asOf));
   const { capacityMinor, savingsRate } = baselineSavingsCapacity({
     monthlyIncomeMinor,
     monthlyFixedCostsMinor: costs.monthlyFixedCostsMinor,
@@ -176,6 +175,14 @@ export function buildTimeline(phases: readonly LivingPhase[], asOf: CalendarDate
   return [...phases].sort(byStartThenId).map((phase) => {
     const snapshot = phaseSnapshot(phase, asOf);
     const months = phaseMonths(phase, asOf);
+    const span = { streams: phase.incomeStreams, startDate: phase.startDate, endDate: phase.endDate };
+    const averageMonthlyIncome = averageMonthlyIncomeMinor(span, asOf);
+    const averageCapacity = baselineSavingsCapacity({ monthlyIncomeMinor: averageMonthlyIncome, monthlyFixedCostsMinor: snapshot.monthlyFixedCostsMinor });
+    const average = {
+      averageMonthlyIncomeMinor: averageMonthlyIncome,
+      averageSavingsCapacityMinor: averageCapacity.capacityMinor,
+      averageSavingsRate: averageCapacity.savingsRate,
+    };
 
     return {
       ...snapshot,
@@ -184,10 +191,8 @@ export function buildTimeline(phases: readonly LivingPhase[], asOf: CalendarDate
       endDate: phase.endDate,
       status: phaseStatus(phase, asOf),
       months,
-      totalIncomeMinor: earnedIncomeMinor(
-        { baseMinor: phase.monthlyIncomeMinor, changes: phase.incomeChanges ?? [], startDate: phase.startDate, endDate: phase.endDate },
-        asOf
-      ),
+      totalIncomeMinor: earnedIncomeMinor(span, asOf),
+      ...average,
       totalFixedCostsMinor: roundHalfAwayFromZero(snapshot.monthlyFixedCostsMinor * months),
     };
   });

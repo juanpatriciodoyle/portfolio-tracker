@@ -1,3 +1,4 @@
+import { salary } from './support/income';
 import express from 'express';
 import request from 'supertest';
 import type { PdfTextExtractor } from '../application/ports';
@@ -19,7 +20,7 @@ const madrid = {
   tenure: 'RENT',
   startDate: '2022-09-01',
   currency: 'EUR',
-  monthlyIncomeMinor: 1,
+  incomeStreams: salary(1),
 };
 
 function build(extractor?: Partial<PdfTextExtractor>, limits?: { limit?: number }) {

@@ -1,3 +1,4 @@
+import { salary } from './support/income';
 import {
   COST_CADENCES,
   ENCRYPTION_NOT_CONFIGURED,
@@ -27,7 +28,7 @@ const validPhase = {
   tenure: 'RENT',
   startDate: '2022-09-01',
   currency: 'EUR',
-  monthlyIncomeMinor: 320000,
+  incomeStreams: salary(320000),
 };
 
 const validCost = { category: 'RENT', cadence: 'MONTHLY', amountMinor: 120000 };
@@ -220,6 +221,9 @@ describe('response shapes', () => {
       monthlyFixedCostsMinor: 150000,
       savingsCapacityMinor: 170000,
       savingsRate: 0.53125,
+      averageMonthlyIncomeMinor: 320000,
+      averageSavingsCapacityMinor: 170000,
+      averageSavingsRate: 0.53125,
       fixedCostsByCategoryMinor: amounts,
       costBasisByCategory: basis,
       months: 14.2,

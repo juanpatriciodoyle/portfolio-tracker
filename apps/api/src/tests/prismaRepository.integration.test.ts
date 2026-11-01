@@ -1,3 +1,4 @@
+import { salary } from './support/income';
 import { PrismaClient } from '@prisma/client';
 import { BillingRecordService } from '../application/billingRecordService';
 import { LivingPhaseService } from '../application/livingPhaseService';
@@ -128,7 +129,7 @@ if (!url) {
       const bills = new BillingRecordService({ repository: new PrismaBillingRecordRepository(prisma), phases, cipher, fingerprinter: new HmacBillFingerprinter(Buffer.alloc(32, 3)) });
       const { id: phaseId } = await phases.createPhase(
         userId,
-        createLivingPhaseRequest.parse({ name: 'Home', city: 'Town', countryCode: 'ES', tenure: 'RENT', startDate: '2020-01-01', currency: 'EUR', monthlyIncomeMinor: 1 })
+        createLivingPhaseRequest.parse({ name: 'Home', city: 'Town', countryCode: 'ES', tenure: 'RENT', startDate: '2020-01-01', currency: 'EUR', incomeStreams: salary(1) })
       );
 
       await bills.createRecord(userId, {
@@ -165,7 +166,7 @@ if (!url) {
           startDate: '2024-01-01',
           endDate: null,
           currency: 'TZS',
-          monthlyIncomeMinor: 987654321,
+          incomeStreams: salary(987654321),
           notes: 'Beach cottage',
           fixedCosts: [{ category: 'RENT', cadence: 'MONTHLY', amountMinor: 123456789, label: 'Landlady Amina' }],
         })
@@ -193,7 +194,7 @@ if (!url) {
       for (const secret of ['Zanzibar', 'Stone Town', 'Mizingani', '987654321', '123456789', 'Beach cottage', 'Amina', 'Quentin', 'Zephyrine']) {
         expect(rows).not.toContain(secret);
       }
-      expect((await phases.listPhases(userId))[0]).toMatchObject({ name: 'Zanzibar Hideaway', monthlyIncomeMinor: 987654321 });
+      expect((await phases.listPhases(userId))[0]).toMatchObject({ name: 'Zanzibar Hideaway', incomeStreams: salary(987654321) });
       expect((await profiles.getProfile(userId)).fullName).toBe('Quentin Zephyrine');
     });
 
@@ -204,7 +205,7 @@ if (!url) {
       await phases.createPhase(
         userId,
         createLivingPhaseRequest.parse({
-          name: 'Home', city: 'Town', countryCode: 'ES', tenure: 'OWN', startDate: '2020-01-01', currency: 'EUR', monthlyIncomeMinor: 1,
+          name: 'Home', city: 'Town', countryCode: 'ES', tenure: 'OWN', startDate: '2020-01-01', currency: 'EUR', incomeStreams: salary(1),
           fixedCosts: [{ category: 'GAS', cadence: 'QUARTERLY', amountMinor: 3000 }],
         })
       );

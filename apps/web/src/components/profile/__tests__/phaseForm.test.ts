@@ -37,7 +37,7 @@ describe('initialPhaseForm', () => {
 
   it('fills every field from an existing phase', () => {
     const form = initialPhaseForm(
-      makePhase({ endDate: '2024-03-31', monthlyIncomeMinor: 320050, address: 'Calle Mayor 1', notes: 'Great place' }),
+      makePhase({ endDate: '2024-03-31', address: 'Calle Mayor 1', notes: 'Great place' }),
       { currency: 'USD', stillLivingHere: true }
     );
 
@@ -46,7 +46,7 @@ describe('initialPhaseForm', () => {
       currency: 'EUR',
       endDate: '2024-03-31',
       stillLivingHere: false,
-      monthlyIncome: '3200.50',
+      monthlyIncome: '',
       address: 'Calle Mayor 1',
       notes: 'Great place',
     });
@@ -68,13 +68,15 @@ describe('validatePhaseForm', () => {
       countryCode: 'ES',
       startDate: '2022-09-01',
       endDate: null,
-      monthlyIncomeMinor: 320000,
+      incomeStreams: [{ label: 'Salary', amountMinor: 320000, startDate: '2022-09-01', endDate: null }],
       address: null,
       notes: null,
       fixedCosts: [],
     });
     expect(result.payload.update).not.toHaveProperty('fixedCosts');
-    expect(result.payload.update).toMatchObject({ endDate: null, monthlyIncomeMinor: 320000 });
+    // Changing a home never sends income: that list is edited on its own.
+    expect(result.payload.update).toMatchObject({ endDate: null });
+    expect(result.payload.update).not.toHaveProperty('incomeStreams');
   });
 
   it('names the phase after its flag, city and address, so nobody has to type a name', () => {
@@ -95,12 +97,12 @@ describe('validatePhaseForm', () => {
     for (const text of ['3.200,50', '3,200.50', '3200.5']) {
       const result = validate({ ...filled, monthlyIncome: text });
 
-      expect(result.ok && result.payload.create.monthlyIncomeMinor).toBe(320050);
+      expect(result.ok && result.payload.create.incomeStreams[0].amountMinor).toBe(320050);
     }
   });
 
   it('asks for everything that is missing, in plain words', () => {
-    const result = validate({ ...filled, city: '', countryCode: '', startDate: '', monthlyIncome: '' });
+    const result = validate({ ...filled, city: '', countryCode: '', startDate: '' });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -108,7 +110,6 @@ describe('validatePhaseForm', () => {
       city: 'Which city was it?',
       countryCode: 'Choose a country.',
       startDate: 'Add the day you moved in.',
-      monthlyIncome: 'Enter your monthly net income, for example 3200 (0 if none).',
     });
   });
 
@@ -130,8 +131,22 @@ describe('validatePhaseForm', () => {
     expect(result.ok && result.payload.create).toMatchObject({ address: 'Calle Mayor 1', notes: 'Sunny' });
   });
 
-  it('allows a monthly income of zero', () => {
-    expect(validate({ ...filled, monthlyIncome: '0' }).ok).toBe(true);
+  it('allows a home with no income: zero, or nothing typed, adds no income stream', () => {
+    for (const monthlyIncome of ['0', '', '  ']) {
+      const result = validate({ ...filled, monthlyIncome });
+
+      expect(result.ok && result.payload.create.incomeStreams).toEqual([]);
+    }
+  });
+
+  it('starts the first income the day the home starts', () => {
+    const result = validate({ ...filled, startDate: '2024-02-10' });
+
+    expect(result.ok && result.payload.create.incomeStreams).toEqual([{ label: 'Salary', amountMinor: 320000, startDate: '2024-02-10', endDate: null }]);
+  });
+
+  it('refuses an income that is not a number', () => {
+    expect(validate({ ...filled, monthlyIncome: 'lots' })).toMatchObject({ ok: false, errors: { monthlyIncome: 'Enter an amount such as 3200, or leave it empty.' } });
   });
 });
 
@@ -191,7 +206,8 @@ describe('phaseStepErrors', () => {
   it('reports only what the given step asks for', () => {
     expect(Object.keys(phaseStepErrors(empty, TODAY, 'place')).sort()).toEqual(['city', 'countryCode']);
     expect(Object.keys(phaseStepErrors(empty, TODAY, 'dates'))).toEqual(['startDate']);
-    expect(Object.keys(phaseStepErrors(empty, TODAY, 'money'))).toEqual(['monthlyIncome']);
+    // Income is optional, so an empty money step has nothing to report.
+    expect(Object.keys(phaseStepErrors(empty, TODAY, 'money'))).toEqual([]);
   });
 
   it('reports nothing for a step that is complete, even when a later one is not', () => {

@@ -44,7 +44,7 @@ const newPhase: CreateLivingPhaseInput = {
   startDate: '2020-01-01',
   endDate: '2022-08-31',
   currency: 'EUR',
-  monthlyIncomeMinor: 280000,
+  incomeStreams: [{ label: 'Salary', amountMinor: 280000, startDate: '2020-01-01', endDate: null }],
 };
 
 beforeEach(() => {
@@ -156,7 +156,7 @@ describe('useLivingPhases changes', () => {
     await waitFor(() => expect(result.current.status).toBe('ready'));
 
     await act(async () => {
-      await result.current.updatePhase('p1', { monthlyIncomeMinor: 330000 });
+      await result.current.updatePhase('p1', { incomeStreams: [] });
       await result.current.deletePhase('p1');
       await result.current.addFixedCost('p1', { category: 'WATER', cadence: 'BIMONTHLY', amountMinor: 4200 });
       await result.current.updateFixedCost('p1', 'c1', { amountMinor: 125000 });
@@ -164,7 +164,7 @@ describe('useLivingPhases changes', () => {
     });
 
     expect(apiCommand.mock.calls).toEqual([
-      [`${LIST_PATH}/p1`, { method: 'PATCH', body: { monthlyIncomeMinor: 330000 } }],
+      [`${LIST_PATH}/p1`, { method: 'PATCH', body: { incomeStreams: [] } }],
       [`${LIST_PATH}/p1`, { method: 'DELETE' }],
       [`${LIST_PATH}/p1/fixed-costs/c1`, { method: 'PATCH', body: { amountMinor: 125000 } }],
       [`${LIST_PATH}/p1/fixed-costs/c1`, { method: 'DELETE' }],

@@ -1,19 +1,35 @@
 import { z } from 'zod';
-import { amountMinorSchema, capitalMilestoneList, incomeChangeSchema, profileDataSchema } from '../contracts';
+import { amountMinorSchema, calendarDateSchema, capitalMilestoneList, incomeStreamSchema, profileDataSchema } from '../contracts';
 
-/** What is sealed inside a living phase row. */
+/** How income was saved before income streams: a base amount that changes replaced for a while. Only read, never written. */
+const legacyIncomeChangeSchema = z.object({
+  startDate: calendarDateSchema,
+  endDate: calendarDateSchema.nullable().default(null),
+  amountMinor: amountMinorSchema,
+  reason: z.string().nullable().default(null),
+});
+
+/** What is sealed inside a living phase row. Phases saved before income streams hold `monthlyIncomeMinor` and `incomeChanges` instead. */
 export const phasePayloadSchema = z
   .object({
     name: z.string(),
     city: z.string(),
     address: z.string().nullable(),
-    monthlyIncomeMinor: amountMinorSchema,
-    /** Phases saved before income changes existed have none. */
-    incomeChanges: z.array(incomeChangeSchema).default([]),
+    incomeStreams: z.array(incomeStreamSchema).optional(),
+    monthlyIncomeMinor: amountMinorSchema.optional(),
+    incomeChanges: z.array(legacyIncomeChangeSchema).default([]),
     notes: z.string().nullable(),
   })
   .strict();
-export type PhasePayload = z.infer<typeof phasePayloadSchema>;
+export type StoredPhasePayload = z.infer<typeof phasePayloadSchema>;
+/** What is written: always streams, never the legacy fields. */
+export interface PhasePayload {
+  readonly name: string;
+  readonly city: string;
+  readonly address: string | null;
+  readonly incomeStreams: z.infer<typeof incomeStreamSchema>[];
+  readonly notes: string | null;
+}
 
 /** What is sealed inside a fixed cost row. */
 export const costPayloadSchema = z

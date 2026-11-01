@@ -31,7 +31,6 @@ function renderTimeline(overrides: Partial<React.ComponentProps<typeof PhaseTime
     onEdit: vi.fn(),
     onDelete: vi.fn().mockResolvedValue(ok),
     onUpdatePhase: vi.fn().mockResolvedValue(ok),
-    onAddCost: vi.fn().mockResolvedValue(ok),
     onUpdateCost: vi.fn().mockResolvedValue(ok),
     onDeleteCost: vi.fn().mockResolvedValue(ok),
     announce: vi.fn(),

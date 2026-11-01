@@ -1,3 +1,4 @@
+import { salary } from './support/income';
 import { FIXED_COST_CATEGORIES } from '../contracts';
 import { AVERAGE_DAYS_PER_MONTH } from '../domain/calendarDate';
 import { InvalidLivingPhaseError } from '../domain/errors';
@@ -16,7 +17,7 @@ const phase = (overrides: Partial<LivingPhase> & { id: string }): LivingPhase =>
   startDate: '2022-01-01',
   endDate: null,
   currency: 'EUR',
-  monthlyIncomeMinor: 300000,
+  incomeStreams: salary(300000),
   fixedCosts: [],
   ...overrides,
 });
@@ -34,7 +35,7 @@ describe('createFixedCost', () => {
 });
 
 describe('createLivingPhase', () => {
-  const input = { id: 'p1', startDate: '2022-01-01', endDate: null, currency: 'EUR', monthlyIncomeMinor: 0, fixedCosts: [] };
+  const input = { id: 'p1', startDate: '2022-01-01', endDate: null, currency: 'EUR', incomeStreams: salary(0), fixedCosts: [] };
 
   it('accepts a current phase, a one-day phase and zero income', () => {
     expect(createLivingPhase(input).endDate).toBeNull();
@@ -45,8 +46,9 @@ describe('createLivingPhase', () => {
     expect(() => createLivingPhase({ ...input, endDate: '2021-12-31' })).toThrow(InvalidLivingPhaseError);
   });
 
-  it.each([-1, 0.5, Number.NaN])('rejects the income %p', (monthlyIncomeMinor) => {
-    expect(() => createLivingPhase({ ...input, monthlyIncomeMinor })).toThrow(InvalidLivingPhaseError);
+  it.each([-1, 0.5, Number.NaN])('rejects an income stream of %p', (amountMinor) => {
+    const incomeStreams = [{ label: 'Job', amountMinor, startDate: '2022-01-01', endDate: null }];
+    expect(() => createLivingPhase({ ...input, incomeStreams })).toThrow(InvalidLivingPhaseError);
   });
 
   it.each(['eur', 'EU', 'EURO', ''])('rejects the currency %p', (currency) => {
@@ -150,7 +152,7 @@ describe('buildTimeline', () => {
     id: 'madrid',
     startDate: '2022-09-01',
     endDate: '2024-08-31',
-    monthlyIncomeMinor: 300000,
+    incomeStreams: salary(300000),
     fixedCosts: [
       { id: 'c1', category: 'RENT', cadence: 'MONTHLY', amountMinor: 120000 },
       { id: 'c2', category: 'ELECTRICITY', cadence: 'BIMONTHLY', amountMinor: 9600 },
@@ -160,7 +162,7 @@ describe('buildTimeline', () => {
     id: 'lisbon',
     startDate: '2024-09-01',
     endDate: null,
-    monthlyIncomeMinor: 350000,
+    incomeStreams: salary(350000),
     fixedCosts: [{ id: 'c3', category: 'RENT', cadence: 'MONTHLY', amountMinor: 90000 }],
   });
 
@@ -193,7 +195,7 @@ describe('buildTimeline', () => {
 
   it('totals income and costs over the months lived, and none for an upcoming phase', () => {
     const [past, current] = buildTimeline([madrid, lisbon], '2026-10-31');
-    const upcoming = buildTimeline([phase({ id: 'future', startDate: '2030-01-01', monthlyIncomeMinor: 100 })], '2026-10-31')[0];
+    const upcoming = buildTimeline([phase({ id: 'future', startDate: '2030-01-01', incomeStreams: salary(100) })], '2026-10-31')[0];
 
     expect(past.months).toBeCloseTo(731 / AVERAGE_DAYS_PER_MONTH, 10); // 2022-09-01 to 2024-08-31 spans leap day 2024-02-29
     expect(past.totalIncomeMinor).toBe(Math.round(300000 * past.months));
@@ -216,7 +218,7 @@ describe('buildTimeline', () => {
 });
 
 describe('determinism', () => {
-  const lived = phase({ id: 'p', startDate: '2022-09-01', endDate: '2023-08-31', monthlyIncomeMinor: 250000 });
+  const lived = phase({ id: 'p', startDate: '2022-09-01', endDate: '2023-08-31', incomeStreams: salary(250000) });
 
   it('does not depend on the system clock', () => {
     jest.useFakeTimers();

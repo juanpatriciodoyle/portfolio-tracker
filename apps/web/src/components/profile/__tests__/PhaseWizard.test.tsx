@@ -75,13 +75,13 @@ describe('PhaseWizard', () => {
     expect(heading()).toBe('Where did you live?');
   });
 
-  it('shows the header it will generate while the place is typed', async () => {
+  it('does not explain how the header is generated while the place is typed', async () => {
     renderWizard();
 
     await fillPlace('Madrid', ['spa', /Spain/]);
     fireEvent.change(screen.getByLabelText('Address (optional)'), { target: { value: 'Calle Mayor 1' } });
 
-    expect(screen.getByText('🇪🇸 Madrid')).toBeInTheDocument();
+    expect(screen.queryByText(/It will appear as/)).not.toBeInTheDocument();
   });
 
   it('confirms each answer with a checkmark once it passes', async () => {
@@ -164,7 +164,7 @@ describe('PhaseWizard', () => {
     clickContinue();
     fillDates();
     clickContinue();
-    fireEvent.change(screen.getByLabelText('Monthly net income'), { target: { value: '2800' } });
+    fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '2800' } });
     clickContinue();
 
     expect(heading()).toBe('What do you pay every month?');
@@ -183,9 +183,24 @@ describe('PhaseWizard', () => {
       countryCode: 'PT',
       startDate: '2020-01-01',
       endDate: '2022-08-31',
-      monthlyIncomeMinor: 280000,
+      incomeStreams: [{ label: 'Salary', amountMinor: 280000, startDate: '2020-01-01', endDate: null }],
       fixedCosts: [expect.objectContaining({ category: 'RENT', cadence: 'MONTHLY', amountMinor: 95000 })],
     });
+  });
+
+  it('can add a phase without any income: a sabbatical has none', async () => {
+    const { props } = renderWizard();
+    await fillPlace();
+    clickContinue();
+    fillDates();
+    clickContinue();
+    expect(screen.getByLabelText('Monthly net income (optional)')).toHaveValue('');
+    clickContinue();
+
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
+
+    await waitFor(() => expect(props.onSubmit).toHaveBeenCalled());
+    expect(vi.mocked(props.onSubmit).mock.calls[0][0].create.incomeStreams).toEqual([]);
   });
 
   it('can add a phase with no bills at all', async () => {
@@ -194,7 +209,7 @@ describe('PhaseWizard', () => {
     clickContinue();
     fillDates();
     clickContinue();
-    fireEvent.change(screen.getByLabelText('Monthly net income'), { target: { value: '2800' } });
+    fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '2800' } });
     clickContinue();
 
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
@@ -211,7 +226,7 @@ describe('PhaseWizard', () => {
     clickContinue();
     fillDates();
     clickContinue();
-    fireEvent.change(screen.getByLabelText('Monthly net income'), { target: { value: '2800' } });
+    fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '2800' } });
     clickContinue();
 
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
@@ -228,11 +243,12 @@ describe('PhaseWizard', () => {
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'Step 1 of 3: Where');
     clickContinue();
     clickContinue();
-    fireEvent.change(screen.getByLabelText('Monthly net income'), { target: { value: '2900' } });
+    expect(screen.queryByLabelText('Monthly net income (optional)')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(props.onSubmit).toHaveBeenCalled());
-    expect(vi.mocked(props.onSubmit).mock.calls[0][0].update).toMatchObject({ name: '🇵🇹 Lisbon', monthlyIncomeMinor: 290000 });
+    expect(vi.mocked(props.onSubmit).mock.calls[0][0].update).toMatchObject({ name: '🇵🇹 Lisbon' });
+    expect(vi.mocked(props.onSubmit).mock.calls[0][0].update).not.toHaveProperty('incomeStreams');
     expect(vi.mocked(props.onSubmit).mock.calls[0][0].update).not.toHaveProperty('fixedCosts');
   });
 
@@ -294,7 +310,7 @@ describe('PhaseWizard drafts', () => {
     clickContinue();
     fillDates();
     clickContinue();
-    fireEvent.change(screen.getByLabelText('Monthly net income'), { target: { value: '2800' } });
+    fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '2800' } });
     clickContinue();
 
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));

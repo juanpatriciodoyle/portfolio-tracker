@@ -1,7 +1,6 @@
 import {
   BILLING_CADENCES,
   COST_CADENCES,
-  INCOME_REASONS,
   UTILITY_CATEGORIES,
   type BillingCadence,
   type CostCadence,
@@ -9,7 +8,6 @@ import {
   type FixedCostCategory,
   type FxRateSource,
   type HousingTenure,
-  type IncomeReason,
   type PhaseStatus,
 } from '../../contracts';
 
@@ -94,15 +92,6 @@ export const EMPLOYMENT_LABELS: Record<EmploymentStatus, string> = {
   RETIRED: 'Retired',
   OTHER: 'Other',
 };
-
-export const INCOME_REASON_LABELS: Record<IncomeReason, string> = {
-  PROMOTION: 'Promotion',
-  NEW_JOB: 'New job',
-  UNEMPLOYMENT: 'Unemployment',
-  OTHER: 'Other',
-};
-
-export const INCOME_REASON_OPTIONS = INCOME_REASONS.map((value) => ({ value, label: INCOME_REASON_LABELS[value] }));
 
 export const STATUS_LABELS: Record<PhaseStatus, string> = {
   past: 'Past',

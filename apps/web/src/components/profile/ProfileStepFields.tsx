@@ -63,7 +63,6 @@ export default function ProfileStepFields({ step, idPrefix, draft, onChange, err
         <WizardField
           id={id('nationalities')}
           label="Nationalities (optional)"
-          hint="Type a country and press Enter or comma. Up to five."
           error={errorOf('nationalities')}
           valid={isValid('nationalities')}
         >

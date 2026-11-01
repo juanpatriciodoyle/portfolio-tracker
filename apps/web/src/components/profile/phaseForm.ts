@@ -9,7 +9,7 @@ import {
   type LivingPhaseDto,
   type UpdateLivingPhaseRequest,
 } from '../../contracts';
-import { minorToInputString, parseMajorToMinor } from '../../lib/money';
+import { parseMajorToMinor } from '../../lib/money';
 import { phaseDisplayName } from '../../lib/phaseName';
 
 /** What the editor holds while a person types: everything is text until it is validated. */
@@ -62,7 +62,7 @@ export function initialPhaseForm(
       startDate: phase.startDate,
       endDate: phase.endDate ?? '',
       stillLivingHere: phase.endDate === null,
-      monthlyIncome: minorToInputString(phase.monthlyIncomeMinor, phase.currency),
+      monthlyIncome: '',
       address: phase.address ?? '',
       notes: phase.notes ?? '',
     };
@@ -88,11 +88,14 @@ const REQUIRED_MESSAGES: Partial<Record<keyof PhaseFormState, string>> = {
 };
 
 /** The contract's field names, mapped onto the form's. */
-const FORM_FIELD_FOR_CONTRACT_FIELD: Record<string, keyof PhaseFormState> = { monthlyIncomeMinor: 'monthlyIncome' };
+const FORM_FIELD_FOR_CONTRACT_FIELD: Record<string, keyof PhaseFormState> = { incomeStreams: 'monthlyIncome' };
 
 function isFormField(field: string): field is keyof PhaseFormState {
   return ['city', 'countryCode', 'tenure', 'currency', 'startDate', 'endDate', 'monthlyIncome', 'address', 'notes'].includes(field);
 }
+
+/** What the first income typed while adding a home is called; more can be added later, each with its own name. */
+const FIRST_INCOME_LABEL = 'Salary';
 
 const FUTURE_MESSAGES = {
   startDate: 'Moved in cannot be a day in the future.',
@@ -110,8 +113,9 @@ export function validatePhaseForm(
 ): PhaseFormResult {
   const errors: PhaseFieldErrors = {};
 
-  const monthlyIncomeMinor = parseMajorToMinor(form.monthlyIncome, form.currency);
-  if (monthlyIncomeMinor === null) errors.monthlyIncome = 'Enter your monthly net income, for example 3200 (0 if none).';
+  // Income is optional: nothing typed is a home without income. Further jobs are added from the home itself.
+  const monthlyIncomeMinor = form.monthlyIncome.trim() === '' ? 0 : parseMajorToMinor(form.monthlyIncome, form.currency);
+  if (monthlyIncomeMinor === null) errors.monthlyIncome = 'Enter an amount such as 3200, or leave it empty.';
   if (form.startDate === '') errors.startDate = 'Add the day you moved in.';
   else if (form.startDate > today) errors.startDate = FUTURE_MESSAGES.startDate;
   if (!form.stillLivingHere) {
@@ -130,11 +134,14 @@ export function validatePhaseForm(
     startDate: form.startDate,
     endDate: form.stillLivingHere ? null : form.endDate,
     currency: form.currency,
-    monthlyIncomeMinor: monthlyIncomeMinor ?? 0,
     notes: form.notes.trim() === '' ? null : form.notes,
   };
+  const incomeStreams =
+    monthlyIncomeMinor !== null && monthlyIncomeMinor > 0 && form.startDate !== ''
+      ? [{ label: FIRST_INCOME_LABEL, amountMinor: monthlyIncomeMinor, startDate: form.startDate, endDate: null }]
+      : [];
 
-  const parsed = createLivingPhaseRequest.safeParse({ ...fields, fixedCosts });
+  const parsed = createLivingPhaseRequest.safeParse({ ...fields, incomeStreams, fixedCosts });
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
       const contractField = String(issue.path[0] ?? '');
@@ -145,6 +152,7 @@ export function validatePhaseForm(
   }
 
   if (!parsed.success || Object.keys(errors).length > 0) return { ok: false, errors };
+  // Changing a home never touches its income: that lives in the home's own Income list.
   return { ok: true, payload: { create: parsed.data, update: updateLivingPhaseRequest.parse(fields) } };
 }
 

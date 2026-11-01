@@ -24,6 +24,10 @@ export const timelineEntryDto = z.object({
   savingsCapacityMinor: signedMinor,
   /** Savings capacity as a fraction of income; null when there is no income. */
   savingsRate: z.number().nullable(),
+  /** The same three figures worked out from the average month of the stay instead of the income of the as-of day. */
+  averageMonthlyIncomeMinor: signedMinor,
+  averageSavingsCapacityMinor: signedMinor,
+  averageSavingsRate: z.number().nullable(),
   fixedCostsByCategoryMinor: amountsByCategory,
   /** Where each category's cost comes from (null: nothing declared or billed) and how many bills it was worked out from. */
   costBasisByCategory: z.record(

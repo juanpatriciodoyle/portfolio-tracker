@@ -4,7 +4,7 @@ import { describeFailure, issuesByField } from './failureMessage';
 import type { PhaseFieldErrors, PhaseFormState } from './phaseForm';
 
 /** The server's field names, mapped onto the form's. */
-const FORM_FIELD_FOR_SERVER_FIELD: Record<string, string> = { monthlyIncomeMinor: 'monthlyIncome' };
+const FORM_FIELD_FOR_SERVER_FIELD: Record<string, string> = { incomeStreams: 'monthlyIncome' };
 
 const FORM_FIELDS: readonly string[] = ['city', 'countryCode', 'tenure', 'currency', 'startDate', 'endDate', 'monthlyIncome', 'address', 'notes'];
 

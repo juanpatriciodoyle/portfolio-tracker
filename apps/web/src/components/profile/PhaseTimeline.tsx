@@ -1,4 +1,4 @@
-import type { CreateFixedCostRequest, LivingPhaseDto, PhaseStatus, TimelineEntryDto, UpdateFixedCostRequest, UpdateLivingPhaseRequest } from '../../contracts';
+import type { LivingPhaseDto, PhaseStatus, TimelineEntryDto, UpdateFixedCostRequest, UpdateLivingPhaseRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import type { BillingView } from './billingView';
 import LivingPhaseCard from './LivingPhaseCard';
@@ -13,7 +13,6 @@ interface PhaseTimelineProps {
   onEdit: (phaseId: string) => void;
   onDelete: (phaseId: string) => Promise<MutationResult<unknown>>;
   onUpdatePhase: (phaseId: string, input: UpdateLivingPhaseRequest) => Promise<MutationResult<unknown>>;
-  onAddCost: (phaseId: string, input: CreateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onUpdateCost: (phaseId: string, costId: string, input: UpdateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onDeleteCost: (phaseId: string, costId: string) => Promise<MutationResult<unknown>>;
   billing?: BillingView;
@@ -45,7 +44,6 @@ export default function PhaseTimeline({
   onEdit,
   onDelete,
   onUpdatePhase,
-  onAddCost,
   onUpdateCost,
   onDeleteCost,
   billing,
@@ -67,7 +65,6 @@ export default function PhaseTimeline({
             onEdit={() => onEdit(phase.id)}
             onDelete={() => onDelete(phase.id)}
             onUpdatePhase={onUpdatePhase}
-            onAddCost={onAddCost}
             onUpdateCost={onUpdateCost}
             onDeleteCost={onDeleteCost}
             billing={billing}

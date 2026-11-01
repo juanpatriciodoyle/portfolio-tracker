@@ -1,23 +1,33 @@
 import { useId, useState, type FormEvent } from 'react';
-import type { BillingRecordDto, CreateBillingRecordRequest } from '../../contracts';
+import type { BillingRecordDto, CreateBillingRecordRequest, LivingPhaseDto } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
+import { defaultExpensePhase, phaseCoveringDay } from '../../lib/phaseRouting';
 import { billFormFrom, emptyBillForm, validateBill, type BillErrors, type BillForm, type BillFormContext } from './billForm';
 import BillFields from './BillFields';
 import { describeFailure } from './failureMessage';
 
-interface BillEditorProps {
-  phaseId: string;
-  currency: string;
+/** Where the bill goes: one known home, or whichever of these homes the days it covers fall in. */
+type BillTarget =
+  | { phaseId: string; currency: string; phases?: undefined }
+  | { phases: readonly LivingPhaseDto[]; phaseId?: undefined; currency?: undefined };
+
+type BillEditorProps = BillTarget & {
   /** Today, the home's country and the senders the person already has: what the form needs to suggest and to fill in days. */
   context: BillFormContext;
   /** Present when changing a bill that was already logged. */
   initial?: BillingRecordDto;
   onSubmit: (input: CreateBillingRecordRequest) => Promise<MutationResult<unknown>>;
   onCancel: () => void;
+};
+
+/** The home a bill belongs to, from the first day it covers; with no day yet, the default home so the other fields can still be checked. */
+function routeBill(phases: readonly LivingPhaseDto[], periodStart: string, today: string | null) {
+  const phase = periodStart === '' ? defaultExpensePhase(phases, today ?? '') : phaseCoveringDay(phases, periodStart);
+  return phase === null ? null : { phaseId: phase.id, currency: phase.currency };
 }
 
 /** Add, or correct, one expense that actually arrived: who sent it, what it cost, and what it covers. */
-export default function BillEditor({ phaseId, currency, context, initial, onSubmit, onCancel }: BillEditorProps) {
+export default function BillEditor({ phaseId, currency, phases, context, initial, onSubmit, onCancel }: BillEditorProps) {
   const id = useId();
   const [form, setForm] = useState<BillForm>(() => (initial ? billFormFrom(initial) : emptyBillForm()));
   const [errors, setErrors] = useState<BillErrors>({});
@@ -25,7 +35,12 @@ export default function BillEditor({ phaseId, currency, context, initial, onSubm
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const result = validateBill(form, phaseId, currency);
+    const target = phases ? routeBill(phases, form.periodStart, context.today) : { phaseId, currency };
+    if (target === null) {
+      setErrors({ periodStart: 'No living phase covers that day. Pick a day you lived somewhere.' });
+      return;
+    }
+    const result = validateBill(form, target.phaseId, target.currency);
     if (!result.ok) {
       setErrors(result.errors);
       return;

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { makeCost, makeEntry, makePhase } from '../../../test/fixtures';
 import LivingPhaseCard from '../LivingPhaseCard';
@@ -22,7 +22,6 @@ function renderCard(overrides: Partial<React.ComponentProps<typeof LivingPhaseCa
     onEdit: vi.fn(),
     onDelete: vi.fn().mockResolvedValue(ok),
     onUpdatePhase: vi.fn().mockResolvedValue(ok),
-    onAddCost: vi.fn().mockResolvedValue(ok),
     onUpdateCost: vi.fn().mockResolvedValue(ok),
     onDeleteCost: vi.fn().mockResolvedValue(ok),
     announce: vi.fn(),
@@ -62,9 +61,10 @@ describe('LivingPhaseCard at a glance', () => {
     // €1,200 rent + €150 electricity + €50 water of €3,200
     expect(container.querySelector('[data-ratio="housing"]')).toHaveTextContent('Housing44%');
     expect(container.querySelector<HTMLElement>('[data-ratio="saved"] .phase-bar__fill')?.style.width).toBe('53.125%');
-    expect(screen.queryByText('Income')).not.toBeInTheDocument();
-    expect(screen.queryByText('Fixed costs')).not.toBeInTheDocument();
-    expect(screen.queryByText('€3,200')).not.toBeInTheDocument();
+    const metrics = container.querySelector('.phase-card__metrics') as HTMLElement;
+    expect(within(metrics).queryByText('Income')).not.toBeInTheDocument();
+    expect(within(metrics).queryByText('Fixed costs')).not.toBeInTheDocument();
+    expect(within(metrics).queryByText('€3,200')).not.toBeInTheDocument();
   });
 
   it('says so, in red, when fixed costs exceed income', () => {
@@ -83,6 +83,72 @@ describe('LivingPhaseCard at a glance', () => {
     const { container } = renderCard({ entry: makeEntry({ savingsRate: null, monthlyIncomeMinor: 0 }) });
 
     expect(container.querySelector('[data-ratio]')).not.toBeInTheDocument();
+  });
+
+  it('shows a burn rate instead of a percentage when nothing comes in', () => {
+    const { container } = renderCard({
+      phase: makePhase({ incomeStreams: [] }),
+      entry: makeEntry({
+        monthlyIncomeMinor: 0,
+        savingsCapacityMinor: -150000,
+        savingsRate: null,
+        averageMonthlyIncomeMinor: 0,
+        averageSavingsCapacityMinor: -150000,
+        averageSavingsRate: null,
+      }),
+    });
+
+    expect(container.querySelector('.phase-card__leftover')).toHaveTextContent('€1,500 short each month');
+    expect(container.querySelector('[data-chip="burn"]')).toHaveTextContent('Burn rate: -€1,500/mo');
+    expect(container.querySelector('[data-ratio]')).not.toBeInTheDocument();
+  });
+
+  it('shows no burn chip while there is income, even when it is not enough', () => {
+    const { container } = renderCard({ entry: makeEntry({ savingsCapacityMinor: -15000, savingsRate: -0.05 }) });
+
+    expect(container.querySelector('[data-chip="burn"]')).not.toBeInTheDocument();
+  });
+
+  describe('current rate and phase average', () => {
+    const entry = makeEntry({
+      monthlyIncomeMinor: 400000,
+      savingsCapacityMinor: 250000,
+      savingsRate: 0.625,
+      averageMonthlyIncomeMinor: 200000,
+      averageSavingsCapacityMinor: 50000,
+      averageSavingsRate: 0.25,
+    });
+
+    it('starts on the current rate', () => {
+      const { container } = renderCard({ entry });
+
+      expect(screen.getByRole('radio', { name: 'Current rate' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Phase average' })).not.toBeChecked();
+      expect(container.querySelector('.phase-card__leftover')).toHaveTextContent('€2,500 left each month');
+      expect(container.querySelector('[data-ratio="saved"]')).toHaveTextContent('Saved63%');
+    });
+
+    it('switches the leftover, the saved share and the housing share to the average month of the stay', () => {
+      const { container } = renderCard({ entry });
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Phase average' }));
+
+      expect(screen.getByRole('radio', { name: 'Phase average' })).toBeChecked();
+      expect(container.querySelector('.phase-card__leftover')).toHaveTextContent('€500 left each month');
+      expect(container.querySelector('[data-ratio="saved"]')).toHaveTextContent('Saved25%');
+      // €1,400 of rent and utilities over an average income of €2,000
+      expect(container.querySelector('[data-ratio="housing"]')).toHaveTextContent('Housing70%');
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Current rate' }));
+      expect(container.querySelector('.phase-card__leftover')).toHaveTextContent('€2,500 left each month');
+    });
+
+    it('keeps each card on its own choice', () => {
+      renderCard({ entry });
+      fireEvent.click(screen.getByRole('radio', { name: 'Phase average' }));
+
+      expect(screen.getAllByRole('radiogroup', { name: 'Income shown' })).toHaveLength(1);
+    });
   });
 
   it('marks an upcoming home as open-ended', () => {
@@ -136,7 +202,7 @@ describe('LivingPhaseCard expanding and comparing', () => {
     expect(screen.getByText('Fixed costs paid').nextElementSibling).toHaveTextContent('€21,000');
   });
 
-  it('invites the first bill when there are none', () => {
+  it('shows no cost rows and no hint when there are no costs', () => {
     const nothing = { RENT: 0, ELECTRICITY: 0, GAS: 0, WATER: 0, HEATING_COOLING: 0, INTERNET: 0, PHONE: 0, SUBSCRIPTIONS: 0, TAXES: 0, OTHER: 0 };
     renderCard({
       expanded: true,
@@ -144,7 +210,7 @@ describe('LivingPhaseCard expanding and comparing', () => {
       phase: makePhase({ fixedCosts: [] }),
     });
 
-    expect(screen.getByText(/No fixed costs yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/No fixed costs yet/)).not.toBeInTheDocument();
   });
 
   it('toggles comparison and reflects it for screen readers', () => {

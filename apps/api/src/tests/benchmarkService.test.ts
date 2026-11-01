@@ -1,3 +1,4 @@
+import { salary } from './support/income';
 import { BenchmarkService } from '../application/benchmarkService';
 import { BenchmarkRefresher, CountryStatisticsService } from '../application/countryStatisticsService';
 import { LivingPhaseService } from '../application/livingPhaseService';
@@ -237,7 +238,7 @@ const madrid = createLivingPhaseRequest.parse({
   startDate: '2022-09-01',
   endDate: '2024-08-31',
   currency: 'EUR',
-  monthlyIncomeMinor: 320000,
+  incomeStreams: salary(320000),
   fixedCosts: [
     { category: 'RENT', cadence: 'MONTHLY', amountMinor: 120000 },
     { category: 'ELECTRICITY', cadence: 'BIMONTHLY', amountMinor: 9600 },
@@ -251,7 +252,7 @@ const buenosAires = createLivingPhaseRequest.parse({
   tenure: 'RENT',
   startDate: '2024-09-01',
   currency: 'ARS',
-  monthlyIncomeMinor: 200_000_000,
+  incomeStreams: salary(200_000_000),
   fixedCosts: [{ category: 'RENT', cadence: 'MONTHLY', amountMinor: 40_000_000 }],
 });
 
@@ -317,7 +318,7 @@ describe('BenchmarkService', () => {
   it('has no nationality equivalences without nationalities or without purchasing power', async () => {
     const { service, phases } = await benchmarkWorld();
     await phases.createPhase(USER, madrid);
-    await phases.createPhase(USER, { ...madrid, name: 'Nowhere', startDate: '2024-09-01', endDate: null, monthlyIncomeMinor: 0 });
+    await phases.createPhase(USER, { ...madrid, name: 'Nowhere', startDate: '2024-09-01', endDate: null, incomeStreams: salary(0) });
 
     const result = await service.benchmarks(USER, '2026-10-31');
 
@@ -326,8 +327,8 @@ describe('BenchmarkService', () => {
 
   it('says what is missing instead of guessing', async () => {
     const { service, phases } = await benchmarkWorld();
-    await phases.createPhase(USER, { ...madrid, monthlyIncomeMinor: 0 });
-    await phases.createPhase(USER, { ...buenosAires, countryCode: 'JP', currency: 'JPY', startDate: '2024-09-01', monthlyIncomeMinor: 500000 });
+    await phases.createPhase(USER, { ...madrid, incomeStreams: salary(0) });
+    await phases.createPhase(USER, { ...buenosAires, countryCode: 'JP', currency: 'JPY', startDate: '2024-09-01', incomeStreams: salary(500000) });
 
     const [noIncome, japan] = (await service.benchmarks(USER, '2026-10-31')).phases;
 

@@ -1,6 +1,6 @@
 import { ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import { useId, useState } from 'react';
-import type { CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest, UpdateLivingPhaseRequest } from '../../contracts';
+import type { LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest, UpdateLivingPhaseRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import { formatMinor, formatPercent, formatPhaseRange } from '../../lib/money';
 import { phaseAddress } from '../../lib/phaseName';
@@ -9,7 +9,8 @@ import type { BillingView } from './billingView';
 import { describeFailure } from './failureMessage';
 import { STATUS_LABELS } from './labels';
 import PhaseDetails from './PhaseDetails';
-import { housingBurden } from './phaseRatios';
+import IncomeViewToggle from './IncomeViewToggle';
+import { burnRateMinor, housingBurden, incomeFigures, type IncomeView } from './phaseRatios';
 
 interface LivingPhaseCardProps {
   phase: LivingPhaseDto;
@@ -22,7 +23,6 @@ interface LivingPhaseCardProps {
   onEdit: () => void;
   onDelete: () => Promise<MutationResult<unknown>>;
   onUpdatePhase: (phaseId: string, input: UpdateLivingPhaseRequest) => Promise<MutationResult<unknown>>;
-  onAddCost: (phaseId: string, input: CreateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onUpdateCost: (phaseId: string, costId: string, input: UpdateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onDeleteCost: (phaseId: string, costId: string) => Promise<MutationResult<unknown>>;
   billing?: BillingView;
@@ -40,7 +40,6 @@ export default function LivingPhaseCard({
   onEdit,
   onDelete,
   onUpdatePhase,
-  onAddCost,
   onUpdateCost,
   onDeleteCost,
   billing,
@@ -50,11 +49,14 @@ export default function LivingPhaseCard({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [incomeView, setIncomeView] = useState<IncomeView>('current');
 
   const status = entry?.status;
   const address = phaseAddress(phase);
-  const housing = entry ? housingBurden(entry) : null;
-  const savingsRate = entry?.savingsRate ?? null;
+  const figures = entry ? incomeFigures(entry, incomeView) : null;
+  const housing = entry && figures ? housingBurden({ monthlyIncomeMinor: figures.incomeMinor, fixedCostsByCategoryMinor: entry.fixedCostsByCategoryMinor }) : null;
+  const savingsRate = figures?.savingsRate ?? null;
+  const burn = figures ? burnRateMinor(figures) : null;
 
   const confirmDelete = async () => {
     setDeleting(true);
@@ -97,11 +99,17 @@ export default function LivingPhaseCard({
         {formatPhaseRange(phase.startDate, phase.endDate, undefined, status === 'upcoming' ? 'open' : 'now')}
       </p>
 
-      {entry && (
+      {entry && figures && (
         <div className="phase-card__metrics">
-          <p className={`phase-card__leftover ${entry.savingsCapacityMinor >= 0 ? 'is-positive' : 'is-negative'}`}>
-            <strong>{formatMinor(Math.abs(entry.savingsCapacityMinor), entry.currency)}</strong>{' '}
-            {entry.savingsCapacityMinor >= 0 ? 'left each month' : 'short each month'}
+          <IncomeViewToggle phaseId={phase.id} value={incomeView} onChange={setIncomeView} />
+          <p className={`phase-card__leftover ${figures.savingsCapacityMinor >= 0 ? 'is-positive' : 'is-negative'}`}>
+            <strong>{formatMinor(Math.abs(figures.savingsCapacityMinor), entry.currency)}</strong>{' '}
+            {figures.savingsCapacityMinor >= 0 ? 'left each month' : 'short each month'}
+            {burn !== null && (
+              <span className="phase-card__burn" data-chip="burn">
+                Burn rate: -{formatMinor(burn, entry.currency)}/mo
+              </span>
+            )}
           </p>
           {(savingsRate !== null || housing !== null) && (
             <div className="phase-card__ratios">
@@ -139,7 +147,6 @@ export default function LivingPhaseCard({
             phase={phase}
             entry={entry}
             onUpdatePhase={onUpdatePhase}
-            onAddCost={onAddCost}
             onUpdateCost={onUpdateCost}
             onDeleteCost={onDeleteCost}
             billing={billing}

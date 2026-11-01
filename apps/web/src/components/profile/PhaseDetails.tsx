@@ -1,17 +1,15 @@
-import { FileText, Pencil, Plus, Trash2 } from 'lucide-react';
+import { FileText, Pencil, Trash2 } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
 import type { CreateBillingRecordRequest, CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest, UpdateLivingPhaseRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import { formatMonths } from '../../lib/duration';
 import { formatMinor } from '../../lib/money';
-import { vendorNamesMatch } from '../../contracts';
 import BenchmarksCard from './BenchmarksCard';
 import BillsLedger from './BillsLedger';
 import type { BillFormContext } from './billForm';
 import type { BillingView } from './billingView';
 import { describeCostBasis, describeDeclaredCadence } from './describeCosts';
 import DocumentReviewModal from './DocumentReviewModal';
-import ExpenseModal from './ExpenseModal';
 import { describeFailure } from './failureMessage';
 import FixedCostEditor from './FixedCostEditor';
 import IncomeSection from './IncomeSection';
@@ -21,7 +19,6 @@ interface PhaseDetailsProps {
   phase: LivingPhaseDto;
   entry: TimelineEntryDto | undefined;
   onUpdatePhase: (phaseId: string, input: UpdateLivingPhaseRequest) => Promise<MutationResult<unknown>>;
-  onAddCost: (phaseId: string, input: CreateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onUpdateCost: (phaseId: string, costId: string, input: UpdateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onDeleteCost: (phaseId: string, costId: string) => Promise<MutationResult<unknown>>;
   /** The bills received for this phase; absent where bills are not shown. */
@@ -30,10 +27,10 @@ interface PhaseDetailsProps {
   announce: (message: string) => void;
 }
 
-type Dialog = 'expense' | 'ledger' | null;
+type Dialog = 'ledger' | null;
 
 /** What opens up when a phase card is expanded: the income, the monthly costs, and how to change them. */
-export default function PhaseDetails({ phase, entry, onUpdatePhase, onAddCost, onUpdateCost, onDeleteCost, billing, announce }: PhaseDetailsProps) {
+export default function PhaseDetails({ phase, entry, onUpdatePhase, onUpdateCost, onDeleteCost, billing, announce }: PhaseDetailsProps) {
   const id = useId();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
@@ -58,28 +55,6 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onAddCost, o
   })).filter((group) => group.rows.length > 0);
 
   const context: BillFormContext = { today: billing?.asOf ?? null, countryCode: phase.countryCode, history: billing?.history ?? [] };
-
-  const addExpense = async (input: CreateBillingRecordRequest) => {
-    const result = await billing?.onAdd(input);
-    if (result?.ok) {
-      setDialog(null);
-      announce('Expense added');
-    }
-    return result ?? { ok: false as const, failure: { kind: 'unknown' as const, message: 'Bills are not available here.' } };
-  };
-
-  /** A fixed rate: it replaces the declared cost it renews (same category, same name), otherwise it is a new one. */
-  const addRate = async (input: CreateFixedCostRequest) => {
-    const renewed = input.label
-      ? phase.fixedCosts.find((cost) => cost.category === input.category && cost.label !== null && vendorNamesMatch(cost.label, input.label as string))
-      : undefined;
-    const result = renewed ? await onUpdateCost(phase.id, renewed.id, input) : await onAddCost(phase.id, input);
-    if (result.ok) {
-      setDialog(null);
-      announce(renewed ? 'Cost updated' : 'Cost added');
-    }
-    return result;
-  };
 
   const saveFromDocument = async (input: CreateBillingRecordRequest) => {
     const result = await billing?.onAdd(input);
@@ -173,9 +148,6 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onAddCost, o
           </h4>
           {billing && (
             <div className="phase-details__actions">
-              <button type="button" className="profile-text-button" onClick={() => setDialog('expense')}>
-                <Plus size={14} aria-hidden="true" /> Add an expense
-              </button>
               <button type="button" className="profile-text-button" onClick={() => setDialog('ledger')}>
                 <FileText size={14} aria-hidden="true" /> Manage bills &amp; documents
               </button>
@@ -183,9 +155,7 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onAddCost, o
           )}
         </div>
 
-        {breakdown.length === 0 ? (
-          <p className="phase-details__hint">No fixed costs yet. Add the bills you pay for this home.</p>
-        ) : (
+        {breakdown.length > 0 && (
           <div className="phase-breakdown">
             {breakdown.map((group) => (
               <div key={group.id} className="phase-breakdown__group">
@@ -261,9 +231,6 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onAddCost, o
 
       {billing?.benchmarks && <BenchmarksCard phaseId={phase.id} view={billing.benchmarks} />}
 
-      {billing && dialog === 'expense' && (
-        <ExpenseModal phase={phase} context={context} onSubmit={addExpense} onSubmitRate={addRate} onPickPdfs={pickPdfs} onClose={() => setDialog(null)} />
-      )}
       {billing && dialog === 'ledger' && (
         <BillsLedger
           phase={phase}

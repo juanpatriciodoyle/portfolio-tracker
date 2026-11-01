@@ -1,3 +1,4 @@
+import { salary } from './support/income';
 import { BillingRecordService } from '../application/billingRecordService';
 import { ResourceNotFoundError } from '../application/errors';
 import { LivingPhaseService } from '../application/livingPhaseService';
@@ -30,7 +31,7 @@ const madridPhase = createLivingPhaseRequest.parse({
   tenure: 'RENT',
   startDate: '2022-09-01',
   currency: 'EUR',
-  monthlyIncomeMinor: 320000,
+  incomeStreams: salary(320000),
   fixedCosts: [
     { category: 'RENT', cadence: 'MONTHLY', amountMinor: 120000 },
     { category: 'ELECTRICITY', cadence: 'BIMONTHLY', amountMinor: 9600 },

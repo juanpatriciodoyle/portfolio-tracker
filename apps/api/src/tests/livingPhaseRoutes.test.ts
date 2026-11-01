@@ -1,3 +1,4 @@
+import { salary } from './support/income';
 import type { PrismaClient } from '@prisma/client';
 import express from 'express';
 import request from 'supertest';
@@ -37,7 +38,7 @@ const madrid = {
   startDate: '2022-09-01',
   endDate: '2024-08-31',
   currency: 'EUR',
-  monthlyIncomeMinor: 320000,
+  incomeStreams: salary(320000),
   notes: 'Close to the office',
   fixedCosts: [
     { category: 'RENT', cadence: 'MONTHLY', amountMinor: 120000, label: 'Landlord Pérez' },
@@ -53,7 +54,7 @@ const lisbon = {
   startDate: '2024-09-01',
   endDate: null,
   currency: 'EUR',
-  monthlyIncomeMinor: 350000,
+  incomeStreams: salary(350000),
   fixedCosts: [{ category: 'RENT', cadence: 'MONTHLY', amountMinor: 90000 }],
 };
 

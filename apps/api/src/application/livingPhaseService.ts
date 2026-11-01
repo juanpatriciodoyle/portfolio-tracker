@@ -19,14 +19,24 @@ import {
   phaseSnapshot,
   type LivingPhase,
 } from '../domain/livingPhase';
+import { streamsFromLegacyIncome } from '../domain/income';
 import { comparePhases } from '../domain/phaseComparison';
 import type { BilledCostReader } from './billedCosts';
 import { ResourceNotFoundError } from './errors';
 import { PayloadVault } from './payloadVault';
 import type { CipherContext, FieldCipher, FxRateProvider, LivingPhaseRepository, StoredLivingPhase } from './ports';
-import { costPayloadSchema, phasePayloadSchema, type CostPayload, type PhasePayload } from './storedPayloads';
+import { costPayloadSchema, phasePayloadSchema, type CostPayload, type PhasePayload, type StoredPhasePayload } from './storedPayloads';
 
 const phaseContext = (userId: string, phaseId: string): CipherContext => ({ table: 'LivingPhase', rowId: phaseId, userId });
+
+/** The income streams of a stored phase; one saved before streams existed is rewritten as streams paying the same every day. */
+function incomeStreamsOf(stored: Pick<StoredLivingPhase, 'startDate' | 'endDate'>, payload: StoredPhasePayload): PhasePayload['incomeStreams'] {
+  return (
+    payload.incomeStreams ??
+    streamsFromLegacyIncome({ baseMinor: payload.monthlyIncomeMinor ?? 0, changes: payload.incomeChanges, startDate: stored.startDate, endDate: stored.endDate })
+  );
+}
+
 const costContext = (userId: string, costId: string): CipherContext => ({ table: 'FixedCostItem', rowId: costId, userId });
 
 export interface LivingPhaseServiceDeps {
@@ -149,8 +159,7 @@ export class LivingPhaseService {
       name: change.name ?? current.name,
       city: change.city ?? current.city,
       address: change.address === undefined ? current.address : change.address,
-      monthlyIncomeMinor: change.monthlyIncomeMinor ?? current.monthlyIncomeMinor,
-      incomeChanges: change.incomeChanges ?? current.incomeChanges,
+      incomeStreams: change.incomeStreams ?? incomeStreamsOf(stored, current),
       notes: change.notes === undefined ? current.notes : change.notes,
     };
     const columns = {
@@ -161,7 +170,7 @@ export class LivingPhaseService {
       tenure: change.tenure ?? stored.tenure,
     };
 
-    createLivingPhase({ id: phaseId, ...columns, monthlyIncomeMinor: payload.monthlyIncomeMinor, incomeChanges: payload.incomeChanges, fixedCosts: [] });
+    createLivingPhase({ id: phaseId, ...columns, incomeStreams: payload.incomeStreams, fixedCosts: [] });
     const conflicts = findConflicts({ id: phaseId, startDate: columns.startDate, endDate: columns.endDate }, all);
     if (conflicts.length > 0) throw new PhaseOverlapError(conflicts);
 
@@ -237,8 +246,7 @@ export class LivingPhaseService {
         startDate: dto.startDate,
         endDate: dto.endDate,
         currency: dto.currency,
-        monthlyIncomeMinor: dto.monthlyIncomeMinor,
-        incomeChanges: dto.incomeChanges,
+        incomeStreams: dto.incomeStreams,
         fixedCosts: dto.fixedCosts.map(({ id, category, cadence, amountMinor, label }) => ({ id, category, cadence, amountMinor, label })),
         bills: bills?.get(dto.id) ?? [],
       });
@@ -258,8 +266,7 @@ export class LivingPhaseService {
       startDate: stored.startDate,
       endDate: stored.endDate,
       currency: stored.currency,
-      monthlyIncomeMinor: payload.monthlyIncomeMinor,
-      incomeChanges: payload.incomeChanges,
+      incomeStreams: incomeStreamsOf(stored, payload),
       notes: payload.notes,
       fixedCosts: stored.fixedCosts.map((cost) => {
         const sealed = this.vault.open(costPayloadSchema, cost.payload, costContext(userId, cost.id));
@@ -290,8 +297,7 @@ export class LivingPhaseService {
         startDate: request.startDate,
         endDate: request.endDate,
         currency: request.currency,
-        monthlyIncomeMinor: request.monthlyIncomeMinor,
-        incomeChanges: request.incomeChanges,
+        incomeStreams: request.incomeStreams,
         fixedCosts: costs.map(({ id: costId, category, cadence, amountMinor }) => ({ id: costId, category, cadence, amountMinor })),
       })
     );
@@ -316,8 +322,7 @@ export class LivingPhaseService {
           name: request.name,
           city: request.city,
           address: request.address ?? null,
-          monthlyIncomeMinor: request.monthlyIncomeMinor,
-          incomeChanges: request.incomeChanges,
+          incomeStreams: request.incomeStreams,
           notes: request.notes ?? null,
         } satisfies PhasePayload,
         phaseContext(userId, id)

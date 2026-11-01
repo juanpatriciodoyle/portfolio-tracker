@@ -1,3 +1,4 @@
+import { salary } from './support/income';
 import express from 'express';
 import request from 'supertest';
 import { AVERAGE_DAYS_PER_MONTH } from '../domain/calendarDate';
@@ -40,7 +41,7 @@ const madrid = {
   startDate: '2026-01-01',
   endDate: null,
   currency: 'EUR',
-  monthlyIncomeMinor: 300000,
+  incomeStreams: salary(300000),
   fixedCosts: [
     { category: 'RENT', cadence: 'MONTHLY', amountMinor: 100000 },
     { category: 'ELECTRICITY', cadence: 'MONTHLY', amountMinor: 8000 },
@@ -128,57 +129,65 @@ describe('monthly costs once bills arrive', () => {
   });
 });
 
-describe('income that changes during a phase', () => {
-  const promoted = { ...madrid, incomeChanges: [{ startDate: '2026-04-01', amountMinor: 350000, reason: 'PROMOTION' }] };
+describe('income streams of a phase', () => {
+  const job = { label: 'Job', amountMinor: 300000, startDate: '2026-01-01', endDate: null };
+  const freelance = { label: 'Freelance', amountMinor: 50000, startDate: '2026-04-01', endDate: null };
+  const withFreelance = { ...madrid, incomeStreams: [job, freelance] };
 
-  it('is stored with the phase and listed back, empty for a phase without changes', async () => {
+  it('are stored with the phase and listed back, empty for a phase without income', async () => {
     const app = build();
-    await createPhase(app, promoted);
-    await createPhase(app, { ...madrid, name: 'Old', startDate: '2020-01-01', endDate: '2020-12-31' });
+    await createPhase(app, withFreelance);
+    await createPhase(app, { ...madrid, name: 'Sabbatical', startDate: '2020-01-01', endDate: '2020-12-31', incomeStreams: [] });
 
     const phases = listLivingPhasesResponse.parse((await request(app).get('/api/living-phases').set(ALICE)).body).phases;
 
-    expect(phases.find((phase) => phase.name === 'Madrid')?.incomeChanges).toEqual([
-      { startDate: '2026-04-01', endDate: null, amountMinor: 350000, reason: 'PROMOTION' },
-    ]);
-    expect(phases.find((phase) => phase.name === 'Old')?.incomeChanges).toEqual([]);
+    expect(phases.find((phase) => phase.name === 'Madrid')?.incomeStreams).toEqual([job, freelance]);
+    expect(phases.find((phase) => phase.name === 'Sabbatical')?.incomeStreams).toEqual([]);
   });
 
-  it('shows the income active today and adds up every stretch into what was earned', async () => {
+  it('add up on the timeline: the rate today, the total earned and the average month', async () => {
     const app = build();
-    await createPhase(app, promoted);
+    await createPhase(app, withFreelance);
 
     const entry = await timelineEntry(app);
 
     expect(entry.monthlyIncomeMinor).toBe(350000);
-    expect(entry.totalIncomeMinor).toBe(Math.round((300000 * 90 + 350000 * 30) / AVERAGE_DAYS_PER_MONTH));
+    expect(entry.totalIncomeMinor).toBe(Math.round((300000 * 120 + 50000 * 30) / AVERAGE_DAYS_PER_MONTH));
     expect(entry.savingsCapacityMinor).toBe(350000 - 111000);
+    expect(entry.averageMonthlyIncomeMinor).toBe(Math.round(entry.totalIncomeMinor / (120 / AVERAGE_DAYS_PER_MONTH)));
+    expect(entry.averageSavingsCapacityMinor).toBe(entry.averageMonthlyIncomeMinor - 111000);
   });
 
-  it('can be replaced on an existing phase, including a stretch without work at zero', async () => {
+  it('leave a gap as zero, and the whole list can be replaced on an existing phase', async () => {
     const app = build();
     const id = await createPhase(app);
 
     await request(app)
       .patch(`/api/living-phases/${id}`)
       .set(ALICE)
-      .send({ incomeChanges: [{ startDate: '2026-02-01', endDate: '2026-02-28', amountMinor: 0, reason: 'UNEMPLOYMENT' }] })
+      .send({ incomeStreams: [{ label: 'Job', amountMinor: 300000, startDate: '2026-01-01', endDate: '2026-01-31' }] })
       .expect(204);
     const entry = await timelineEntry(app);
 
-    expect(entry.monthlyIncomeMinor).toBe(300000);
-    expect(entry.totalIncomeMinor).toBe(Math.round((300000 * (120 - 28)) / AVERAGE_DAYS_PER_MONTH));
+    expect(entry.monthlyIncomeMinor).toBe(0);
+    expect(entry.savingsRate).toBeNull();
+    expect(entry.savingsCapacityMinor).toBe(-111000);
+    expect(entry.totalIncomeMinor).toBe(Math.round((300000 * 31) / AVERAGE_DAYS_PER_MONTH));
 
-    await request(app).patch(`/api/living-phases/${id}`).set(ALICE).send({ incomeChanges: [] }).expect(204);
-    expect((await timelineEntry(app)).totalIncomeMinor).toBe(Math.round((300000 * 120) / AVERAGE_DAYS_PER_MONTH));
+    await request(app).patch(`/api/living-phases/${id}`).set(ALICE).send({ incomeStreams: [] }).expect(204);
+    expect((await timelineEntry(app)).totalIncomeMinor).toBe(0);
   });
 
-  it('refuses a change that ends before it starts', async () => {
+  it('are optional when creating a phase', async () => {
     const app = build();
-    const response = await request(app)
-      .post('/api/living-phases')
-      .set(ALICE)
-      .send({ ...madrid, incomeChanges: [{ startDate: '2026-03-01', endDate: '2026-02-01', amountMinor: 1 }] });
-    expect(response.status).toBe(400);
+    const { incomeStreams: _omitted, ...withoutIncome } = madrid;
+    await request(app).post('/api/living-phases').set(ALICE).send(withoutIncome).expect(201);
+  });
+
+  it('refuse a stream that ends before it starts, or has no label', async () => {
+    const app = build();
+    const post = (stream: object) => request(app).post('/api/living-phases').set(ALICE).send({ ...madrid, incomeStreams: [stream] });
+    expect((await post({ label: 'Job', amountMinor: 1, startDate: '2026-03-01', endDate: '2026-02-01' })).status).toBe(400);
+    expect((await post({ label: ' ', amountMinor: 1, startDate: '2026-03-01' })).status).toBe(400);
   });
 });
