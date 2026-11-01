@@ -1563,6 +1563,87 @@ select:disabled {
   .kpi-row { grid-template-columns: 1fr; }
 }
 
+/* Second salary: what the capital could pay each month */
+.second-salary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 20px;
+  background-color: var(--bg-tile);
+  border: 1px solid var(--border-subtle-color);
+  border-radius: 12px;
+}
+.second-salary__badge {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--text-heading);
+}
+.second-salary__subtext {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.second-salary__track {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background-color: var(--bg-badge);
+  overflow: visible;
+}
+.second-salary__target {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--color-profit-bg);
+  border-radius: 0 999px 999px 0;
+}
+.second-salary__fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background-color: var(--color-profit);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.second-salary__tick {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  margin-left: -1px;
+  background-color: var(--text-muted);
+}
+.second-salary__tick.is-reached {
+  background-color: var(--text-heading);
+}
+.second-salary__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.second-salary__legend li.is-reached {
+  color: var(--color-profit);
+}
+.second-salary__legend-target {
+  margin-left: auto;
+  color: var(--text-secondary);
+}
+.second-salary__note {
+  color: var(--text-muted);
+}
+@media (max-width: 720px) {
+  .second-salary__legend-target { margin-left: 0; }
+}
+
 /* Compact cash row */
 .cash-row {
   display: flex;

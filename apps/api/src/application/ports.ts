@@ -162,3 +162,8 @@ export interface CountryStatisticsRepository {
 export interface JobLock {
   runExclusive(name: string, task: () => Promise<void>): Promise<'ran' | 'skipped'>;
 }
+
+/** Port: what a person's portfolio is worth now, in one currency. Read-only. */
+export interface PortfolioValueReader {
+  netWorth(userId: string): Promise<{ readonly amountMinor: number; readonly currency: string }>;
+}

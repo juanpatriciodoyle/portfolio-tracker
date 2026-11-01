@@ -8,6 +8,7 @@ export * from './fixedCost';
 export * from './livingPhase';
 export * from './primitives';
 export * from './profile';
+export * from './secondSalary';
 export * from './timeline';
 export * from './trends';
 export * from './vendorDictionary';

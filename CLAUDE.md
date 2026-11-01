@@ -63,6 +63,12 @@ Execute commands in this specific sequence[cite: 6, 11]:
 - After pulling this change run `npx prisma db push` in `apps/api` (adds `HEATING_COOLING` to the `FixedCostCategory` enum). Bills saved earlier that cover more days than their cadence allows still display, but cannot be edited until their dates or cadence are fixed.
 - `scripts/contracts.mjs` mirrors every file of `apps/api/src/contracts` (flat folder), so pure code both sides need (`billingPeriod`, `calendarDate`, `vendorMatching`, `vendorDictionary`) lives there too.
 
+### Second Salary
+- `GET /api/insights/second-salary` turns the portfolio's net worth into the monthly income it could sustain (`CONSERVATIVE_REAL_YIELD` 6% a year, over 12 months) and sets it against the monthly costs of the living phase being lived today. The maths is pure, in `apps/api/src/domain/wealthMilestones.ts`; the yield and the 3,000–5,000 target range are constants there.
+- Milestones: 1 utilities, internet, phone and subscriptions; 2 rent; 3 every monthly cost ("Living Cost Autonomy"). A milestone whose cost is zero is left out. Costs come from `phaseSnapshot`, so bills move them like everywhere else.
+- No milestones come back (with a `gap`: `NO_CURRENT_PHASE`, `NO_COSTS` or `CURRENCY_MISMATCH`) when the cost cannot be compared; the salary is still shown. Costs are not converted to the portfolio's currency yet.
+- The portfolio value arrives through the `PortfolioValueReader` port (adapter: `infrastructure/pnlPortfolioValueReader.ts`). No schema change.
+
 ### Guided flows (wizards)
 - Onboarding ("Tell us about yourself": About you, then the first living phase with its bills), adding or editing a living phase, and Log Transaction all open as a centered dialog (`components/Modal.tsx`). There are no side drawers. Multi-step flows use `components/wizard/WizardModal.tsx` (milestone progress bar, Back/Continue, Enter to continue); the caller owns the answers and decides when a step is complete.
 - Every step is saved as a draft in `sessionStorage` (`lib/stepDraft.ts`, `hooks/useStepDraft.ts`), so closing the dialog or refreshing resumes on the same step. A draft survives a refresh but not the end of the tab, is parsed with a Zod schema before use, is cleared when the flow saves, and `clearAllDrafts` runs on sign-out: personal answers are stored encrypted on the server, so they are not left readable in the browser.

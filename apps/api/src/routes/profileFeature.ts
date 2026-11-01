@@ -5,11 +5,12 @@ import { BilledCostReader } from '../application/billedCosts';
 import { BillingRecordService } from '../application/billingRecordService';
 import { LivingPhaseService } from '../application/livingPhaseService';
 import { ProfileService } from '../application/profileService';
+import { SecondSalaryService } from '../application/secondSalaryService';
 import { BenchmarkService } from '../application/benchmarkService';
 import { BenchmarkRefresher, CountryStatisticsService } from '../application/countryStatisticsService';
 import { DocumentExtractionService } from '../application/documentExtractionService';
 import { ConcurrencyGate, SlidingWindowRateLimiter } from '../application/limits';
-import type { BillFingerprinter, BillingRecordRepository, FieldCipher, FxRateProvider, LivingPhaseRepository, PdfTextExtractor, ProfileRepository } from '../application/ports';
+import type { BillFingerprinter, BillingRecordRepository, FieldCipher, FxRateProvider, LivingPhaseRepository, PdfTextExtractor, PortfolioValueReader, ProfileRepository } from '../application/ports';
 import { ENCRYPTION_NOT_CONFIGURED, type ApiErrorResponse, type CalendarDate } from '../contracts';
 import { calendarDateOf } from '../domain/calendarDate';
 import { AesGcmFieldCipher, loadFieldCipherKey } from '../infrastructure/aesGcmFieldCipher';
@@ -22,6 +23,7 @@ import { ReferenceFxRateProvider } from '../infrastructure/fx/referenceFxRates';
 import { EurostatStatisticsProvider } from '../infrastructure/benchmarks/eurostatStatistics';
 import { IndecStatisticsProvider } from '../infrastructure/benchmarks/indecStatistics';
 import { WorldBankStatisticsProvider } from '../infrastructure/benchmarks/worldBankStatistics';
+import { PnlPortfolioValueReader } from '../infrastructure/pnlPortfolioValueReader';
 import { PrismaBillingRecordRepository } from '../infrastructure/prismaBillingRecordRepository';
 import { PrismaCountryStatisticsRepository } from '../infrastructure/prismaCountryStatisticsRepository';
 import { PrismaJobLock } from '../infrastructure/prismaJobLock';
@@ -33,6 +35,7 @@ import { createBillingRecordsRouter } from './billingRecords';
 import { createDocumentsRouter } from './documents';
 import { createLivingPhasesRouter } from './livingPhases';
 import { createProfileRouter } from './profile';
+import { createSecondSalaryRouter } from './secondSalary';
 
 export interface ProfileFeatureDeps {
   readonly cipher: FieldCipher;
@@ -44,6 +47,8 @@ export interface ProfileFeatureDeps {
   readonly pdfTextExtractor?: PdfTextExtractor;
   /** Public country statistics for the benchmarks. Without it the benchmark route is not mounted. */
   readonly statistics?: CountryStatisticsService;
+  /** What the portfolio is worth, for the second salary. Without it that route is not mounted. */
+  readonly portfolio?: PortfolioValueReader;
   readonly documentLimits?: { readonly limit?: number; readonly windowMs?: number; readonly maxConcurrent?: number; readonly now?: () => number };
   readonly today?: () => CalendarDate;
   readonly newId?: () => string;
@@ -77,9 +82,11 @@ export function buildProfileFeature(deps: ProfileFeatureDeps): Router[] {
   const benchmarks = deps.statistics
     ? [createBenchmarksRouter({ service: new BenchmarkService({ phases, profiles: new ProfileService({ repository: deps.profileRepository, cipher: deps.cipher }), statistics: deps.statistics }), today })]
     : [];
+  const secondSalary = deps.portfolio ? [createSecondSalaryRouter({ service: new SecondSalaryService({ phases, portfolio: deps.portfolio }), today })] : [];
   return [
     ...documents,
     ...benchmarks,
+    ...secondSalary,
     createLivingPhasesRouter({ service: phases, today }),
     createBillingRecordsRouter({
       service: new BillingRecordService({ repository: deps.billingRecordRepository, phases, cipher: deps.cipher, fingerprinter: deps.fingerprinter, newId: deps.newId }),
@@ -128,6 +135,7 @@ export function mountProfileFeature(
         fingerprinter: new HmacBillFingerprinter(key),
         pdfTextExtractor: new WorkerPdfTextExtractor(),
         statistics,
+        portfolio: new PnlPortfolioValueReader(),
         livingPhaseRepository: new PrismaLivingPhaseRepository(prisma),
         profileRepository: new PrismaProfileRepository(prisma),
         billingRecordRepository: new PrismaBillingRecordRepository(prisma),
