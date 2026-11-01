@@ -1,8 +1,9 @@
-import { FIXED_COST_CATEGORIES, type FixedCostCategory } from '../contracts';
+import { DEFAULT_CAPITAL_REQUIRED_PERCENTAGE, FIXED_COST_CATEGORIES, type CapitalMilestone, type FixedCostCategory } from '../contracts';
 import {
   CONSERVATIVE_REAL_YIELD,
   SECOND_SALARY_TARGET_MAX_MINOR,
   SECOND_SALARY_TARGET_MIN_MINOR,
+  capitalMilestonePacing,
   capitalNeededMinor,
   secondSalaryMinor,
   wealthMilestones,
@@ -140,5 +141,68 @@ describe('the 3,000 to 5,000 euro target', () => {
   it('keeps a milestone above the range at the end of the bar', () => {
     const { milestones } = wealthMilestones({ capitalMinor: 0, costsByCategoryMinor: costs({ RENT: 900_000 }) });
     expect(milestones.find(({ id }) => id === 2)?.position).toBe(1);
+  });
+});
+
+const milestone = (overrides: Partial<CapitalMilestone> = {}): CapitalMilestone => ({
+  id: 'm1',
+  title: 'Property Down Payment',
+  targetAmountMinor: 350_000_00,
+  capitalRequiredPercentage: 30,
+  category: 'PROPERTY',
+  enabled: true,
+  ...overrides,
+});
+
+describe('capitalMilestonePacing', () => {
+  it('needs the share of the target the milestone asks for', () => {
+    expect(capitalMilestonePacing({ milestone: milestone(), liquidPortfolioMinor: 0, monthlySurplusMinor: 1_000_00 }).capitalNeededMinor).toBe(105_000_00);
+    expect(capitalMilestonePacing({ milestone: milestone({ capitalRequiredPercentage: 100 }), liquidPortfolioMinor: 0, monthlySurplusMinor: 1 }).capitalNeededMinor).toBe(350_000_00);
+  });
+
+  it('counts the months the surplus needs to close the gap, rounded up', () => {
+    const pacing = capitalMilestonePacing({ milestone: milestone(), liquidPortfolioMinor: 80_000_00, monthlySurplusMinor: 1_200_00 });
+    expect(pacing).toMatchObject({ capitalGapMinor: 25_000_00, monthsRemaining: 21, achieved: false }); // 20.83 months
+  });
+
+  it('is exact when the surplus divides the gap', () => {
+    expect(capitalMilestonePacing({ milestone: milestone(), liquidPortfolioMinor: 95_000_00, monthlySurplusMinor: 1_000_00 }).monthsRemaining).toBe(10);
+  });
+
+  it('is achieved with no months to wait when the capital is already enough, even without a surplus', () => {
+    for (const surplus of [1_000_00, 0, -500_00, null]) {
+      const pacing = capitalMilestonePacing({ milestone: milestone(), liquidPortfolioMinor: 105_000_00, monthlySurplusMinor: surplus });
+      expect(pacing).toMatchObject({ capitalGapMinor: 0, monthsRemaining: 0, achieved: true, progress: 1 });
+    }
+  });
+
+  it.each([
+    ['no surplus', 0],
+    ['a deficit', -200_00],
+    ['an unknown surplus', null],
+  ])('cannot say when there is %s and a gap', (_label, surplus) => {
+    expect(capitalMilestonePacing({ milestone: milestone(), liquidPortfolioMinor: 0, monthlySurplusMinor: surplus }).monthsRemaining).toBeNull();
+  });
+
+  it('measures progress toward the capital needed, never below zero or above one', () => {
+    const progress = (liquidPortfolioMinor: number) => capitalMilestonePacing({ milestone: milestone(), liquidPortfolioMinor, monthlySurplusMinor: 1 }).progress;
+    expect(progress(52_500_00)).toBe(0.5);
+    expect(progress(0)).toBe(0);
+    expect(progress(-10_000_00)).toBe(0);
+    expect(progress(900_000_00)).toBe(1);
+  });
+
+  it('counts a negative portfolio as a bigger gap', () => {
+    expect(capitalMilestonePacing({ milestone: milestone(), liquidPortfolioMinor: -5_000_00, monthlySurplusMinor: 1_000_00 }).capitalGapMinor).toBe(110_000_00);
+  });
+
+  it('rounds the capital needed to a whole cent', () => {
+    expect(capitalMilestonePacing({ milestone: milestone({ targetAmountMinor: 1_001, capitalRequiredPercentage: 33 }), liquidPortfolioMinor: 0, monthlySurplusMinor: 1 }).capitalNeededMinor).toBe(330);
+  });
+});
+
+describe('defaultCapitalRequiredPercentage', () => {
+  it('asks for 30% of a property and all of a cash reserve', () => {
+    expect(DEFAULT_CAPITAL_REQUIRED_PERCENTAGE).toEqual({ PROPERTY: 30, SABBATICAL: 100, VENTURE: 100, CUSTOM: 100 });
   });
 });

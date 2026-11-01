@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { ProfileService } from '../application/profileService';
-import { saveProfileRequest, type CalendarDate } from '../contracts';
+import { saveCapitalMilestonesRequest, saveProfileRequest, type CalendarDate } from '../contracts';
 import { handle, noStore, parseRequest, requireUser, userIdOf } from './http';
 
 export interface ProfileRouterDeps {
@@ -24,6 +24,14 @@ export function createProfileRouter({ service, today }: ProfileRouterDeps): Rout
     '/profile',
     handle(async (req, res) => {
       await service.saveProfile(userIdOf(req), parseRequest(saveProfileRequest, req.body), today());
+      res.status(204).end();
+    })
+  );
+
+  router.put(
+    '/profile/capital-milestones',
+    handle(async (req, res) => {
+      await service.saveCapitalMilestones(userIdOf(req), parseRequest(saveCapitalMilestonesRequest, req.body).milestones);
       res.status(204).end();
     })
   );

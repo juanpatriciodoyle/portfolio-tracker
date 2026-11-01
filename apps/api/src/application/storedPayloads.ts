@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { amountMinorSchema, incomeChangeSchema } from '../contracts';
+import { amountMinorSchema, capitalMilestoneList, incomeChangeSchema, profileDataSchema } from '../contracts';
 
 /** What is sealed inside a living phase row. */
 export const phasePayloadSchema = z
@@ -34,3 +34,7 @@ export const billingPayloadSchema = z
   })
   .strict();
 export type BillingPayload = z.infer<typeof billingPayloadSchema>;
+
+/** What is sealed inside the profile row: the profile itself and the goals saved toward. Profiles saved before goals existed have none. */
+export const storedProfileSchema = profileDataSchema.extend({ capitalMilestones: capitalMilestoneList.default([]) });
+export type StoredProfile = z.infer<typeof storedProfileSchema>;

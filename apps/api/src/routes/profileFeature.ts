@@ -5,6 +5,7 @@ import { BilledCostReader } from '../application/billedCosts';
 import { BillingRecordService } from '../application/billingRecordService';
 import { LivingPhaseService } from '../application/livingPhaseService';
 import { ProfileService } from '../application/profileService';
+import { CapitalHorizonService } from '../application/capitalHorizonService';
 import { SecondSalaryService } from '../application/secondSalaryService';
 import { BenchmarkService } from '../application/benchmarkService';
 import { BenchmarkRefresher, CountryStatisticsService } from '../application/countryStatisticsService';
@@ -31,6 +32,7 @@ import { PrismaLivingPhaseRepository } from '../infrastructure/prismaLivingPhase
 import { PrismaProfileRepository } from '../infrastructure/prismaProfileRepository';
 import { noStore, requireUser } from './http';
 import { createBenchmarksRouter } from './benchmarks';
+import { createCapitalHorizonRouter } from './capitalHorizon';
 import { createBillingRecordsRouter } from './billingRecords';
 import { createDocumentsRouter } from './documents';
 import { createLivingPhasesRouter } from './livingPhases';
@@ -47,7 +49,7 @@ export interface ProfileFeatureDeps {
   readonly pdfTextExtractor?: PdfTextExtractor;
   /** Public country statistics for the benchmarks. Without it the benchmark route is not mounted. */
   readonly statistics?: CountryStatisticsService;
-  /** What the portfolio is worth, for the second salary. Without it that route is not mounted. */
+  /** What the portfolio is worth, for the second salary and the capital horizon. Without it those routes are not mounted. */
   readonly portfolio?: PortfolioValueReader;
   readonly documentLimits?: { readonly limit?: number; readonly windowMs?: number; readonly maxConcurrent?: number; readonly now?: () => number };
   readonly today?: () => CalendarDate;
@@ -82,20 +84,20 @@ export function buildProfileFeature(deps: ProfileFeatureDeps): Router[] {
   const benchmarks = deps.statistics
     ? [createBenchmarksRouter({ service: new BenchmarkService({ phases, profiles: new ProfileService({ repository: deps.profileRepository, cipher: deps.cipher }), statistics: deps.statistics }), today })]
     : [];
+  const profiles = new ProfileService({ repository: deps.profileRepository, cipher: deps.cipher });
+  const capitalHorizon = deps.portfolio ? [createCapitalHorizonRouter({ service: new CapitalHorizonService({ phases, profiles, portfolio: deps.portfolio }), today })] : [];
   const secondSalary = deps.portfolio ? [createSecondSalaryRouter({ service: new SecondSalaryService({ phases, portfolio: deps.portfolio }), today })] : [];
   return [
     ...documents,
     ...benchmarks,
     ...secondSalary,
+    ...capitalHorizon,
     createLivingPhasesRouter({ service: phases, today }),
     createBillingRecordsRouter({
       service: new BillingRecordService({ repository: deps.billingRecordRepository, phases, cipher: deps.cipher, fingerprinter: deps.fingerprinter, newId: deps.newId }),
       today,
     }),
-    createProfileRouter({
-      service: new ProfileService({ repository: deps.profileRepository, cipher: deps.cipher }),
-      today,
-    }),
+    createProfileRouter({ service: profiles, today }),
   ];
 }
 

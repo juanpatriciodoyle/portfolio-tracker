@@ -2,6 +2,7 @@
 export * from './benchmark';
 export * from './billingPeriod';
 export * from './billingRecord';
+export * from './capitalMilestone';
 export * from './calendarDate';
 export * from './document';
 export * from './errors';

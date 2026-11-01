@@ -1644,6 +1644,77 @@ select:disabled {
   .second-salary__legend-target { margin-left: 0; }
 }
 
+/* Capital horizon: goals saved toward */
+.capital-horizon {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.capital-horizon__milestone {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 20px;
+  background-color: var(--bg-tile);
+  border: 1px solid var(--border-subtle-color);
+  border-radius: 12px;
+}
+.capital-horizon__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.capital-horizon__badge {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--text-heading);
+}
+.capital-horizon__subtext {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.capital-horizon__track {
+  height: 8px;
+  border-radius: 999px;
+  background-color: var(--bg-badge);
+  overflow: hidden;
+}
+.capital-horizon__fill {
+  height: 100%;
+  background-color: var(--color-portfolio);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.capital-horizon__fill.is-achieved {
+  background-color: var(--color-profit);
+}
+.capital-horizon__ghost {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.capital-horizon__ghost.is-empty {
+  padding: 14px 20px;
+  border: 1px dashed var(--border-subtle-color);
+  border-radius: 12px;
+}
+.capital-horizon__confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+@media (max-width: 720px) {
+  .capital-horizon__badge { font-size: 20px; }
+}
+
 /* Compact cash row */
 .cash-row {
   display: flex;

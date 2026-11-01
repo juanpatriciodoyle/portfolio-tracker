@@ -5,6 +5,8 @@ import {
   type FixedCostDto,
   type LivingPhaseDto,
   type PhaseObservedDto,
+  type CapitalHorizonResponse,
+  type CapitalMilestonePacingDto,
   type ProfileData,
   type SecondSalaryResponse,
   type TimelineEntryDto,
@@ -176,6 +178,36 @@ export function makeSecondSalary(overrides: Partial<SecondSalaryResponse> = {}):
     reachedMilestone: 2,
     gap: null,
     target: { minMonthlyMinor: 300_000, maxMonthlyMinor: 500_000, progress: 0.2, minMarker: 0.6, reachedMin: false, minCapitalNeededMinor: 60_000_000, maxCapitalNeededMinor: 100_000_000 },
+    ...overrides,
+  };
+}
+
+/** A €350,000 property needing 30% (€105,000), with €80,000 held and €2,000 left over each month: 13 months away. */
+export function makePacedMilestone(overrides: Partial<CapitalMilestonePacingDto> = {}): CapitalMilestonePacingDto {
+  return {
+    id: 'm1',
+    title: 'Property Down Payment',
+    targetAmountMinor: 35_000_000,
+    capitalRequiredPercentage: 30,
+    category: 'PROPERTY',
+    enabled: true,
+    capitalNeededMinor: 10_500_000,
+    capitalGapMinor: 2_500_000,
+    monthsRemaining: 13,
+    achieved: false,
+    progress: 8_000_000 / 10_500_000,
+    ...overrides,
+  };
+}
+
+export function makeCapitalHorizon(overrides: Partial<CapitalHorizonResponse> = {}): CapitalHorizonResponse {
+  return {
+    asOf: '2026-10-31',
+    currency: 'EUR',
+    liquidPortfolioMinor: 8_000_000,
+    monthlySurplusMinor: 200_000,
+    gap: null,
+    milestones: [makePacedMilestone()],
     ...overrides,
   };
 }

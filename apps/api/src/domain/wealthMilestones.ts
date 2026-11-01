@@ -1,3 +1,4 @@
+import type { CapitalMilestone } from '../contracts/capitalMilestone';
 import { UTILITY_CATEGORIES, type FixedCostCategory } from '../contracts/vocabulary';
 import { roundHalfAwayFromZero } from './money';
 
@@ -118,5 +119,39 @@ export function wealthMilestones(input: {
       minCapitalNeededMinor: capitalNeededMinor(SECOND_SALARY_TARGET_MIN_MINOR, annualYield),
       maxCapitalNeededMinor: capitalNeededMinor(SECOND_SALARY_TARGET_MAX_MINOR, annualYield),
     },
+  };
+}
+
+export interface CapitalMilestonePacing {
+  readonly capitalNeededMinor: number;
+  readonly capitalGapMinor: number;
+  /** Whole months at the monthly surplus; 0 when achieved, null when the surplus cannot close the gap. */
+  readonly monthsRemaining: number | null;
+  readonly achieved: boolean;
+  /** How much of the capital needed is held, from 0 to 1. */
+  readonly progress: number;
+}
+
+/**
+ * How far a goal is and how long it takes at the current pace: the capital needed is the share of the
+ * target the milestone asks for, the gap is what the portfolio lacks, and the months are that gap over the
+ * monthly surplus, rounded up. Without a surplus (none, a deficit, or unknown) a gap has no end date.
+ */
+export function capitalMilestonePacing(input: {
+  readonly milestone: Pick<CapitalMilestone, 'targetAmountMinor' | 'capitalRequiredPercentage'>;
+  readonly liquidPortfolioMinor: number;
+  readonly monthlySurplusMinor: number | null;
+}): CapitalMilestonePacing {
+  const { milestone, liquidPortfolioMinor, monthlySurplusMinor } = input;
+  const capitalNeeded = roundHalfAwayFromZero((milestone.targetAmountMinor * milestone.capitalRequiredPercentage) / 100);
+  const capitalGap = Math.max(0, capitalNeeded - liquidPortfolioMinor);
+  const monthsRemaining = capitalGap === 0 ? 0 : monthlySurplusMinor !== null && monthlySurplusMinor > 0 ? Math.ceil(capitalGap / monthlySurplusMinor) : null;
+
+  return {
+    capitalNeededMinor: capitalNeeded,
+    capitalGapMinor: capitalGap,
+    monthsRemaining,
+    achieved: capitalGap === 0,
+    progress: clampUnit(liquidPortfolioMinor / capitalNeeded),
   };
 }
