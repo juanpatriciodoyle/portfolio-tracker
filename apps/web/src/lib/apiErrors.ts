@@ -1,6 +1,8 @@
 import {
   DOCUMENT_ERROR_CODES,
   ENCRYPTION_NOT_CONFIGURED,
+  INTERNAL_ERROR_MESSAGE,
+  INVALID_REQUEST_MESSAGE,
   duplicateBillingRecordErrorResponse,
   phaseOverlapErrorResponse,
   validationErrorResponse,
@@ -24,13 +26,30 @@ export type LoadStatus = 'loading' | 'ready' | 'error' | 'signed-out' | 'encrypt
 
 export type MutationResult<T = void> = { ok: true; value: T } | { ok: false; failure: ApiFailure };
 
+const RAW_SERVER_TEXT = /^(internal server error|bad gateway|service unavailable|gateway timeout|request failed|error)\.?$/i;
+
+/**
+ * What a failed call says on screen. A message the server wrote on purpose is kept; a bare status
+ * text ("Internal Server Error") becomes advice about what happened and what to do next.
+ */
+function readableMessage(error: ApiError): string {
+  const written = (error.body as { error?: unknown } | null)?.error;
+  const serverWrote = typeof written === 'string' && written.trim() !== '' && !RAW_SERVER_TEXT.test(written.trim());
+  if (serverWrote) return written;
+  if (error.status >= 500) return INTERNAL_ERROR_MESSAGE;
+  if (error.status === 400) return INVALID_REQUEST_MESSAGE;
+  if (error.status === 404) return 'That could not be found. It may have been removed elsewhere.';
+  if (error.status === 429) return 'Too many attempts in a short time. Wait a minute and try again.';
+  return 'That could not be completed. Check the information and try again.';
+}
+
 export function classifyApiError(error: unknown): ApiFailure {
   if (error instanceof ApiError) {
     if (error.status === 401 || error.status === 403) {
       return { kind: 'signed-out', message: 'Your session has ended. Sign in again to continue.' };
     }
     if (error.status === 503 && (error.body as { code?: unknown } | null)?.code === ENCRYPTION_NOT_CONFIGURED) {
-      return { kind: 'encryption-unavailable', message: error.message };
+      return { kind: 'encryption-unavailable', message: readableMessage(error) };
     }
     if (error.status === 400) {
       const parsed = validationErrorResponse.safeParse(error.body);
@@ -38,7 +57,7 @@ export function classifyApiError(error: unknown): ApiFailure {
     }
     const code = (error.body as { code?: unknown } | null)?.code;
     const documentCode = DOCUMENT_ERROR_CODES.find((known) => known === code);
-    if (documentCode) return { kind: 'document', code: documentCode, message: error.message };
+    if (documentCode) return { kind: 'document', code: documentCode, message: readableMessage(error) };
     if (error.status === 409) {
       const duplicate = duplicateBillingRecordErrorResponse.safeParse(error.body);
       if (duplicate.success) return { kind: 'duplicate', message: duplicate.data.error, existingRecordId: duplicate.data.existingRecordId };
@@ -47,8 +66,8 @@ export function classifyApiError(error: unknown): ApiFailure {
         return { kind: 'overlap', message: parsed.data.error, conflictingPhaseIds: parsed.data.conflictingPhaseIds };
       }
     }
-    if (error.status === 404) return { kind: 'not-found', message: error.message };
-    return { kind: 'unknown', message: error.message };
+    if (error.status === 404) return { kind: 'not-found', message: readableMessage(error) };
+    return { kind: 'unknown', message: readableMessage(error) };
   }
   if (error instanceof ApiContractError) {
     return { kind: 'unknown', message: 'The server sent something this version of the app does not understand.' };
@@ -56,7 +75,7 @@ export function classifyApiError(error: unknown): ApiFailure {
   if (error instanceof TypeError) {
     return { kind: 'network', message: 'Could not reach the server. Check your connection and try again.' };
   }
-  return { kind: 'unknown', message: error instanceof Error ? error.message : 'Something went wrong.' };
+  return { kind: 'unknown', message: 'Something unexpected happened. Try again, and reload the page if it keeps happening.' };
 }
 
 /** Runs an API call and turns a thrown error into a typed result. */

@@ -132,7 +132,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}) as { error?: string });
 
       if (response.ok) {
         setStatus({
@@ -148,10 +148,10 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
           onSuccess();
         }
       } else {
-        setStatus({ type: 'error', message: data.error || 'Failed to submit transaction.' });
+        setStatus({ type: 'error', message: data.error || 'The transaction was not recorded. Check the details and try again.' });
       }
     } catch (err) {
-      setStatus({ type: 'error', message: 'Could not connect to the API server.' });
+      setStatus({ type: 'error', message: 'Could not reach the server, so the transaction was not recorded. Check your connection and try again.' });
     } finally {
       setIsSubmitting(false);
     }

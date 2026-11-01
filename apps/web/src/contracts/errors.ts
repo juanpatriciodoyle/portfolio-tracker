@@ -22,3 +22,10 @@ export type PhaseOverlapErrorResponse = z.infer<typeof phaseOverlapErrorResponse
 
 /** 503 with this code: the server has no field-encryption key, so profile data cannot be stored. */
 export const ENCRYPTION_NOT_CONFIGURED = 'ENCRYPTION_NOT_CONFIGURED';
+
+/** 500: what the person sees when the server failed in a way it cannot explain. Says what happened and what to do. */
+export const INTERNAL_ERROR_MESSAGE =
+  'Something went wrong on our side, and your change was not saved. Try again in a moment. If it keeps happening, reload the page.';
+
+/** 400: the request did not match its contract; the `issues` say which fields. */
+export const INVALID_REQUEST_MESSAGE = 'Some of the information sent is missing or not valid. Check the fields and try again.';

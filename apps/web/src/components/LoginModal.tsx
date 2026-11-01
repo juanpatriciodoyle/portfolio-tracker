@@ -55,7 +55,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
           setError(data.error || 'Google Sign-In failed.');
         }
       } catch (err) {
-        setError('Could not connect to authentication server.');
+        setError('Could not reach the server. Check your connection and try again.');
       } finally {
         setIsLoading(false);
       }
@@ -162,7 +162,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
         setError(data.error || 'Failed to initialize demo portfolio.');
       }
     } catch (err) {
-      setError('Could not connect to authentication server.');
+      setError('Could not reach the server. Check your connection and try again.');
     } finally {
       setIsLoading(false);
     }

@@ -5,6 +5,7 @@ import {
   DUPLICATE_BILLING_RECORD,
   duplicateBillingRecordErrorResponse,
   ENCRYPTION_NOT_CONFIGURED,
+  INTERNAL_ERROR_MESSAGE,
   listBillingRecordsResponse,
   listLivingPhasesResponse,
   phaseComparisonResponse,
@@ -315,7 +316,7 @@ describe('living phases over HTTP', () => {
     expect((await request(app).get('/api/living-phases').set(ALICE)).body.phases[0].city).toBe('Madrid');
   });
 
-  it('answers a damaged row with a plain 500 that reveals nothing', async () => {
+  it('answers a damaged row with a readable 500 that reveals nothing', async () => {
     const { app, livingPhaseRepository } = build();
     await request(app).post('/api/living-phases').set(ALICE).send(madrid).expect(201);
     livingPhaseRepository.corruptPayload('id-1');
@@ -324,7 +325,8 @@ describe('living phases over HTTP', () => {
     const response = await request(app).get('/api/living-phases').set(ALICE);
 
     expect(response.status).toBe(500);
-    expect(response.body).toEqual({ error: 'Internal server error' });
+    expect(response.body).toEqual({ error: INTERNAL_ERROR_MESSAGE });
+    expect(response.body.error).not.toMatch(/internal server error/i);
   });
 });
 

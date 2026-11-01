@@ -1,7 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { z } from 'zod';
 import { DocumentRejectedError, ResourceNotFoundError } from '../application/errors';
-import { DUPLICATE_BILLING_RECORD } from '../contracts';
+import { DUPLICATE_BILLING_RECORD, INTERNAL_ERROR_MESSAGE, INVALID_REQUEST_MESSAGE } from '../contracts';
 import type { ApiErrorResponse, DuplicateBillingRecordErrorResponse, PhaseOverlapErrorResponse, ValidationErrorResponse } from '../contracts';
 import { DuplicateBillingRecordError, InvalidBillingRecordError, InvalidLivingPhaseError, InvalidProfileError, PhaseOverlapError } from '../domain/errors';
 import { verifyToken, type AuthenticatedRequest } from '../lib/auth';
@@ -33,13 +33,13 @@ export function requireUser(req: Request, res: Response, next: NextFunction): vo
   const header = req.headers.authorization;
   const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : undefined;
   if (!token) {
-    res.status(401).json({ error: 'Access denied. Authentication token required.' } satisfies ApiErrorResponse);
+    res.status(401).json({ error: 'You are signed out. Sign in again to continue.' } satisfies ApiErrorResponse);
     return;
   }
 
   const decoded = verifyToken(token);
   if (!decoded) {
-    res.status(403).json({ error: 'Invalid or expired authentication token.' } satisfies ApiErrorResponse);
+    res.status(403).json({ error: 'Your session has expired. Sign in again to continue.' } satisfies ApiErrorResponse);
     return;
   }
 
@@ -73,7 +73,7 @@ const DOCUMENT_STATUS: Record<DocumentRejectedError['code'], number> = {
 
 export function respondWithError(error: unknown, res: Response): void {
   if (error instanceof RequestValidationError) {
-    res.status(400).json({ error: 'Invalid request', issues: error.issues } satisfies ValidationErrorResponse);
+    res.status(400).json({ error: INVALID_REQUEST_MESSAGE, issues: error.issues } satisfies ValidationErrorResponse);
   } else if (error instanceof ResourceNotFoundError) {
     res.status(404).json({ error: error.message } satisfies ApiErrorResponse);
   } else if (error instanceof PhaseOverlapError) {
@@ -96,6 +96,6 @@ export function respondWithError(error: unknown, res: Response): void {
   } else {
     // Only the kind of failure is logged: never request bodies, never decrypted data.
     console.error('Unexpected error in profile feature:', error instanceof Error ? error.name : 'unknown');
-    res.status(500).json({ error: 'Internal server error' } satisfies ApiErrorResponse);
+    res.status(500).json({ error: INTERNAL_ERROR_MESSAGE } satisfies ApiErrorResponse);
   }
 }

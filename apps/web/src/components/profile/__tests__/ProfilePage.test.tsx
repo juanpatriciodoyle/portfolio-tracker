@@ -449,10 +449,12 @@ describe('ProfilePage trends and bills', () => {
   });
 
   it('does not break the page when the trends cannot be loaded', async () => {
-    serve({ failures: { '/api/insights/trends': new Error('boom') } });
+    serve({ failures: { '/api/insights/trends': new ApiError(500, 'Internal Server Error', null) } });
     renderPage();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('boom');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/try again/i);
+    expect(alert).not.toHaveTextContent(/internal server error/i);
     expect(screen.getByRole('heading', { level: 3, name: 'Madrid' })).toBeInTheDocument();
   });
 });

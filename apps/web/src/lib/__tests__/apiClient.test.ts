@@ -258,3 +258,33 @@ describe('classifyApiError for documents and duplicates', () => {
     expect(classifyApiError(new ApiError(422, 'x', { error: 'x', code: 'SOMETHING_ELSE' })).kind).toBe('unknown');
   });
 });
+
+
+describe('classifyApiError: server failures read as plain advice', () => {
+  const RAW = /internal server error|request failed|bad gateway|^error$/i;
+
+  it.each([
+    [500, 'Internal Server Error', null],
+    [502, 'Bad Gateway', null],
+    [503, 'Service Unavailable', null],
+    [500, 'Internal server error', { error: 'Internal server error' }],
+  ])('turns a %i (%s) into a message that says what to do', (status, statusText, body) => {
+    const failure = classifyApiError(new ApiError(status, statusText, body));
+
+    expect(failure.message).not.toMatch(RAW);
+    expect(failure.message).toMatch(/try again/i);
+  });
+
+  it('keeps a specific message the server wrote on purpose', () => {
+    const failure = classifyApiError(new ApiError(500, 'x', { error: 'The sneak peek could not be prepared right now.' }));
+
+    expect(failure.message).toBe('The sneak peek could not be prepared right now.');
+  });
+
+  it('explains a bare client error that has no message of its own', () => {
+    const failure = classifyApiError(new ApiError(404, '', null));
+
+    expect(failure.message).not.toBe('');
+    expect(failure.message).not.toMatch(RAW);
+  });
+});
