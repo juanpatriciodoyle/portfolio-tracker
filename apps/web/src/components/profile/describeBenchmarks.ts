@@ -1,4 +1,4 @@
-import type { BenchmarkGap, BenchmarkSource, PhaseBenchmarkDto } from '../../contracts';
+import type { BenchmarkGap, BenchmarkSource, NationalityEquivalenceDto, PhaseBenchmarkDto } from '../../contracts';
 import { countryName } from '../../lib/countries';
 import { displayLocale } from '../../lib/money';
 import { formatMinor } from '../../lib/money';
@@ -30,8 +30,23 @@ export interface HousingKpi extends Kpi {
   verdict: 'LOWER' | 'SIMILAR' | 'HIGHER';
 }
 
+export interface NationalityEquivalenceView {
+  countryCode: string;
+  text: string;
+  /** Where the equivalent income would rank among people there, when that country publishes a distribution. */
+  tier: string | null;
+}
+
+/** The clean, rewarding summary: only what the data supports. `unavailable` is the rankings that have no source yet. */
+export interface PositioningView {
+  badge: string | null;
+  equivalences: NationalityEquivalenceView[];
+  unavailable: string[];
+}
+
 export interface PhaseBenchmarkView {
   country: string;
+  positioning: PositioningView;
   income: Kpi | null;
   housing: HousingKpi | null;
   purchasingPower: Kpi | null;
@@ -67,6 +82,29 @@ function describeIncome(dto: NonNullable<PhaseBenchmarkDto['incomePercentile']>,
     value: `${bound}${ordinal(n, locale)} percentile`,
     sub: n >= 50 ? `Top ${Math.max(1, 100 - n)}%` : `Bottom ${Math.max(1, n)}%`,
     note: `Your household income compared with people in ${country}, ${BASIS_CAPTIONS[dto.basis]}. ${dto.period} · ${SOURCE_LABELS[dto.source]}`,
+  };
+}
+
+const UNAVAILABLE_RANKINGS = [
+  'A global ranking needs a worldwide income distribution, which is not connected yet.',
+  'City rankings need city-level income statistics, which are not connected yet.',
+];
+
+/** "Top 11% in Spain": the share of people the income is above, from the top. */
+function tierBadge(dto: NonNullable<PhaseBenchmarkDto['incomePercentile']>, country: string, locale: string): string {
+  const n = Math.round(dto.percentile);
+  const top = Math.max(1, 100 - n);
+  if (dto.bound === 'AT_LEAST') return `Top ${top}% or better in ${country}`;
+  if (dto.bound === 'AT_MOST') return `Below the ${ordinal(n, locale)} percentile in ${country}`;
+  return `Top ${top}% in ${country}`;
+}
+
+function describeEquivalence(dto: NationalityEquivalenceDto, locale: string): NationalityEquivalenceView {
+  const country = countryName(dto.countryCode, locale);
+  return {
+    countryCode: dto.countryCode,
+    text: `Holds the purchasing power of ${formatMinor(dto.equivalentMonthlyIncomeMinor, dto.currency, locale)} a month in ${country}`,
+    tier: dto.incomePercentile ? tierBadge(dto.incomePercentile, country, locale) : null,
   };
 }
 
@@ -110,11 +148,16 @@ export function describePhaseBenchmark(
   const purchasingPower = dto.purchasingPower ? describePower(dto.purchasingPower, country, nameOf, locale) : null;
   return {
     country,
+    positioning: {
+      badge: dto.incomePercentile ? tierBadge(dto.incomePercentile, country, locale) : null,
+      equivalences: dto.nationalityEquivalences.map((equivalence) => describeEquivalence(equivalence, locale)),
+      unavailable: UNAVAILABLE_RANKINGS,
+    },
     income,
     housing,
     purchasingPower,
     gaps: dto.gaps.map((gap) => GAP_REASONS[gap]),
-    hasComparison: income !== null || housing !== null || purchasingPower !== null,
+    hasComparison: income !== null || housing !== null || purchasingPower !== null || dto.nationalityEquivalences.length > 0,
   };
 }
 

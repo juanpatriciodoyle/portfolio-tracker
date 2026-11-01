@@ -25,6 +25,7 @@ export function makePhaseBenchmark(overrides: Partial<PhaseBenchmarkDto> = {}): 
       period: '2025',
       source: 'WORLD_BANK',
     },
+    nationalityEquivalences: [],
     gaps: [],
     ...overrides,
   };

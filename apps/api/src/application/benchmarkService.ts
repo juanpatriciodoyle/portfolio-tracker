@@ -1,6 +1,6 @@
-import type { BenchmarkGap, BenchmarksResponse, CalendarDate, PhaseBenchmarkDto } from '../contracts';
-import { compareShare, housingCostsMinor, housingShare, incomePercentile, internationalDollars, ratioOf, type Household } from '../domain/benchmarks';
-import { isLocalCurrency } from '../domain/countryCurrencies';
+import type { BenchmarkGap, BenchmarksResponse, CalendarDate, NationalityEquivalenceDto, PhaseBenchmarkDto } from '../contracts';
+import { compareShare, equivalentIncomeMinor, housingCostsMinor, housingShare, incomePercentile, internationalDollars, ratioOf, type Household } from '../domain/benchmarks';
+import { isLocalCurrency, localCurrencyOf } from '../domain/countryCurrencies';
 import { phaseSnapshot } from '../domain/livingPhase';
 import type { CountryStatisticsService } from './countryStatisticsService';
 import type { LivingPhaseService } from './livingPhaseService';
@@ -21,7 +21,7 @@ export class BenchmarkService {
     const [loaded, profile] = await Promise.all([this.deps.phases.loadPhases(userId), this.deps.profiles.getProfile(userId)]);
     const household: Household = { adults: profile.householdAdults, children: profile.dependentChildren };
 
-    const countries = [...new Set(loaded.map(({ dto }) => dto.countryCode))];
+    const countries = [...new Set([...loaded.map(({ dto }) => dto.countryCode), ...profile.nationalities])];
     const stored = new Map(await Promise.all(countries.map(async (code) => [code, await this.deps.statistics.get(code)] as const)));
 
     const phases: PhaseBenchmarkDto[] = [];
@@ -40,7 +40,8 @@ export class BenchmarkService {
         statistics,
         previousPurchasing,
       });
-      phases.push(benchmark);
+      const nationalityEquivalences = nationalityEquivalencesOf(benchmark, profile.nationalities, household, stored);
+      phases.push({ ...benchmark, nationalityEquivalences });
       if (benchmark.purchasingPower) previousPurchasing = { phaseId: dto.id, dollars: benchmark.purchasingPower.internationalDollarsPerMonth };
     }
 
@@ -128,6 +129,39 @@ function benchmarkPhase(facts: PhaseFacts): PhaseBenchmarkDto {
     incomePercentile: incomePercentileDto,
     housingBurden,
     purchasingPower,
+    nationalityEquivalences: [],
     gaps: [...new Set(gaps)],
   };
+}
+
+/**
+ * What a phase's income would be worth in the country of each other nationality, by purchasing power, and where that
+ * sits among people there. A country that publishes no price level is left out: nothing is guessed.
+ */
+function nationalityEquivalencesOf(
+  benchmark: PhaseBenchmarkDto,
+  nationalities: readonly string[],
+  household: Household,
+  stored: ReadonlyMap<string, { readonly statistics: CountryStatistics } | null>
+): NationalityEquivalenceDto[] {
+  if (!benchmark.purchasingPower) return [];
+  const dollars = benchmark.purchasingPower.internationalDollarsPerMonth;
+  return nationalities.flatMap((countryCode) => {
+    const statistics = stored.get(countryCode)?.statistics;
+    const currency = localCurrencyOf(countryCode);
+    if (countryCode === benchmark.countryCode || !statistics?.purchasing || !currency) return [];
+    const equivalentMonthlyIncomeMinor = equivalentIncomeMinor(dollars, currency, statistics.purchasing.lcuPerInternationalDollar);
+    if (equivalentMonthlyIncomeMinor === null) return [];
+
+    const income = statistics.incomeDistribution;
+    const position = income && income.currency === currency ? incomePercentile(income.distribution, equivalentMonthlyIncomeMinor, household) : null;
+    return [
+      {
+        countryCode,
+        currency,
+        equivalentMonthlyIncomeMinor,
+        incomePercentile: position && income ? { ...position, period: income.period, source: income.source, basis: income.distribution.basis } : null,
+      },
+    ];
+  });
 }

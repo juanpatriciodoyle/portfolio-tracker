@@ -1482,83 +1482,74 @@
   border-top: 1px solid var(--border-divider-color);
 }
 
-.benchmarks__kpis,
-.benchmarks__gaps,
 .benchmarks__notes {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.benchmarks__kpis {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+.benchmarks__badges {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
 }
 
-.benchmarks__gaps {
-  margin-top: 12px;
+.benchmarks__equivalence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
 }
 
-.benchmarks__notes {
-  margin-top: 8px;
+.benchmarks__badge {
+  display: inline-block;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-blue-light);
+  background: var(--accent-blue-subtle);
+  border-radius: 999px;
+}
+
+.benchmarks__badge--primary {
+  padding: 8px 16px;
+  font-size: 16px;
+}
+
+.benchmarks__figures {
+  margin: 8px 0 0 0;
+  padding: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
-.benchmarks__kpi {
-  position: relative;
-  padding: 12px 14px;
-  background: var(--bg-input);
-  border-radius: 12px;
-  outline-offset: 2px;
-}
-
-.benchmarks__kpi-value {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.3;
+.benchmarks__figure-value {
   color: var(--text-heading);
 }
 
-.benchmarks__kpi[data-verdict='HIGHER'] .benchmarks__kpi-value {
+.benchmarks__figure[data-verdict='HIGHER'] .benchmarks__figure-value {
   color: var(--color-loss);
 }
 
-.benchmarks__kpi[data-verdict='LOWER'] .benchmarks__kpi-value {
+.benchmarks__figure[data-verdict='LOWER'] .benchmarks__figure-value {
   color: var(--color-profit);
 }
 
-.benchmarks__kpi-sub {
-  margin: 2px 0 0 0;
+.benchmarks__figure-sub {
   font-size: 12.5px;
   color: var(--text-muted);
 }
 
-.benchmarks__tooltip {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 2;
-  padding: 8px 10px;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--text-secondary);
-  background: var(--bg-card);
-  border: var(--border-card);
-  border-radius: 8px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--motion-quick) ease;
-}
-
-.benchmarks__kpi:hover .benchmarks__tooltip,
-.benchmarks__kpi:focus .benchmarks__tooltip,
-.benchmarks__kpi:focus-within .benchmarks__tooltip {
-  opacity: 1;
+.benchmarks__figure p {
+  margin: 2px 0 0 0;
 }
 
 .benchmarks__problem {

@@ -1,5 +1,6 @@
 import {
   compareShare,
+  equivalentIncomeMinor,
   housingCostsMinor,
   housingShare,
   incomePercentile,
@@ -124,5 +125,23 @@ describe('purchasing power', () => {
     expect(ratioOf(5604.29, 3525.49)).toBe(1.59);
     expect(ratioOf(1, 0)).toBeNull();
     expect(ratioOf(0, 5)).toBe(0);
+  });
+});
+
+describe('equivalentIncomeMinor', () => {
+  it('turns international dollars into the local currency of a country, in minor units', () => {
+    // 5 604.29 international dollars at 0.570991 euros each is about 3 200 euros
+    expect(equivalentIncomeMinor(5604.29, 'EUR', 0.570991)).toBe(320000);
+  });
+
+  it('respects currencies without decimals', () => {
+    expect(equivalentIncomeMinor(1000, 'JPY', 100)).toBe(100000);
+  });
+
+  it('is zero for no income and null for a factor that is not a positive number', () => {
+    expect(equivalentIncomeMinor(0, 'EUR', 0.57)).toBe(0);
+    expect(equivalentIncomeMinor(100, 'EUR', 0)).toBeNull();
+    expect(equivalentIncomeMinor(100, 'EUR', -1)).toBeNull();
+    expect(equivalentIncomeMinor(100, 'EUR', Number.NaN)).toBeNull();
   });
 });

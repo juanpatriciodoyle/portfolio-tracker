@@ -109,6 +109,15 @@ export function internationalDollars(amountMinor: number, currency: string, lcuP
   return Math.round((major / lcuPerInternationalDollar) * 100) / 100;
 }
 
+/**
+ * The reverse of `internationalDollars`: the monthly amount, in minor units of the currency, that buys the same at that
+ * country's prices. Null when the factor is not a positive number.
+ */
+export function equivalentIncomeMinor(dollars: number, currency: string, lcuPerInternationalDollar: number): number | null {
+  if (!(Number.isFinite(lcuPerInternationalDollar) && lcuPerInternationalDollar > 0)) return null;
+  return Math.round(dollars * lcuPerInternationalDollar * 10 ** currencyExponent(currency));
+}
+
 /** `a` as a multiple of `b`, two decimals; null when `b` is zero. */
 export function ratioOf(a: number, b: number): number | null {
   return b === 0 ? null : Math.round((a / b) * 100) / 100;

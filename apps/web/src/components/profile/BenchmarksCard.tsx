@@ -7,21 +7,18 @@ interface BenchmarksCardProps {
   view: BenchmarksView;
 }
 
-/** One figure with its method behind a tooltip, reachable by hover and by keyboard focus. */
-function KpiCard({ metric, kpi, verdict }: { metric: string; kpi: Kpi; verdict?: string }) {
-  const noteId = useId();
+/** One figure with the method behind it, shown inside the collapsed data sources. */
+function Figure({ metric, kpi, verdict }: { metric: string; kpi: Kpi; verdict?: string }) {
   return (
-    <li className="benchmarks__kpi" data-metric={metric} data-verdict={verdict} tabIndex={0} aria-describedby={noteId}>
-      <p className="benchmarks__kpi-value">{kpi.value}</p>
-      {kpi.sub && <p className="benchmarks__kpi-sub">{kpi.sub}</p>}
-      <span className="benchmarks__tooltip" role="tooltip" id={noteId}>
-        {kpi.note}
-      </span>
+    <li className="benchmarks__figure" data-metric={metric} data-verdict={verdict}>
+      <strong className="benchmarks__figure-value">{kpi.value}</strong>
+      {kpi.sub && <span className="benchmarks__figure-sub"> · {kpi.sub}</span>}
+      <p className="phase-details__hint">{kpi.note}</p>
     </li>
   );
 }
 
-/** How one living phase compares with its country: income, housing burden and what the income buys. */
+/** Where one living phase's income stands in the country and in the person's other nationalities; the figures behind it are in the data sources. */
 export default function BenchmarksCard({ phaseId, view }: BenchmarksCardProps) {
   const id = useId();
   const { status, benchmarks, message, onRetry, nameOf } = view;
@@ -33,7 +30,7 @@ export default function BenchmarksCard({ phaseId, view }: BenchmarksCardProps) {
   return (
     <section className="benchmarks" aria-labelledby={`${id}-title`} aria-busy={status === 'loading'}>
       <h4 className="phase-details__heading" id={`${id}-title`}>
-        How you compare
+        Where you stand
       </h4>
 
       {status === 'loading' && !benchmarks && (
@@ -63,35 +60,43 @@ export default function BenchmarksCard({ phaseId, view }: BenchmarksCardProps) {
 
       {described && !(noIncome && !described.hasComparison) && (
         <>
-          <ul className="benchmarks__kpis">
-            {described.income && <KpiCard metric="income" kpi={described.income} />}
-            {described.housing && <KpiCard metric="housing" kpi={described.housing} verdict={described.housing.verdict} />}
-            {described.purchasingPower && <KpiCard metric="purchasing-power" kpi={described.purchasingPower} />}
+          <ul className="benchmarks__badges">
+            {described.positioning.badge && (
+              <li>
+                <span className="benchmarks__badge benchmarks__badge--primary">{described.positioning.badge}</span>
+              </li>
+            )}
+            {described.positioning.equivalences.map((equivalence) => (
+              <li key={equivalence.countryCode} className="benchmarks__equivalence">
+                <span>{equivalence.text}</span>
+                {equivalence.tier && <span className="benchmarks__badge">{equivalence.tier}</span>}
+              </li>
+            ))}
           </ul>
-
-          {described.gaps.length > 0 && (
-            <ul className="benchmarks__gaps">
-              {described.gaps.map((gap) => (
-                <li key={gap} className="phase-details__hint">
-                  {gap}
-                </li>
-              ))}
-            </ul>
-          )}
         </>
       )}
 
-      {benchmarks && (
+      {benchmarks && phase && !(noIncome && !described?.hasComparison) && (
         <details className="benchmarks__how">
-          <summary>How this is worked out</summary>
+          <summary>Data sources</summary>
+          <ul className="benchmarks__figures">
+            {described?.income && <Figure metric="income" kpi={described.income} />}
+            {described?.housing && <Figure metric="housing" kpi={described.housing} verdict={described.housing.verdict} />}
+            {described?.purchasingPower && <Figure metric="purchasing-power" kpi={described.purchasingPower} />}
+          </ul>
           <ul className="phase-details__hint benchmarks__notes">
+            {described?.gaps.map((gap) => <li key={gap}>{gap}</li>)}
+            {described?.positioning.unavailable.map((note) => <li key={note}>{note}</li>)}
             <li>These are national averages, not figures for your city.</li>
             <li>
               Income is compared per person after adjusting for household size. We assume 1 adult and no children unless your
               profile says otherwise.
             </li>
             <li>Housing means rent, utilities and property taxes.</li>
-            <li>International dollars (PPP) use national price levels and change slowly.</li>
+            <li>
+              Purchasing power in another country converts your income with international dollars (PPP), which use national price
+              levels, not city prices, and change slowly.
+            </li>
             <li>Argentine figures are in current pesos of the quarter published, so they can be out of date.</li>
             <li>
               Data is refreshed monthly from Eurostat, INDEC and the World Bank

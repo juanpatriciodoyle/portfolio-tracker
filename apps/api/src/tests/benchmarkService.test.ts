@@ -295,6 +295,35 @@ describe('BenchmarkService', () => {
     expect(phase.incomePercentile!.percentile).toBeLessThan(88.7);
   });
 
+  it('places the income in each other nationality: what it equals there and where it ranks', async () => {
+    const { service, phases, profiles } = await benchmarkWorld();
+    await phases.createPhase(USER, madrid);
+    await profiles.saveProfile(USER, { fullName: null, birthYear: null, nationalities: ['ES', 'AR', 'IT'], taxResidence: null, householdAdults: 1, dependentChildren: 0, employmentStatus: null }, '2026-10-31');
+
+    const [phase] = benchmarksResponse.parse(await service.benchmarks(USER, '2026-10-31')).phases;
+
+    // The country of the phase is not repeated; Italy publishes nothing in this world, so it is left out rather than guessed.
+    expect(phase.nationalityEquivalences).toEqual([
+      {
+        countryCode: 'AR',
+        currency: 'ARS',
+        // 5 604.29 international dollars at 567.297421343424 pesos each
+        equivalentMonthlyIncomeMinor: 317_929_927,
+        incomePercentile: { percentile: 95, bound: 'AT_LEAST', period: '2026-Q1', source: 'INDEC', basis: 'PER_CAPITA' },
+      },
+    ]);
+  });
+
+  it('has no nationality equivalences without nationalities or without purchasing power', async () => {
+    const { service, phases } = await benchmarkWorld();
+    await phases.createPhase(USER, madrid);
+    await phases.createPhase(USER, { ...madrid, name: 'Nowhere', startDate: '2024-09-01', endDate: null, monthlyIncomeMinor: 0 });
+
+    const result = await service.benchmarks(USER, '2026-10-31');
+
+    expect(result.phases.map((phase) => phase.nationalityEquivalences)).toEqual([[], []]);
+  });
+
   it('says what is missing instead of guessing', async () => {
     const { service, phases } = await benchmarkWorld();
     await phases.createPhase(USER, { ...madrid, monthlyIncomeMinor: 0 });

@@ -50,6 +50,17 @@ export const purchasingPowerSchema = z.object({
 });
 export type PurchasingPowerDto = z.infer<typeof purchasingPowerSchema>;
 
+/** What the income of a living phase amounts to in the country of one of the person's other nationalities. */
+export const nationalityEquivalenceSchema = z.object({
+  countryCode: countryCodeSchema,
+  currency: currencyCodeSchema,
+  /** The monthly amount in that country's currency that buys what the income buys here (PPP). */
+  equivalentMonthlyIncomeMinor: z.number().int().min(0),
+  /** Where that amount would sit among people in that country; null when it publishes no comparable distribution. */
+  incomePercentile: incomePercentileSchema.nullable(),
+});
+export type NationalityEquivalenceDto = z.infer<typeof nationalityEquivalenceSchema>;
+
 export const phaseBenchmarkSchema = z.object({
   phaseId: z.string(),
   name: z.string(),
@@ -60,6 +71,7 @@ export const phaseBenchmarkSchema = z.object({
   incomePercentile: incomePercentileSchema.nullable(),
   housingBurden: housingBurdenSchema.nullable(),
   purchasingPower: purchasingPowerSchema.nullable(),
+  nationalityEquivalences: z.array(nationalityEquivalenceSchema),
   gaps: z.array(benchmarkGapSchema),
 });
 export type PhaseBenchmarkDto = z.infer<typeof phaseBenchmarkSchema>;

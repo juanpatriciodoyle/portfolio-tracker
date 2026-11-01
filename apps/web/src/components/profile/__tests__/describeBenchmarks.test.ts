@@ -90,6 +90,48 @@ describe('purchasing power KPI', () => {
   });
 });
 
+describe('positioning', () => {
+  const argentina = {
+    countryCode: 'AR',
+    currency: 'ARS',
+    equivalentMonthlyIncomeMinor: 317_929_927,
+    incomePercentile: { percentile: 99.8, bound: 'EXACT' as const, period: '2026-Q1', source: 'INDEC' as const, basis: 'PER_CAPITA' as const },
+  };
+  const italy = { countryCode: 'IT', currency: 'EUR', equivalentMonthlyIncomeMinor: 580_000, incomePercentile: null };
+
+  it('has a badge for where the income sits in the country of the phase', () => {
+    expect(describeIt().positioning.badge).toBe('Top 11% in Spain');
+  });
+
+  it('does not claim more than the published range allows', () => {
+    const base = { period: '2025', source: 'EUROSTAT' as const, basis: 'EQUIVALISED' as const };
+
+    expect(describeIt({ incomePercentile: { ...base, percentile: 90, bound: 'AT_LEAST' } }).positioning.badge).toBe('Top 10% or better in Spain');
+    expect(describeIt({ incomePercentile: { ...base, percentile: 10, bound: 'AT_MOST' } }).positioning.badge).toBe('Below the 10th percentile in Spain');
+    expect(describeIt({ incomePercentile: { ...base, percentile: 99.8, bound: 'EXACT' } }).positioning.badge).toBe('Top 1% in Spain');
+  });
+
+  it('has no badge without a percentile', () => {
+    expect(describeIt({ incomePercentile: null }).positioning.badge).toBeNull();
+  });
+
+  it('says what the income holds in each other nationality, with the tier when there is one', () => {
+    const { equivalences } = describeIt({ nationalityEquivalences: [italy, argentina] }).positioning;
+
+    expect(equivalences).toEqual([
+      { countryCode: 'IT', text: 'Holds the purchasing power of €5,800 a month in Italy', tier: null },
+      { countryCode: 'AR', text: expect.stringMatching(/^Holds the purchasing power of .* a month in Argentina$/), tier: 'Top 1% in Argentina' },
+    ]);
+  });
+
+  it('lists the global and city rankings as not available, since no source publishes them here', () => {
+    expect(describeIt().positioning.unavailable).toEqual([
+      'A global ranking needs a worldwide income distribution, which is not connected yet.',
+      'City rankings need city-level income statistics, which are not connected yet.',
+    ]);
+  });
+});
+
 describe('gaps', () => {
   it('has a plain reason for every possible gap', () => {
     for (const gap of BENCHMARK_GAPS) expect(GAP_REASONS[gap].length).toBeGreaterThan(10);

@@ -15,36 +15,41 @@ const view = (overrides: Partial<BenchmarksView> = {}): BenchmarksView => ({
 });
 
 describe('BenchmarksCard', () => {
-  it('shows income, housing and purchasing power for the phase', () => {
-    render(<BenchmarksCard phaseId="p1" view={view()} />);
+  it('shows only clean positioning badges until the sources are opened', () => {
+    const italy = { countryCode: 'IT', currency: 'EUR', equivalentMonthlyIncomeMinor: 580_000, incomePercentile: null };
+    const benchmarks = makeBenchmarks({ phases: [makePhaseBenchmark({ nationalityEquivalences: [italy] })] });
 
-    expect(screen.getByRole('heading', { name: 'How you compare' })).toBeInTheDocument();
-    const kpi = (metric: string) => screen.getByText((_, element) => element?.getAttribute('data-metric') === metric);
-    expect(kpi('income')).toHaveTextContent('89th percentileTop 11%');
-    expect(kpi('housing')).toHaveTextContent('42.8% housing burdenvs. 16% typical');
-    expect(kpi('purchasing-power')).toHaveTextContent('1.4x purchasing power');
-    expect(screen.getAllByRole('listitem').filter((item) => item.hasAttribute('data-metric'))).toHaveLength(3);
+    render(<BenchmarksCard phaseId="p1" view={view({ benchmarks })} />);
+
+    expect(screen.getByRole('heading', { name: 'Where you stand' })).toBeInTheDocument();
+    expect(screen.getByText('Top 11% in Spain')).toBeVisible();
+    expect(screen.getByText('Holds the purchasing power of €5,800 a month in Italy')).toBeVisible();
+    expect(screen.getByText('Data sources').closest('details')).not.toHaveAttribute('open');
   });
 
-  it('keeps methodology out of the visible text and in tooltips reachable by keyboard', () => {
+  it('keeps figures, formulas and what is not connected inside the collapsed data sources', () => {
     render(<BenchmarksCard phaseId="p1" view={view()} />);
 
-    const housing = screen.getByText('42.8% housing burden').closest('li')!;
-    expect(housing).toHaveAttribute('tabindex', '0');
-    expect(housing).toHaveAccessibleDescription(/Rent, utilities and property taxes/);
-    expect(screen.queryByText(/adjusted for household size/)).toHaveAttribute('role', 'tooltip');
-    expect(screen.queryByText(/international dollars/)).toHaveAttribute('role', 'tooltip');
+    fireEvent.click(screen.getByText('Data sources'));
+
+    expect(screen.getByText('42.8% housing burden')).toBeInTheDocument();
+    expect(screen.getByText(/Rent, utilities and property taxes come to/)).toBeInTheDocument();
+    expect(screen.getByText('1.4x purchasing power')).toBeInTheDocument();
+    expect(screen.getByText(/A global ranking needs a worldwide income distribution/)).toBeInTheDocument();
+    expect(screen.getByText(/national averages, not figures for your city/)).toBeInTheDocument();
+    expect(screen.getByText(/Argentine figures are in current pesos/)).toBeInTheDocument();
+    expect(screen.getByText(/Last refreshed .*2026/)).toBeInTheDocument();
   });
 
-  it('shows what it has and says why it lacks the rest', () => {
+  it('puts what it lacks inside the data sources and shows what it has', () => {
     const partial = makeBenchmarks({
       phases: [makePhaseBenchmark({ incomePercentile: null, housingBurden: null, gaps: ['NO_DISTRIBUTION', 'NO_HOUSING_BASELINE'] })],
     });
 
     render(<BenchmarksCard phaseId="p1" view={view({ benchmarks: partial })} />);
 
-    expect(screen.queryByText(/percentile/)).not.toBeInTheDocument();
-    expect(screen.getByText(/purchasing power/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Top .* in Spain$/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Data sources'));
     expect(screen.getByText(/No income statistics are published for this country/)).toBeInTheDocument();
     expect(screen.getByText(/No typical housing cost figure/)).toBeInTheDocument();
   });
@@ -64,7 +69,7 @@ describe('BenchmarksCard', () => {
     render(<BenchmarksCard phaseId="p1" view={view({ status: 'loading', benchmarks: null })} />);
 
     expect(screen.getByRole('status')).toHaveTextContent('Loading comparisons…');
-    expect(screen.queryByText(/How this is worked out/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Data sources')).not.toBeInTheDocument();
   });
 
   it('shows the problem with a retry when loading failed', () => {
@@ -80,17 +85,5 @@ describe('BenchmarksCard', () => {
     render(<BenchmarksCard phaseId="other" view={view()} />);
 
     expect(screen.getByText(/No comparison is available for this living phase yet/)).toBeInTheDocument();
-  });
-
-  it('explains how it is worked out, with the refresh date', () => {
-    render(<BenchmarksCard phaseId="p1" view={view()} />);
-
-    const summary = screen.getByText('How this is worked out');
-    fireEvent.click(summary);
-
-    expect(screen.getByText(/national averages, not figures for your city/)).toBeInTheDocument();
-    expect(screen.getByText(/assume 1 adult and no children/)).toBeInTheDocument();
-    expect(screen.getByText(/Argentine figures are in current pesos/)).toBeInTheDocument();
-    expect(screen.getByText(/Last refreshed .*2026/)).toBeInTheDocument();
   });
 });

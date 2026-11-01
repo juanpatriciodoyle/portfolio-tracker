@@ -16,3 +16,8 @@ export function isLocalCurrency(countryCode: string, currency: string): boolean 
   const local = LOCAL_CURRENCY[countryCode];
   return local === undefined || local === currency;
 }
+
+/** The currency of a well-known country; null when the country is not listed. */
+export function localCurrencyOf(countryCode: string): string | null {
+  return LOCAL_CURRENCY[countryCode] ?? null;
+}
