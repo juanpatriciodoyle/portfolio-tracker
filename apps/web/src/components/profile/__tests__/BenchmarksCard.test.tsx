@@ -19,11 +19,21 @@ describe('BenchmarksCard', () => {
     render(<BenchmarksCard phaseId="p1" view={view()} />);
 
     expect(screen.getByRole('heading', { name: 'How you compare' })).toBeInTheDocument();
-    expect(screen.getByText(/higher than about 89 of every 100 people in/)).toBeInTheDocument();
-    expect(screen.getByText(/Housing takes 42.8% of your income/)).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'You 42.8%, typical 16%' })).toBeInTheDocument();
-    expect(screen.getByText(/buys about \$5,604 a month/)).toBeInTheDocument();
-    expect(screen.getByText('That is 1.59x what you had in Buenos Aires.')).toBeInTheDocument();
+    const kpi = (metric: string) => screen.getByText((_, element) => element?.getAttribute('data-metric') === metric);
+    expect(kpi('income')).toHaveTextContent('89th percentileTop 11%');
+    expect(kpi('housing')).toHaveTextContent('42.8% housing burdenvs. 16% typical');
+    expect(kpi('purchasing-power')).toHaveTextContent('1.4x purchasing power');
+    expect(screen.getAllByRole('listitem').filter((item) => item.hasAttribute('data-metric'))).toHaveLength(3);
+  });
+
+  it('keeps methodology out of the visible text and in tooltips reachable by keyboard', () => {
+    render(<BenchmarksCard phaseId="p1" view={view()} />);
+
+    const housing = screen.getByText('42.8% housing burden').closest('li')!;
+    expect(housing).toHaveAttribute('tabindex', '0');
+    expect(housing).toHaveAccessibleDescription(/Rent, utilities and property taxes/);
+    expect(screen.queryByText(/adjusted for household size/)).toHaveAttribute('role', 'tooltip');
+    expect(screen.queryByText(/international dollars/)).toHaveAttribute('role', 'tooltip');
   });
 
   it('shows what it has and says why it lacks the rest', () => {
@@ -33,8 +43,8 @@ describe('BenchmarksCard', () => {
 
     render(<BenchmarksCard phaseId="p1" view={view({ benchmarks: partial })} />);
 
-    expect(screen.queryByText(/higher than about/)).not.toBeInTheDocument();
-    expect(screen.getByText(/buys about/)).toBeInTheDocument();
+    expect(screen.queryByText(/percentile/)).not.toBeInTheDocument();
+    expect(screen.getByText(/purchasing power/)).toBeInTheDocument();
     expect(screen.getByText(/No income statistics are published for this country/)).toBeInTheDocument();
     expect(screen.getByText(/No typical housing cost figure/)).toBeInTheDocument();
   });
@@ -47,7 +57,7 @@ describe('BenchmarksCard', () => {
     render(<BenchmarksCard phaseId="p1" view={view({ benchmarks: empty })} />);
 
     expect(screen.getByText(/Add a monthly income to this living phase/)).toBeInTheDocument();
-    expect(screen.queryByText(/Housing takes/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/housing burden/)).not.toBeInTheDocument();
   });
 
   it('shows a loading placeholder before the first answer', () => {

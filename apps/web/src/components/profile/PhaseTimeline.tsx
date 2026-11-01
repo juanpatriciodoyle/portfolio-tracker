@@ -54,7 +54,7 @@ export default function PhaseTimeline({
   const entryById = new Map(entries.map((entry) => [entry.phaseId, entry]));
 
   return (
-    <ol className="phase-timeline" aria-label="Living phases">
+    <ol className={`phase-timeline${compareIds.length > 0 ? ' is-comparing' : ''}`} aria-label="Living phases">
       {orderPhases(phases, entryById).map((phase) => (
         <li key={phase.id}>
           <LivingPhaseCard

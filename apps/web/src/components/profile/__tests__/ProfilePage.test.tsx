@@ -184,11 +184,26 @@ describe('ProfilePage loading', () => {
 });
 
 describe('ProfilePage comparing', () => {
-  it('compares two chosen homes, the earlier one first', async () => {
+  it('lays chosen homes out as columns, earliest first, listing only rows that differ by more than 5%', async () => {
     serve();
     renderPage();
     await screen.findByRole('heading', { name: 'Living phases' });
-    expect(screen.getByText('Pick two phases to compare them.')).toBeInTheDocument();
+    expect(screen.getByText('Pick two to four phases to compare them.')).toBeInTheDocument();
+
+    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: 'Compare' }));
+    fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Compare' }));
+
+    const table = await screen.findByRole('table', { name: /differ by more than 5%/ });
+    expect(within(table).getAllByRole('columnheader').map((header) => header.textContent)).toEqual(['🇵🇹 Lisbon', '🇪🇸 Madrid']);
+    expect(within(table).getByRole('row', { name: /Fixed costs €1,250 €1,500/ })).toBeInTheDocument();
+    expect(within(table).queryByRole('row', { name: /^Income/ })).not.toBeInTheDocument();
+    expect(apiRequest.mock.calls.some(([path]) => path.startsWith('/api/living-phases/compare'))).toBe(false);
+  });
+
+  it('asks the server to convert two homes in different currencies', async () => {
+    serve({ entries: [madridEntry, { ...lisbonEntry, currency: 'USD' }] });
+    renderPage();
+    await screen.findByRole('heading', { name: 'Living phases' });
 
     fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: 'Compare' }));
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Compare' }));
@@ -212,25 +227,41 @@ describe('ProfilePage comparing', () => {
     expect(within(cardFor('Madrid')).getByRole('button', { name: 'Compare' })).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('keeps only the two most recent choices', async () => {
-    serve({
-      phases: [madrid, lisbon, makePhase({ id: 'p3', name: 'Porto', city: 'Porto', countryCode: 'PT', startDate: '2017-01-01', endDate: '2019-12-31', fixedCosts: [] })],
-      entries: [madridEntry, lisbonEntry, makeEntry({ phaseId: 'p3', name: 'Porto', city: 'Porto', countryCode: 'PT', status: 'past', startDate: '2017-01-01', endDate: '2019-12-31' })],
+  it('keeps the four most recent choices', async () => {
+    const extra = (id: string, name: string) => ({
+      phase: makePhase({ id, name, city: name, countryCode: 'PT', startDate: '2017-01-01', endDate: '2019-12-31', fixedCosts: [] }),
+      entry: makeEntry({ phaseId: id, name, city: name, countryCode: 'PT', status: 'past', startDate: '2017-01-01', endDate: '2019-12-31' }),
     });
+    const [porto, faro] = [extra('p3', 'Porto'), extra('p4', 'Faro')];
+    serve({ phases: [madrid, lisbon, porto.phase, faro.phase], entries: [madridEntry, lisbonEntry, porto.entry, faro.entry] });
     renderPage();
     await screen.findByRole('heading', { name: 'Living phases' });
 
-    for (const name of ['Madrid', 'Lisbon', 'Porto']) {
+    for (const name of ['Madrid', 'Lisbon', 'Porto', 'Faro']) {
+      fireEvent.click(within(cardFor(name)).getByRole('button', { name: 'Compare' }));
+    }
+    expect(within(await screen.findByRole('table')).getAllByRole('columnheader')).toHaveLength(4);
+  });
+
+  it('drops the oldest choice when a fifth home is picked', async () => {
+    const more = ['Porto', 'Faro', 'Evora'].map((name, index) => ({
+      phase: makePhase({ id: `x${index}`, name, city: name, startDate: '2017-01-01', endDate: '2019-12-31', fixedCosts: [] }),
+      entry: makeEntry({ phaseId: `x${index}`, name, city: name, status: 'past', startDate: '2017-01-01', endDate: '2019-12-31' }),
+    }));
+    serve({ phases: [madrid, lisbon, ...more.map((m) => m.phase)], entries: [madridEntry, lisbonEntry, ...more.map((m) => m.entry)] });
+    renderPage();
+    await screen.findByRole('heading', { name: 'Living phases' });
+
+    for (const name of ['Madrid', 'Lisbon', 'Porto', 'Faro', 'Evora']) {
       fireEvent.click(within(cardFor(name)).getByRole('button', { name: 'Compare' }));
     }
 
     expect(within(cardFor('Madrid')).getByRole('button', { name: 'Compare' })).toHaveAttribute('aria-pressed', 'false');
-    expect(within(cardFor('Lisbon')).getByRole('button', { name: 'Compare' })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(cardFor('Porto')).getByRole('button', { name: 'Compare' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(cardFor('Evora')).getByRole('button', { name: 'Compare' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('refreshes an open comparison after a phase is changed, instead of leaving old numbers on screen', async () => {
-    const world = serve();
+    const world = serve({ entries: [madridEntry, { ...lisbonEntry, currency: 'USD' }] });
     const answer = apiRequest.getMockImplementation() as RequestFn;
     let delta = 25000;
     apiRequest.mockImplementation(async (path, schema, options) => {
@@ -246,7 +277,7 @@ describe('ProfilePage comparing', () => {
     await screen.findByText(/Fixed costs in 🇪🇸 Madrid are €250 more per month/);
 
     delta = 40000; // what the server now says, after the person edits Lisbon
-    world.entries = [madridEntry, { ...lisbonEntry, monthlyFixedCostsMinor: 110000 }];
+    world.entries = [madridEntry, { ...lisbonEntry, currency: 'USD', monthlyFixedCostsMinor: 110000 }];
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: /Lisbon/ }));
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: /Edit phase/ }));
     clickContinue();

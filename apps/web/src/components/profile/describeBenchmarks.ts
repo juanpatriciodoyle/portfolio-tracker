@@ -18,32 +18,23 @@ export const GAP_REASONS: Readonly<Record<BenchmarkGap, string>> = {
   CURRENCY_MISMATCH: 'This living phase’s income is not in the currency of the country, so it cannot be compared with national figures directly.',
 };
 
-export interface IncomeRow {
-  headline: string;
-  caption: string;
+/** One glanceable figure. `note` holds the methodology and shows only on hover or focus. */
+export interface Kpi {
+  label: string;
+  value: string;
+  sub: string | null;
+  note: string;
 }
 
-export interface HousingRow {
-  headline: string;
-  detail: string;
-  caption: string;
+export interface HousingKpi extends Kpi {
   verdict: 'LOWER' | 'SIMILAR' | 'HIGHER';
-  you: { label: string; widthPercent: number };
-  typical: { label: string; widthPercent: number };
-}
-
-export interface PurchasingPowerRow {
-  headline: string;
-  comparisons: string[];
-  unitNote: string;
-  caption: string;
 }
 
 export interface PhaseBenchmarkView {
   country: string;
-  income: IncomeRow | null;
-  housing: HousingRow | null;
-  purchasingPower: PurchasingPowerRow | null;
+  income: Kpi | null;
+  housing: HousingKpi | null;
+  purchasingPower: Kpi | null;
   gaps: string[];
   /** True when at least one comparison could be made. */
   hasComparison: boolean;
@@ -60,36 +51,32 @@ const trimmed = (value: number, locale: string, maximumFractionDigits: number) =
 const percent = (value: number, locale: string) => `${trimmed(value, locale, 1)}%`;
 const times = (ratio: number, locale: string) => `${trimmed(ratio, locale, 2)}x`;
 
-function describeIncome(dto: NonNullable<PhaseBenchmarkDto['incomePercentile']>, country: string): IncomeRow {
-  const n = Math.round(dto.percentile);
-  const headline =
-    dto.bound === 'AT_LEAST'
-      ? `Your household income is higher than at least ${n} of every 100 people in ${country}.`
-      : dto.bound === 'AT_MOST'
-        ? `Your household income is higher than at most ${n} of every 100 people in ${country}.`
-        : n >= 50
-          ? `Your household income is higher than about ${n} of every 100 people in ${country}.`
-          : `In ${country}, about ${n} of every 100 people earn less than you.`;
-  return { headline, caption: `${BASIS_CAPTIONS[dto.basis]} · ${dto.period} · ${SOURCE_LABELS[dto.source]}` };
+const ENGLISH_ORDINAL_SUFFIX: Readonly<Record<string, string>> = { one: 'st', two: 'nd', few: 'rd', other: 'th' };
+
+/** "89th" in English; other languages get the bare number rather than a wrong suffix. */
+function ordinal(n: number, locale: string): string {
+  if (!locale.toLowerCase().startsWith('en')) return String(n);
+  return `${n}${ENGLISH_ORDINAL_SUFFIX[new Intl.PluralRules('en', { type: 'ordinal' }).select(n)]}`;
 }
 
-function describeHousing(dto: NonNullable<PhaseBenchmarkDto['housingBurden']>, currency: string, country: string, locale: string): HousingRow {
-  const points = trimmed(Math.abs(dto.differencePoints), locale, 1);
-  const detail =
-    dto.verdict === 'SIMILAR'
-      ? 'About the same as a typical household.'
-      : dto.verdict === 'HIGHER'
-        ? `That is ${points} points more than typical.`
-        : `That is ${points} points less than typical.`;
-  const widest = Math.max(dto.yourSharePercent, dto.typicalSharePercent, 1);
-  const width = (value: number) => Math.round((value / widest) * 100);
+function describeIncome(dto: NonNullable<PhaseBenchmarkDto['incomePercentile']>, country: string, locale: string): Kpi {
+  const n = Math.round(dto.percentile);
+  const bound = dto.bound === 'AT_LEAST' ? 'At least ' : dto.bound === 'AT_MOST' ? 'At most ' : '';
   return {
-    headline: `Housing takes ${percent(dto.yourSharePercent, locale)} of your income. A typical household in ${country} spends ${percent(dto.typicalSharePercent, locale)}.`,
-    detail: `${detail} Your housing costs come to ${formatMinor(dto.housingMonthlyMinor, currency, locale)} a month.`,
-    caption: `Rent, utilities and property taxes · ${dto.period} · ${SOURCE_LABELS[dto.source]}`,
+    label: 'Income',
+    value: `${bound}${ordinal(n, locale)} percentile`,
+    sub: n >= 50 ? `Top ${Math.max(1, 100 - n)}%` : `Bottom ${Math.max(1, n)}%`,
+    note: `Your household income compared with people in ${country}, ${BASIS_CAPTIONS[dto.basis]}. ${dto.period} · ${SOURCE_LABELS[dto.source]}`,
+  };
+}
+
+function describeHousing(dto: NonNullable<PhaseBenchmarkDto['housingBurden']>, currency: string, country: string, locale: string): HousingKpi {
+  return {
+    label: 'Housing',
+    value: `${percent(dto.yourSharePercent, locale)} housing burden`,
+    sub: `vs. ${percent(dto.typicalSharePercent, locale)} typical`,
+    note: `Rent, utilities and property taxes come to ${formatMinor(dto.housingMonthlyMinor, currency, locale)} a month. A typical household in ${country} spends ${percent(dto.typicalSharePercent, locale)}. ${dto.period} · ${SOURCE_LABELS[dto.source]}`,
     verdict: dto.verdict,
-    you: { label: percent(dto.yourSharePercent, locale), widthPercent: width(dto.yourSharePercent) },
-    typical: { label: percent(dto.typicalSharePercent, locale), widthPercent: width(dto.typicalSharePercent) },
   };
 }
 
@@ -98,20 +85,16 @@ function describePower(
   country: string,
   nameOf: (phaseId: string) => string | undefined,
   locale: string
-): PurchasingPowerRow {
-  const comparisons: string[] = [];
+): Kpi {
   const previousName = dto.versusPreviousPhase && nameOf(dto.versusPreviousPhase.phaseId);
-  if (dto.versusPreviousPhase && previousName) {
-    comparisons.push(`That is ${times(dto.versusPreviousPhase.ratio, locale)} what you had in ${previousName}.`);
-  }
-  if (dto.versusNationalAverage !== null) {
-    comparisons.push(`About ${times(dto.versusNationalAverage, locale)} the average person in ${country}.`);
-  }
+  const extra =
+    dto.versusPreviousPhase && previousName ? ` That is ${times(dto.versusPreviousPhase.ratio, locale)} what you had in ${previousName}.` : '';
+  const dollars = `$${trimmed(dto.internationalDollarsPerMonth, locale, 0)}`;
   return {
-    headline: `Your income buys about $${trimmed(dto.internationalDollarsPerMonth, locale, 0)} a month at world-average prices.`,
-    comparisons,
-    unitNote: 'These are international dollars, a unit for comparing what money buys. They are not real money.',
-    caption: `${dto.period} · ${SOURCE_LABELS[dto.source]}`,
+    label: 'Purchasing power',
+    value: dto.versusNationalAverage !== null ? `${times(dto.versusNationalAverage, locale)} purchasing power` : `${dollars} a month`,
+    sub: dto.versusNationalAverage !== null ? `vs. the average person in ${country}` : 'at world-average prices',
+    note: `Your income buys about ${dollars} a month at world-average prices (international dollars, a unit for comparing what money buys, not real money).${extra} ${dto.period} · ${SOURCE_LABELS[dto.source]}`,
   };
 }
 
@@ -122,7 +105,7 @@ export function describePhaseBenchmark(
   locale: string = displayLocale()
 ): PhaseBenchmarkView {
   const country = countryName(dto.countryCode, locale);
-  const income = dto.incomePercentile ? describeIncome(dto.incomePercentile, country) : null;
+  const income = dto.incomePercentile ? describeIncome(dto.incomePercentile, country, locale) : null;
   const housing = dto.housingBurden ? describeHousing(dto.housingBurden, dto.currency, country, locale) : null;
   const purchasingPower = dto.purchasingPower ? describePower(dto.purchasingPower, country, nameOf, locale) : null;
   return {

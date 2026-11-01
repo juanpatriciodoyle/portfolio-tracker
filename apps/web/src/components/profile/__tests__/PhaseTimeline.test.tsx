@@ -67,6 +67,17 @@ describe('PhaseTimeline', () => {
     expect(within(byName('Porto')).getByRole('button', { name: 'Compare' })).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('does not flag the list as comparing while nothing is chosen', () => {
+    renderTimeline();
+    expect(screen.getByRole('list', { name: 'Living phases' })).not.toHaveClass('is-comparing');
+  });
+
+  it('flags the list while homes are chosen', () => {
+    renderTimeline({ compareIds: ['madrid'] });
+
+    expect(screen.getByRole('list', { name: 'Living phases' })).toHaveClass('is-comparing');
+  });
+
   it('tells the page which phase a card belongs to', () => {
     const props = renderTimeline();
     const lisbonCard = screen.getAllByRole('article').find((card) => within(card).queryByRole('heading', { name: 'Lisbon' }))!;

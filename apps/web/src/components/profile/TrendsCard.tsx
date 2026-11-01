@@ -38,6 +38,12 @@ function CurrencyBlock({ block, showCurrency }: { block: CurrencyTrend; showCurr
       {showCurrency && <h3 className="trends-block__currency">{block.currency}</h3>}
       <table className="trends-table">
         <caption className="visually-hidden">Average cost per month{showCurrency ? ` in ${block.currency}` : ''}</caption>
+        <colgroup>
+          <col className="trends-table__col-label" />
+          {headers.map((figure) => (
+            <col key={figure.windowMonths} className="trends-table__col-window" />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             <th scope="col" className="trends-table__corner">

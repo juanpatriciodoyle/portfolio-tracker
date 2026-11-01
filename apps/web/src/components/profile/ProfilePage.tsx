@@ -10,7 +10,9 @@ import { useTrends } from '../../hooks/useTrends';
 import { combineStatuses, type MutationResult } from '../../lib/apiErrors';
 import { vendorHistory } from './vendorHistory';
 import type { BillingView } from './billingView';
+import { MAX_COMPARED_PHASES, MIN_COMPARED_PHASES } from './comparisonTable';
 import PhaseComparison from './PhaseComparison';
+import PhaseComparisonTable from './PhaseComparisonTable';
 import OnboardingWizard from './OnboardingWizard';
 import PhaseWizard from './PhaseWizard';
 import type { PhasePayload } from './phaseForm';
@@ -80,7 +82,9 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
   const picked = compareIds
     .map((id) => entries.find((entry) => entry.phaseId === id))
     .filter((entry): entry is TimelineEntryDto => entry !== undefined);
-  const [from, to] = picked.length === 2 ? [...picked].sort((a, b) => a.startDate.localeCompare(b.startDate)) : [undefined, undefined];
+  // Two homes in different currencies need the server's exchange rates; every other choice reads straight from the timeline.
+  const needsConversion = picked.length === 2 && picked[0].currency !== picked[1].currency;
+  const [from, to] = needsConversion ? [...picked].sort((a, b) => a.startDate.localeCompare(b.startDate)) : [undefined, undefined];
   const comparison = usePhaseComparison(phasesApi.compare, from?.phaseId ?? null, to?.phaseId ?? null, entries);
 
   const editingPhase = editor?.mode === 'edit' ? (phases.find((phase) => phase.id === editor.phaseId) ?? null) : null;
@@ -96,7 +100,7 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
   };
 
   const toggleCompare = (phaseId: string) =>
-    setCompareIds((previous) => (previous.includes(phaseId) ? previous.filter((id) => id !== phaseId) : [...previous.slice(-1), phaseId]));
+    setCompareIds((previous) => (previous.includes(phaseId) ? previous.filter((id) => id !== phaseId) : [...previous.slice(-(MAX_COMPARED_PHASES - 1)), phaseId]));
 
   const submitPhase = async (payload: PhasePayload): Promise<MutationResult<unknown>> => {
     if (editor?.mode === 'edit') {
@@ -199,7 +203,7 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
                   <h2 className="profile-section__title" id="living-phases-heading">
                     Living phases
                   </h2>
-                  {phases.length > 1 && <p className="profile-section__hint">Pick two phases to compare them.</p>}
+                  {phases.length > 1 && <p className="profile-section__hint">Pick two to four phases to compare them.</p>}
                 </div>
                 {phases.length > 0 && !profileEmpty && (
                   <button type="button" className="profile-add-button" onClick={() => setEditor({ mode: 'create' })}>
@@ -221,6 +225,9 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
 
               {from && to && (
                 <PhaseComparison fromName={from.name} toName={to.name} state={comparison} onClose={() => setCompareIds([])} />
+              )}
+              {!needsConversion && picked.length >= MIN_COMPARED_PHASES && (
+                <PhaseComparisonTable entries={picked} onClose={() => setCompareIds([])} />
               )}
 
               {phases.length === 0 ? (

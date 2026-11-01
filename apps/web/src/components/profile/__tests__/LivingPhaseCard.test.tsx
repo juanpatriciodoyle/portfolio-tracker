@@ -41,7 +41,21 @@ describe('LivingPhaseCard at a glance', () => {
     expect(screen.getByText('Current')).toBeInTheDocument();
     expect(screen.getByText('Income').nextElementSibling?.nextElementSibling).toHaveTextContent('€3,200');
     expect(screen.getByText('Fixed costs').nextElementSibling?.nextElementSibling).toHaveTextContent('€1,500');
-    expect(container.querySelector('.phase-card__leftover')).toHaveTextContent('€1,700 left each month · 53% of income');
+    expect(container.querySelector('.phase-card__leftover')).toHaveTextContent('€1,700 left each month');
+    expect(screen.getByRole('button', { name: '53% saved' })).toBeInTheDocument();
+  });
+
+  it('keeps income and fixed costs behind the chip until it is pressed', () => {
+    renderCard();
+    const chip = screen.getByRole('button', { name: '53% saved' });
+
+    expect(chip).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Fixed costs')).not.toBeVisible();
+
+    fireEvent.click(chip);
+
+    expect(chip).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Fixed costs')).toBeVisible();
   });
 
   it('scales the bars against the larger of the two', () => {
@@ -59,11 +73,14 @@ describe('LivingPhaseCard at a glance', () => {
     const leftover = container.querySelector('.phase-card__leftover');
     expect(leftover).toHaveTextContent('€150 short each month');
     expect(leftover).toHaveClass('is-negative');
+    expect(screen.getByRole('button', { name: '-5% of income' })).toHaveClass('is-negative');
   });
 
   it('leaves the percentage out when there is no income to compare with', () => {
     const { container } = renderCard({ entry: makeEntry({ savingsRate: null }) });
 
+    expect(screen.queryByRole('button', { name: /saved|of income/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Per month' })).toBeInTheDocument();
     expect(container.querySelector('.phase-card__leftover')).not.toHaveTextContent('of income');
   });
 

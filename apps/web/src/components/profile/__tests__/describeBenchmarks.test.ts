@@ -6,82 +6,87 @@ import { describePhaseBenchmark, describeRefreshedAt, GAP_REASONS } from '../des
 const nameOf = (id: string) => ({ p0: 'Buenos Aires' })[id];
 const describeIt = (overrides = {}) => describePhaseBenchmark(makePhaseBenchmark(overrides), nameOf, 'en-GB');
 
-describe('income percentile wording', () => {
-  it('says "higher than about N of every 100" from the middle upwards, with basis, period and source', () => {
+describe('income percentile KPI', () => {
+  it('shows the percentile and the top share, with the method in the note', () => {
     const { income } = describeIt();
 
-    expect(income?.headline).toBe('Your household income is higher than about 89 of every 100 people in Spain.');
-    expect(income?.caption).toBe('per person, adjusted for household size · 2025 · Eurostat');
+    expect(income?.value).toBe('89th percentile');
+    expect(income?.sub).toBe('Top 11%');
+    expect(income?.note).toBe('Your household income compared with people in Spain, per person, adjusted for household size. 2025 · Eurostat');
   });
 
-  it('flips to "earn less than you" below the middle', () => {
+  it('flips to the bottom share below the middle', () => {
     const { income } = describeIt({ incomePercentile: { percentile: 30.4, bound: 'EXACT', period: '2026-Q1', source: 'INDEC', basis: 'PER_CAPITA' } });
 
-    expect(income?.headline).toBe('In Spain, about 30 of every 100 people earn less than you.');
-    expect(income?.caption).toBe('per person · 2026-Q1 · INDEC');
+    expect(income?.value).toBe('30th percentile');
+    expect(income?.sub).toBe('Bottom 30%');
+    expect(income?.note).toContain('per person. 2026-Q1 · INDEC');
   });
 
   it('does not claim precision beyond the published range', () => {
     const base = { period: '2025', source: 'EUROSTAT' as const, basis: 'EQUIVALISED' as const };
 
-    expect(describeIt({ incomePercentile: { ...base, percentile: 90, bound: 'AT_LEAST' } }).income?.headline).toContain('higher than at least 90 of every 100');
-    expect(describeIt({ incomePercentile: { ...base, percentile: 10, bound: 'AT_MOST' } }).income?.headline).toContain('higher than at most 10 of every 100');
+    expect(describeIt({ incomePercentile: { ...base, percentile: 90, bound: 'AT_LEAST' } }).income?.value).toBe('At least 90th percentile');
+    expect(describeIt({ incomePercentile: { ...base, percentile: 10, bound: 'AT_MOST' } }).income?.value).toBe('At most 10th percentile');
   });
 
-  it('rounds half up and labels the World Bank', () => {
+  it('rounds half up, uses the right ordinal and labels the World Bank', () => {
     const view = describeIt({ incomePercentile: { percentile: 50.5, bound: 'EXACT', period: '2024', source: 'WORLD_BANK', basis: 'PER_CAPITA' } });
 
-    expect(view.income?.headline).toContain('about 51 of every 100');
-    expect(view.income?.caption).toContain('World Bank');
+    expect(view.income?.value).toBe('51st percentile');
+    expect(view.income?.note).toContain('World Bank');
+    const ordinals = [2, 3, 11, 12, 13, 22].map((n) => describeIt({ incomePercentile: { percentile: n, bound: 'EXACT', period: '2024', source: 'WORLD_BANK', basis: 'PER_CAPITA' } }).income?.value);
+    expect(ordinals).toEqual(['2nd percentile', '3rd percentile', '11th percentile', '12th percentile', '13th percentile', '22nd percentile']);
+  });
+
+  it('never says "Top 0%" and leaves the ordinal off outside English', () => {
+    const top = { percentile: 99.8, bound: 'EXACT' as const, period: '2024', source: 'WORLD_BANK' as const, basis: 'PER_CAPITA' as const };
+
+    expect(describeIt({ incomePercentile: top }).income?.sub).toBe('Top 1%');
+    expect(describePhaseBenchmark(makePhaseBenchmark({ incomePercentile: top }), nameOf, 'es-ES').income?.value).toBe('100 percentile');
   });
 });
 
-describe('housing burden wording', () => {
-  it('shows both shares, the gap and the amount, with bars scaled to the larger share', () => {
+describe('housing burden KPI', () => {
+  it('shows the share against the typical one, and keeps the amount and sources in the note', () => {
     const { housing } = describeIt();
 
-    expect(housing?.headline).toBe('Housing takes 42.8% of your income. A typical household in Spain spends 16%.');
-    expect(housing?.detail).toBe('That is 26.8 points more than typical. Your housing costs come to €1,371 a month.');
-    expect(housing?.you).toEqual({ label: '42.8%', widthPercent: 100 });
-    expect(housing?.typical).toEqual({ label: '16%', widthPercent: 37 });
+    expect(housing?.value).toBe('42.8% housing burden');
+    expect(housing?.sub).toBe('vs. 16% typical');
+    expect(housing?.note).toBe(
+      'Rent, utilities and property taxes come to €1,371 a month. A typical household in Spain spends 16%. 2025 · Eurostat'
+    );
     expect(housing?.verdict).toBe('HIGHER');
-    expect(housing?.caption).toBe('Rent, utilities and property taxes · 2025 · Eurostat');
   });
 
-  it('words LOWER and SIMILAR', () => {
+  it('keeps the verdict for LOWER and SIMILAR', () => {
     const base = { housingMonthlyMinor: 30000, typicalSharePercent: 16, period: '2025', source: 'EUROSTAT' as const };
 
-    expect(describeIt({ housingBurden: { ...base, yourSharePercent: 10.2, differencePoints: -5.8, verdict: 'LOWER' } }).housing?.detail).toContain('5.8 points less than typical');
-    expect(describeIt({ housingBurden: { ...base, yourSharePercent: 17, differencePoints: 1, verdict: 'SIMILAR' } }).housing?.detail).toContain('About the same as a typical household.');
-  });
-
-  it('keeps bar widths sane for tiny shares', () => {
-    const { housing } = describeIt({
-      housingBurden: { housingMonthlyMinor: 0, yourSharePercent: 0, typicalSharePercent: 0, differencePoints: 0, verdict: 'SIMILAR', period: '2025', source: 'EUROSTAT' },
-    });
-
-    expect(housing?.you.widthPercent).toBe(0);
-    expect(housing?.typical.widthPercent).toBe(0);
+    expect(describeIt({ housingBurden: { ...base, yourSharePercent: 10.2, differencePoints: -5.8, verdict: 'LOWER' } }).housing?.verdict).toBe('LOWER');
+    expect(describeIt({ housingBurden: { ...base, yourSharePercent: 17, differencePoints: 1, verdict: 'SIMILAR' } }).housing?.verdict).toBe('SIMILAR');
   });
 });
 
-describe('purchasing power wording', () => {
-  it('names the unit, the previous phase and the national average', () => {
+describe('purchasing power KPI', () => {
+  it('leads with the ratio to the national average and explains the unit in the note', () => {
     const { purchasingPower } = describeIt();
 
-    expect(purchasingPower?.headline).toBe('Your income buys about $5,604 a month at world-average prices.');
-    expect(purchasingPower?.comparisons).toEqual(['That is 1.59x what you had in Buenos Aires.', 'About 1.4x the average person in Spain.']);
-    expect(purchasingPower?.unitNote).toMatch(/not real money/);
-    expect(purchasingPower?.caption).toBe('2025 · World Bank');
+    expect(purchasingPower?.value).toBe('1.4x purchasing power');
+    expect(purchasingPower?.sub).toBe('vs. the average person in Spain');
+    expect(purchasingPower?.note).toContain('about $5,604 a month at world-average prices');
+    expect(purchasingPower?.note).toMatch(/not real money/);
+    expect(purchasingPower?.note).toContain('That is 1.59x what you had in Buenos Aires.');
+    expect(purchasingPower?.note).toContain('2025 · World Bank');
   });
 
-  it('shows ratios below one and skips comparisons it cannot name or does not have', () => {
-    const power = { internationalDollarsPerMonth: 100, period: '2025', source: 'WORLD_BANK' as const };
+  it('falls back to the dollar figure without a national average, and skips a previous phase it cannot name', () => {
+    const power = { internationalDollarsPerMonth: 100, period: '2025', source: 'WORLD_BANK' as const, versusNationalAverage: null };
 
-    expect(describeIt({ purchasingPower: { ...power, versusPreviousPhase: { phaseId: 'p0', ratio: 0.63 }, versusNationalAverage: null } }).purchasingPower?.comparisons).toEqual([
-      'That is 0.63x what you had in Buenos Aires.',
-    ]);
-    expect(describeIt({ purchasingPower: { ...power, versusPreviousPhase: { phaseId: 'unknown', ratio: 2 }, versusNationalAverage: null } }).purchasingPower?.comparisons).toEqual([]);
+    const named = describeIt({ purchasingPower: { ...power, versusPreviousPhase: { phaseId: 'p0', ratio: 0.63 } } }).purchasingPower;
+    expect(named?.value).toBe('$100 a month');
+    expect(named?.sub).toBe('at world-average prices');
+    expect(named?.note).toContain('That is 0.63x what you had in Buenos Aires.');
+    expect(describeIt({ purchasingPower: { ...power, versusPreviousPhase: { phaseId: 'unknown', ratio: 2 } } }).purchasingPower?.note).not.toContain('what you had in');
   });
 });
 
