@@ -174,3 +174,37 @@ describe('HoldingsTable Component', () => {
     expect(screen.getByText(/No holdings in portfolio yet/i)).toBeInTheDocument();
   });
 });
+
+describe('HoldingsTable omnibox search', () => {
+  const positions: PositionItem[] = [
+    { id: 'a', symbol: 'AAPL', name: 'Apple Inc.', assetClass: 'Stock', region: 'North America', sector: 'Technology', quantity: 1, investedAmount: 100, currentValue: 120 },
+    { id: 'b', symbol: 'SAN.MC', name: 'Banco Santander', assetClass: 'Stock', region: 'Europe', sector: 'Financials', quantity: 1, investedAmount: 100, currentValue: 110 },
+  ];
+  const renderTable = () => render(<HoldingsTable positions={positions} soldAssets={[]} netWorth={230} />);
+  const search = (value: string) =>
+    fireEvent.change(screen.getByRole('searchbox', { name: /search holdings/i }), { target: { value } });
+
+  it('filters by ticker, name and sector with one input', () => {
+    renderTable();
+    search('aapl');
+    expect(screen.getByText('Apple Inc.')).toBeInTheDocument();
+    expect(screen.queryByText('Banco Santander')).not.toBeInTheDocument();
+
+    search('santander');
+    expect(screen.getByText('Banco Santander')).toBeInTheDocument();
+    expect(screen.queryByText('Apple Inc.')).not.toBeInTheDocument();
+
+    search('financ');
+    expect(screen.getByText('Banco Santander')).toBeInTheDocument();
+    expect(screen.queryByText('Apple Inc.')).not.toBeInTheDocument();
+  });
+
+  it('shows a no-match message and restores all rows when cleared', () => {
+    renderTable();
+    search('zzz');
+    expect(screen.getByText(/No holdings match/i)).toBeInTheDocument();
+    search('');
+    expect(screen.getByText('Apple Inc.')).toBeInTheDocument();
+    expect(screen.getByText('Banco Santander')).toBeInTheDocument();
+  });
+});

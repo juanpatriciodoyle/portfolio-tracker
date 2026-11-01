@@ -32,20 +32,17 @@ describe('CashBalancesTable Component', () => {
       />
     );
 
-    // Section title
     expect(screen.getByText('Cash')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
 
-    // Row 1: USD
-    expect(screen.getByText('US Dollar')).toBeInTheDocument();
     expect(screen.getByText('USD')).toBeInTheDocument();
     expect(screen.getByText('$3,141.05')).toBeInTheDocument();
-    expect(screen.getByText('€2,708.73')).toBeInTheDocument();
+    // Only a foreign currency shows its worth in the reporting currency
+    expect(screen.getByText('≈ €2,708.73')).toBeInTheDocument();
 
-    // Row 2: EUR
-    expect(screen.getByText('Euro')).toBeInTheDocument();
     expect(screen.getByText('EUR')).toBeInTheDocument();
-    // Using getAllByText for €985.86 since it appears in both native and reporting currency columns
-    expect(screen.getAllByText('€985.86').length).toBe(2);
+    expect(screen.getAllByText('€985.86')).toHaveLength(1);
   });
 
   it('should fallback to single base cash balance when multi-currency breakdown is not provided', () => {
@@ -57,9 +54,8 @@ describe('CashBalancesTable Component', () => {
       />
     );
 
-    expect(screen.getByText('Euro')).toBeInTheDocument();
     expect(screen.getByText('EUR')).toBeInTheDocument();
-    expect(screen.getAllByText('€1,500.00').length).toBe(2);
+    expect(screen.getAllByText('€1,500.00')).toHaveLength(1);
   });
 
   it('should render clean empty state when there is 0 uninvested cash', () => {

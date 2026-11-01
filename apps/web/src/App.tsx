@@ -7,6 +7,7 @@ import InflationSettingsModal from './components/InflationSettingsModal';
 import TransactionHistoryTable from './components/TransactionHistoryTable';
 import ReportingPeriodBar from './components/ReportingPeriodBar';
 import PortfolioChart from './components/PortfolioChart';
+import KpiRow from './components/KpiRow';
 import PerformanceAnalysisGrid from './components/PerformanceAnalysisGrid';
 import HoldingsTable, { type PositionItem, type SoldAssetItem } from './components/HoldingsTable';
 import CashBalancesTable, { type CashBalanceItem } from './components/CashBalancesTable';
@@ -325,6 +326,18 @@ function App() {
             />
           </div>
 
+          {/* Primary KPI row */}
+          <KpiRow
+            netWorth={stats.netWorth}
+            cashBalance={stats.cashBalance}
+            soldProfit={stats.soldProfit}
+            returnEuros={activeProfitEuros}
+            returnPercent={activeRoiPercent}
+            isRealInflationMode={isRealInflationMode}
+            country={stats.country}
+            currency={stats.baseCurrency || 'EUR'}
+          />
+
           {/* Interactive Multi-Mode Portfolio Chart */}
           <PortfolioChart
             data={chartData}
@@ -334,13 +347,7 @@ function App() {
             userCashBalance={stats.cashBalance}
           />
 
-          {/* Performance Analysis Metric Grid (8 Tiles) */}
-          <PerformanceAnalysisGrid
-            stats={stats}
-            historyData={chartData}
-            period={period}
-            isRealInflationMode={isRealInflationMode}
-          />
+          <PerformanceAnalysisGrid stats={stats} isRealInflationMode={isRealInflationMode} />
 
           {/* Holdings Breakdown Table */}
           <HoldingsTable
@@ -351,17 +358,11 @@ function App() {
             isRealInflationMode={isRealInflationMode}
           />
 
-          {/* Cash Balances Table */}
+          {/* Compact cash row */}
           <CashBalancesTable
             cashBalances={stats.cashBalances}
             cashBalance={stats.cashBalance}
             reportingCurrency={stats.baseCurrency || 'EUR'}
-          />
-
-          {/* Performance Breakdown (Bar Chart & Monthly Heatmap) */}
-          <PerformanceBreakdown
-            currency={stats.baseCurrency || 'EUR'}
-            userId={user?.id}
           />
 
           {/* Portfolio Allocation Breakdown (Donut Chart & Interactive Legend) */}
@@ -373,45 +374,11 @@ function App() {
             currency={stats.baseCurrency || 'EUR'}
           />
 
-          {/* Metric Overview Cards (3 Cards) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '16px' }}>
-            {/* Card 1: Net Worth */}
-            <div style={cardStyle}>
-              <div style={cardHeaderStyle}>
-                <span>Net Worth</span>
-              </div>
-              <div style={cardValueStyle}>€{stats.netWorth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>
-                Cash: €{stats.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-            </div>
-
-            {/* Card 2: Profit from Sold Assets */}
-            <div style={cardStyle}>
-              <div style={cardHeaderStyle}>
-                <span>Profit from Sold Assets</span>
-              </div>
-              <div style={{ ...cardValueStyle, color: stats.soldProfit >= 0 ? '#10B981' : '#F43F5E' }}>
-                {stats.soldProfit >= 0 ? '+' : ''}€{stats.soldProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>
-                Total earnings locked from closed trades
-              </div>
-            </div>
-
-            {/* Card 3: All-Time Return */}
-            <div style={cardStyle}>
-              <div style={cardHeaderStyle}>
-                <span>All-Time Return</span>
-              </div>
-              <div style={{ ...cardValueStyle, color: activeProfitEuros >= 0 ? '#10B981' : '#F43F5E' }}>
-                {activeProfitEuros >= 0 ? '+' : ''}€{activeProfitEuros.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-              <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>
-                Return: {activeRoiPercent >= 0 ? '+' : ''}{activeRoiPercent.toFixed(2)}% {isRealInflationMode ? `(${stats.country} inflation adj.)` : '(standard)'}
-              </div>
-            </div>
-          </div>
+          {/* Performance Breakdown (Bar Chart & Monthly Heatmap) */}
+          <PerformanceBreakdown
+            currency={stats.baseCurrency || 'EUR'}
+            userId={user?.id}
+          />
 
           {/* Transaction History Log Table */}
           <TransactionHistoryTable key={tableKey} userId={user?.id} />
@@ -440,34 +407,5 @@ function App() {
     </div>
   );
 }
-
-const cardStyle = {
-  backgroundColor: 'var(--bg-card)',
-  border: 'var(--border-card)',
-  borderRadius: '14px',
-  padding: '20px',
-  display: 'flex',
-  flexDirection: 'column' as const,
-  justifyContent: 'space-between',
-};
-
-const cardHeaderStyle = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  fontSize: '12px',
-  fontWeight: 600,
-  color: 'var(--text-secondary)',
-  textTransform: 'uppercase' as const,
-  letterSpacing: '0.5px',
-};
-
-const cardValueStyle = {
-  fontSize: '24px',
-  fontWeight: 700,
-  color: 'var(--text-heading)',
-  letterSpacing: '-0.5px',
-  marginTop: '10px',
-};
 
 export default App;

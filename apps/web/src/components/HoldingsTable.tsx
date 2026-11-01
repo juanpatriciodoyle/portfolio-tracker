@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Columns3, HelpCircle, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Columns3, HelpCircle, X, ChevronUp, ChevronDown, Search } from 'lucide-react';
 import { formatCurrency } from '../data/sampleChartData';
+import { matchesHoldingsQuery } from '../lib/holdingsSearch';
 
 export interface PositionItem {
   id: string;
@@ -61,6 +62,7 @@ interface TableHoldingRow {
   security_name: string;
   symbol: string;
   assetClass: string;
+  sector: string;
   position: number;
   holding_period: number;
   net_cash_invested: number;
@@ -83,6 +85,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   const [sortKey, setSortKey] = useState<SortKey>('allocation');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showClosed, setShowClosed] = useState(false);
+  const [query, setQuery] = useState('');
   const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
@@ -140,6 +143,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
         security_name: p.name || p.symbol,
         symbol: p.symbol,
         assetClass: p.assetClass || 'Stock',
+        sector: p.sector || '',
         position: quantity,
         holding_period: p.holdingDays || 1,
         net_cash_invested: invested,
@@ -167,6 +171,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
           security_name: s.symbol,
           symbol: s.symbol,
           assetClass: s.assetClass || 'Stock',
+          sector: s.sector || '',
           position: 0,
           holding_period: s.holdingDays || 1,
           net_cash_invested: invested,
@@ -181,8 +186,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
       });
     }
 
-    // Sort rows
-    return rows.sort((a, b) => {
+    // Search then sort rows
+    return rows.filter((row) => matchesHoldingsQuery({ symbol: row.symbol, name: row.security_name, sector: row.sector }, query)).sort((a, b) => {
       let valA = a[sortKey];
       let valB = b[sortKey];
 
@@ -194,7 +199,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
       const numB = Number(valB) || 0;
       return sortDirection === 'asc' ? numA - numB : numB - numA;
     });
-  }, [positions, soldAssets, netWorth, showClosed, sortKey, sortDirection, isRealInflationMode]);
+  }, [positions, soldAssets, netWorth, showClosed, sortKey, sortDirection, isRealInflationMode, query]);
 
   // Logo fallback badge helper
   const renderSecurityLogo = (name: string, symbol: string, assetClass: string) => {
@@ -237,6 +242,18 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
         {/* Header */}
         <div className="dashboard-panel-header">
           <h2 className="dashboard-panel-title">Holdings</h2>
+
+          <label className="holdings-search">
+            <Search size={14} aria-hidden="true" />
+            <input
+              type="search"
+              className="holdings-search__input"
+              placeholder="Search ticker, name or industry"
+              aria-label="Search holdings"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </label>
 
           <div className="dashboard-table-column-menu" ref={columnMenuRef}>
             <button
@@ -512,8 +529,14 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       className="dashboard-table__cell dashboard-table__cell--empty"
                       style={{ textAlign: 'center', padding: '36px 16px', color: '#71717A' }}
                     >
-                      No holdings in portfolio yet. Click <strong>Log Transaction</strong> above to record your first
-                      position.
+                      {query.trim() ? (
+                        'No holdings match your search.'
+                      ) : (
+                        <>
+                          No holdings in portfolio yet. Click <strong>Log Transaction</strong> above to record your first
+                          position.
+                        </>
+                      )}
                     </td>
                   </tr>
                 ) : (

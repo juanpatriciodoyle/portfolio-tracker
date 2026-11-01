@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { History, ArrowUpRight, ArrowDownLeft, PlusCircle, MinusCircle, Search, Filter } from 'lucide-react';
 import { authorizedFetch } from '../lib/authorizedFetch';
+import { paginate } from '../lib/pagination';
+
+const PAGE_SIZE = 5;
 
 export interface TransactionLog {
   id: string;
@@ -26,6 +29,7 @@ export default function TransactionHistoryTable({ userId }: TransactionHistoryTa
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<string>('ALL');
+  const [pageIndex, setPageIndex] = useState(0);
 
   const fetchTransactions = async () => {
     try {
@@ -45,7 +49,9 @@ export default function TransactionHistoryTable({ userId }: TransactionHistoryTa
     fetchTransactions();
   }, [userId]);
 
-  const filtered = transactions.filter((tx) => {
+  const filtered = [...transactions]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .filter((tx) => {
     const matchesSearch =
       tx.symbol.toLowerCase().includes(search.toLowerCase()) ||
       tx.region.toLowerCase().includes(search.toLowerCase()) ||
@@ -53,6 +59,7 @@ export default function TransactionHistoryTable({ userId }: TransactionHistoryTa
     const matchesType = filterType === 'ALL' || tx.type === filterType;
     return matchesSearch && matchesType;
   });
+  const page = paginate(filtered, pageIndex, PAGE_SIZE);
 
   const getTypeBadge = (type: string) => {
     switch (type) {
@@ -131,7 +138,10 @@ export default function TransactionHistoryTable({ userId }: TransactionHistoryTa
               type="text"
               placeholder="Search symbol, region, sector..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPageIndex(0);
+              }}
               style={{
                 padding: '8px 12px 8px 34px',
                 borderRadius: '8px',
@@ -150,7 +160,10 @@ export default function TransactionHistoryTable({ userId }: TransactionHistoryTa
             <Filter size={14} color="var(--text-secondary)" style={{ position: 'absolute', left: '10px' }} />
             <select
               value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
+              onChange={(e) => {
+                setFilterType(e.target.value);
+                setPageIndex(0);
+              }}
               style={{
                 padding: '8px 12px 8px 30px',
                 borderRadius: '8px',
@@ -193,7 +206,7 @@ export default function TransactionHistoryTable({ userId }: TransactionHistoryTa
               </tr>
             </thead>
             <tbody>
-              {filtered.map((tx) => (
+              {page.items.map((tx) => (
                 <tr key={tx.id} style={{ borderBottom: '1px solid var(--border-divider-color)' }}>
                   <td style={{ padding: '12px 14px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
                     {new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -215,6 +228,20 @@ export default function TransactionHistoryTable({ userId }: TransactionHistoryTa
             </tbody>
           </table>
         </div>
+      )}
+
+      {!loading && page.pageCount > 1 && (
+        <nav aria-label="Transaction history pages" className="history-pager">
+          <button type="button" className="dashboard-flat-button" disabled={!page.hasPrevious} onClick={() => setPageIndex(page.page - 1)}>
+            Previous
+          </button>
+          <span className="history-pager__status">
+            Page {page.page + 1} of {page.pageCount}
+          </span>
+          <button type="button" className="dashboard-flat-button" disabled={!page.hasNext} onClick={() => setPageIndex(page.page + 1)}>
+            Next
+          </button>
+        </nav>
       )}
     </div>
   );

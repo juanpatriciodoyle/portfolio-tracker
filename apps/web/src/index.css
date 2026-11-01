@@ -671,7 +671,7 @@ select:disabled {
 
 .metric-grid--performance-analysis {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 1px;
   background-color: var(--border-subtle-color);
   border-radius: 12px;
@@ -1537,3 +1537,95 @@ select:disabled {
   padding: 32px 16px;
   text-align: center;
 }
+
+/* Primary KPI row */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.kpi-row__tile {
+  border: 1px solid var(--border-subtle-color);
+  border-radius: 12px;
+  gap: 6px;
+}
+.kpi-row__value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--text-heading);
+}
+.kpi-row__note {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+@media (max-width: 720px) {
+  .kpi-row { grid-template-columns: 1fr; }
+}
+
+/* Compact cash row */
+.cash-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.cash-row__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.cash-row__empty { font-size: 13px; color: var(--text-secondary); }
+.cash-row__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cash-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-subtle-color);
+  border-radius: 999px;
+  background-color: var(--bg-tile);
+  font-size: 13px;
+}
+.cash-pill__currency { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+.cash-pill__amount { font-weight: 600; color: var(--text-heading); }
+.cash-pill__converted { font-size: 12px; color: var(--text-secondary); }
+
+/* Holdings search & history pager */
+.holdings-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 6px 12px;
+  border: 1px solid var(--border-subtle-color);
+  border-radius: 8px;
+  background-color: var(--bg-input);
+  color: var(--text-secondary);
+}
+.holdings-search__input {
+  width: 220px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.history-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.history-pager__status { font-size: 13px; color: var(--text-secondary); }
+.history-pager button:disabled { opacity: 0.4; cursor: default; }
