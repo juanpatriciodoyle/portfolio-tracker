@@ -15,7 +15,8 @@ import AllocationBreakdown from './components/AllocationBreakdown';
 import ProfilePage from './components/profile/ProfilePage';
 import { PROFILE_PATH, useHashRoute } from './hooks/useHashRoute';
 import { type ChartDataPoint, type ReportingPeriod, type DateRange } from './data/sampleChartData';
-import { authorizedFetch } from './lib/authorizedFetch';
+import { authorizedFetch, readAuthToken } from './lib/authorizedFetch';
+import { endGuestSession } from './lib/guestSession';
 
 interface User {
   id: string;
@@ -139,6 +140,8 @@ function App() {
   }, [user]);
 
   const handleLogout = () => {
+    // The guest's reset needs the token: read it first, then drop it so signing out is instant.
+    void endGuestSession(user, readAuthToken());
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
     setUser(null);

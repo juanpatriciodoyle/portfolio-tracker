@@ -8,7 +8,8 @@ import { hashUserIdentity } from './lib/privacy';
 import { assertJwtSecretConfigured, generateToken } from './lib/auth';
 import { getPasskeyOptions, verifyPasskeyCredential } from './lib/passkey';
 import { searchMarketTickers } from './lib/financialFetcher';
-import { ensureDemoUserWithData } from './lib/demoSeed';
+import { ensureDemoUserWithData, isDemoUserId, resetDemoUser } from './lib/demoSeed';
+import { createDemoRouter } from './routes/demo';
 import { mountProfileFeature } from './routes/profileFeature';
 import { scheduleBenchmarkRefresh } from './infrastructure/benchmarks/refreshSchedule';
 import { createPortfolioRouter } from './routes/portfolio';
@@ -26,6 +27,9 @@ const { benchmarkRefresher } = mountProfileFeature(app, { env: process.env, pris
 
 // The original portfolio endpoints; every one acts for the bearer-token holder only.
 app.use('/api', createPortfolioRouter(createPrismaPortfolioDeps(db)));
+
+// Guest mode ("Sneak peek" as Joe): ephemeral, wiped on sign-out and before every new guest session.
+app.use('/api', createDemoRouter({ restore: resetDemoUser, isGuestAccount: isDemoUserId }));
 
 const PORT = process.env.PORT || 3000;
 
@@ -53,7 +57,7 @@ app.get('/api/market/search', async (req: Request, res: Response) => {
     return res.json(results);
   } catch (error) {
     console.error('Market search error:', error);
-    return res.status(500).json({ error: 'Market search failed.' });
+    return res.status(500).json({ error: 'Ticker search is unavailable right now. Try again in a moment, or type the symbol yourself.' });
   }
 });
 
@@ -81,12 +85,12 @@ app.post('/api/auth/google', async (req: Request, res: Response) => {
         }
       } catch (verifyErr) {
         console.error('Failed to verify Google ID token:', verifyErr);
-        return res.status(401).json({ error: 'Invalid Google authentication token.' });
+        return res.status(401).json({ error: 'Google could not confirm your sign-in. Try signing in again.' });
       }
     }
 
     if (!email && !googleId) {
-      return res.status(400).json({ error: 'Google authentication requires valid email or Google ID.' });
+      return res.status(400).json({ error: 'Google did not share an email with us. Try signing in again.' });
     }
 
     const rawId = email || googleId;
@@ -123,7 +127,7 @@ app.post('/api/auth/google', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Google Auth Error:', error);
-    return res.status(500).json({ error: 'Internal server error during Google Sign-In.' });
+    return res.status(500).json({ error: 'Google sign-in failed on our side. Try again in a moment, or sign in with a passkey.' });
   }
 });
 
@@ -132,13 +136,13 @@ app.post('/api/auth/passkey/generate-options', async (req: Request, res: Respons
   try {
     const { email } = req.body;
     if (!email) {
-      return res.status(400).json({ error: 'Email required to generate Passkey options.' });
+      return res.status(400).json({ error: 'Enter your email so we can find your passkey.' });
     }
     const data = await getPasskeyOptions(email);
     return res.json(data);
   } catch (error) {
     console.error('Passkey options error:', error);
-    return res.status(500).json({ error: 'Failed to generate Passkey challenge.' });
+    return res.status(500).json({ error: 'Could not start the passkey prompt. Try again in a moment.' });
   }
 });
 
@@ -147,7 +151,7 @@ app.post('/api/auth/passkey/verify', async (req: Request, res: Response) => {
   try {
     const { email, credential } = req.body;
     if (!email || !credential) {
-      return res.status(400).json({ error: 'Email and Passkey credential required.' });
+      return res.status(400).json({ error: 'Enter your email and confirm the passkey prompt to sign in.' });
     }
 
     const user = await verifyPasskeyCredential(email, credential);
@@ -170,30 +174,7 @@ app.post('/api/auth/passkey/verify', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('Passkey Verification Error:', error);
-    return res.status(400).json({ error: error.message || 'Passkey verification failed.' });
-  }
-});
-
-// POST /api/auth/demo - Sneak peek demo account login
-app.post('/api/auth/demo', async (req: Request, res: Response) => {
-  try {
-    const demoUser = await ensureDemoUserWithData();
-    const token = generateToken(demoUser.id);
-
-    return res.status(200).json({
-      success: true,
-      token,
-      user: {
-        id: demoUser.id,
-        email: demoUser.email || 'demo@portfolio.local',
-        name: 'Joe',
-        avatarUrl: demoUser.avatarUrl,
-        country: demoUser.country,
-      },
-    });
-  } catch (error) {
-    console.error('Demo Auth Error:', error);
-    return res.status(500).json({ error: 'Failed to initialize demo portfolio.' });
+    return res.status(400).json({ error: error.message || 'The passkey could not be verified. Try again, or sign in another way.' });
   }
 });
 

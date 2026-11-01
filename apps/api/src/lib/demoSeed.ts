@@ -4,6 +4,36 @@ import { syncCountryInflationHistory } from './inflationService';
 
 export const DEMO_USER_EMAIL = 'demo@portfolio.local';
 
+/**
+ * Erases everything the guest account owns and puts Joe's profile settings back, so the next
+ * `ensureDemoUserWithData` re-seeds the default portfolio. The account row keeps its id, so a
+ * token already issued to a guest stays valid. Child rows (living phases, bills, fixed costs,
+ * profile) go with `onDelete: Cascade` or are listed here.
+ */
+export async function resetDemoUser() {
+  const existing = await db.user.findUnique({ where: { email: DEMO_USER_EMAIL } });
+  if (existing) {
+    await db.$transaction([
+      db.transaction.deleteMany({ where: { userId: existing.id } }),
+      db.position.deleteMany({ where: { userId: existing.id } }),
+      db.realizedGain.deleteMany({ where: { userId: existing.id } }),
+      db.livingPhase.deleteMany({ where: { userId: existing.id } }),
+      db.billingRecord.deleteMany({ where: { userId: existing.id } }),
+      db.userProfile.deleteMany({ where: { userId: existing.id } }),
+      db.user.update({
+        where: { id: existing.id },
+        data: { name: 'Joe', country: 'Spain', baseCurrency: 'EUR', cashBalance: 24500.0, annualInflationRate: 2.8 },
+      }),
+    ]);
+  }
+  return ensureDemoUserWithData();
+}
+
+export async function isDemoUserId(userId: string): Promise<boolean> {
+  const user = await db.user.findUnique({ where: { id: userId }, select: { email: true } });
+  return user?.email === DEMO_USER_EMAIL;
+}
+
 export async function ensureDemoUserWithData() {
   // 1. Ensure Demo user exists with realistic fake name
   let user = await db.user.findUnique({
