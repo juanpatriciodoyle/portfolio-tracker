@@ -206,3 +206,26 @@ describe('defaultCapitalRequiredPercentage', () => {
     expect(DEFAULT_CAPITAL_REQUIRED_PERCENTAGE).toEqual({ PROPERTY: 30, SABBATICAL: 100, VENTURE: 100, CUSTOM: 100 });
   });
 });
+
+describe('wealthMilestones with another yield', () => {
+  it('uses the yield for the salary, the capital each milestone needs and the target', () => {
+    const result = wealthMilestones({ capitalMinor: 24_000_000, costsByCategoryMinor: MADRID, annualYield: 0.03 });
+
+    expect(result.secondSalaryMinor).toBe(secondSalaryMinor(24_000_000, 0.03));
+    expect(result.milestones[1].capitalNeededMinor).toBe(capitalNeededMinor(90_000, 0.03));
+    expect(result.target.maxCapitalNeededMinor).toBe(capitalNeededMinor(SECOND_SALARY_TARGET_MAX_MINOR, 0.03));
+  });
+
+  it('does not change the costs it was given', () => {
+    const before = { ...MADRID };
+    wealthMilestones({ capitalMinor: 1, costsByCategoryMinor: MADRID });
+
+    expect(MADRID).toEqual(before);
+  });
+
+  it('gives the same answer for the same input', () => {
+    const input = { capitalMinor: 12_345_678, costsByCategoryMinor: MADRID };
+
+    expect(wealthMilestones(input)).toEqual(wealthMilestones(input));
+  });
+});

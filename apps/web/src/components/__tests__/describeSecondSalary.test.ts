@@ -8,13 +8,13 @@ describe('describeSecondSalary', () => {
   it('shows the second salary as a badge', () => {
     expect(describeIt().badge).toBe('Second Salary: €1,000 / month');
     expect(describeIt({ secondSalaryMinor: 123_456 }).badge).toBe('Second Salary: €1,234.56 / month');
-    expect(describeIt({ secondSalaryMinor: 0 }).badge).toBe('Second Salary: €0 / month');
+    expect(describeIt({ secondSalaryMinor: 0 }).badge).toBe('Second Salary: your first investment starts it');
   });
 
   it.each([
     [1, 'Covers 100% of your utilities & subscriptions.'],
     [2, 'Covers 100% of your rent.'],
-    [3, '100% Living Cost Autonomy (Your capital matches your burn).'],
+    [3, '100% Living Cost Autonomy (Your capital covers your monthly living costs).'],
   ] as const)('says what milestone %i means', (reachedMilestone, subtext) => {
     expect(describeIt({ reachedMilestone }).subtext).toBe(subtext);
   });
@@ -22,6 +22,11 @@ describe('describeSecondSalary', () => {
   it('says how far the nearest milestone is when none is reached', () => {
     const milestones = makeSecondSalary().milestones.map((milestone) => ({ ...milestone, reached: false, progress: milestone.id === 1 ? 0.456 : 0.1 }));
     expect(describeIt({ reachedMilestone: null, milestones }).subtext).toBe('45% of the way to covering your utilities & subscriptions.');
+  });
+
+  it('encourages the first step instead of showing 0%', () => {
+    const milestones = makeSecondSalary().milestones.map((milestone) => ({ ...milestone, reached: false, progress: 0 }));
+    expect(describeIt({ reachedMilestone: null, milestones }).subtext).toBe('Every euro invested moves you toward covering your utilities & subscriptions.');
   });
 
   it('never rounds an unreached milestone up to 100%', () => {

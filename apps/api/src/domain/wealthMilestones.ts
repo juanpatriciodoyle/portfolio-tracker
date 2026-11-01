@@ -80,7 +80,7 @@ function milestoneCosts(byCategory: Readonly<Record<FixedCostCategory, number>>)
 
 /**
  * Turns capital into the monthly income it could sustain (the "second salary") and measures it against what
- * life costs: the utilities and subscriptions, the rent, and the whole monthly burn. Pure: the same capital
+ * life costs: the utilities and subscriptions, the rent, and the whole of the monthly costs. Pure: the same capital
  * and costs always give the same answer.
  *
  * `costsByCategoryMinor` is the monthly cost per category, in the same currency as the capital; null when no

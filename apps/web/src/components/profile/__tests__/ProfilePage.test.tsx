@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { ENCRYPTION_NOT_CONFIGURED, type BillingRecordDto, type LivingPhaseDto, type ProfileData, type TimelineEntryDto } from '../../../contracts';
 import * as client from '../../../lib/apiClient';
 import { ApiError, type RequestOptions } from '../../../lib/apiClient';
-import { makeBill, makeEntry, makePhase, makeProfile } from '../../../test/fixtures';
+import { makeBill, makeCapitalHorizon, makeEntry, makePhase, makeProfile, makeSecondSalary } from '../../../test/fixtures';
 import { chooseCountry, clickContinue } from '../../../test/wizardHelpers';
 import ProfilePage from '../ProfilePage';
 
@@ -65,6 +65,8 @@ function serve(initial: Partial<World> = {}) {
     if (key === '/api/profile') return world.profile;
     if (key === '/api/living-phases') return { phases: world.phases };
     if (key === '/api/living-phases/timeline') return { asOf: '2026-10-31', entries: world.entries };
+    if (key === '/api/insights/second-salary') return makeSecondSalary();
+    if (key === '/api/insights/capital-horizon') return makeCapitalHorizon();
     if (key === 'POST /api/living-phases') return { id: 'new-phase' };
     if (key === '/api/billing-records') return { records: world.records };
     if (key === 'POST /api/billing-records') return { id: 'new-bill' };
@@ -455,6 +457,29 @@ describe('ProfilePage bills', () => {
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(billLoads()).toBe(2));
+  });
+});
+
+describe('ProfilePage goals', () => {
+  it('leads the page with the second salary and the capital horizon, above the living phases', async () => {
+    serve();
+    renderPage();
+
+    const badge = await screen.findByRole('heading', { name: /^Second Salary:/ });
+    const horizon = await screen.findByRole('region', { name: 'Capital horizon' });
+    const phases = screen.getByRole('heading', { name: 'Living phases' });
+
+    expect(badge.compareDocumentPosition(phases) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(horizon.compareDocumentPosition(phases) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows no goals before the first home and profile exist', async () => {
+    serve({ profile: makeProfile({ fullName: null, birthYear: null, nationalities: [], taxResidence: null, employmentStatus: null }), phases: [], entries: [] });
+    renderPage();
+
+    await screen.findByRole('button', { name: 'Tell us about yourself' });
+
+    expect(screen.queryByRole('heading', { name: /^Second Salary:/ })).not.toBeInTheDocument();
   });
 });
 

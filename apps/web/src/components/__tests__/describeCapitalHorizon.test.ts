@@ -25,11 +25,12 @@ describe('describeCapitalMilestone', () => {
     expect(describeIt({ capitalRequiredPercentage: 100, capitalNeededMinor: 35_000_000 }).subtext).toMatch(/^€350,000 capital target \(100% requirement\)/);
   });
 
-  it('does not promise a date when the surplus cannot close the gap', () => {
+  it('does not promise a date when the surplus cannot close the gap, and says what unlocks it', () => {
     const view = describeIt({ monthsRemaining: null }, { monthlySurplusMinor: 0 });
-    expect(view.badge).toBe('Property Down Payment: no date yet');
-    expect(view.subtext).toBe('€105,000 capital target (30% requirement) · Nothing is left over each month, so there is no date yet.');
-    expect(describeIt({ monthsRemaining: null }, { monthlySurplusMinor: -5_000 }).subtext).toMatch(/Spending is above income/);
+    expect(view.badge).toBe('Property Down Payment: your date starts with your first monthly surplus');
+    expect(view.subtext).toBe('€105,000 capital target (30% requirement) · Set aside a monthly surplus and your date appears here.');
+    expect(describeIt({ monthsRemaining: null }, { monthlySurplusMinor: -5_000 }).subtext).toBe(view.subtext);
+    expect(view.subtext).not.toMatch(/above income|deficit|burn/i);
   });
 
   it.each([
@@ -37,7 +38,7 @@ describe('describeCapitalMilestone', () => {
     ['CURRENCY_MISMATCH', 'Your costs are in another currency than your portfolio, so the date cannot be estimated yet.'],
   ] as const)('explains the gap %s', (gap, reason) => {
     const view = describeIt({ monthsRemaining: null }, { gap, monthlySurplusMinor: null });
-    expect(view.badge).toBe('Property Down Payment: no date yet');
+    expect(view.badge).toBe('Property Down Payment: your date starts with your first monthly surplus');
     expect(view.subtext).toBe(`€105,000 capital target (30% requirement) · ${reason}`);
   });
 

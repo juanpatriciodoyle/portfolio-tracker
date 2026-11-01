@@ -167,6 +167,13 @@
 
 /* ---------- Cards, sections, banners ---------- */
 
+/* The goals lead the page: where the portfolio is headed, before the places lived. */
+.profile-aspirations {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .profile-card {
   background-color: var(--bg-card);
   border: var(--border-card);

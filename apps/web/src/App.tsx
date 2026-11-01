@@ -9,10 +9,6 @@ import TransactionHistoryTable from './components/TransactionHistoryTable';
 import ReportingPeriodBar from './components/ReportingPeriodBar';
 import PortfolioChart from './components/PortfolioChart';
 import KpiRow from './components/KpiRow';
-import CapitalHorizonCard from './components/CapitalHorizonCard';
-import SecondSalaryCard from './components/SecondSalaryCard';
-import { useCapitalHorizon } from './hooks/useCapitalHorizon';
-import { useSecondSalary } from './hooks/useSecondSalary';
 import PerformanceAnalysisGrid from './components/PerformanceAnalysisGrid';
 import HoldingsTable, { type PositionItem, type SoldAssetItem } from './components/HoldingsTable';
 import CashBalancesTable, { type CashBalanceItem } from './components/CashBalancesTable';
@@ -95,9 +91,6 @@ function App() {
     positions: [],
     soldAssets: [],
   });
-
-  const { secondSalary } = useSecondSalary(user !== null, stats.netWorth);
-  const { capitalHorizon, save: saveCapitalMilestones } = useCapitalHorizon(user !== null, stats.netWorth);
 
   const getGreetingName = () => {
     if (!user) return 'Joe';
@@ -338,10 +331,6 @@ function App() {
             country={stats.country}
             currency={stats.baseCurrency || 'EUR'}
           />
-
-          {secondSalary && <SecondSalaryCard secondSalary={secondSalary} />}
-
-          {capitalHorizon && <CapitalHorizonCard capitalHorizon={capitalHorizon} onSave={saveCapitalMilestones} />}
 
           {/* Interactive Multi-Mode Portfolio Chart */}
           <PortfolioChart

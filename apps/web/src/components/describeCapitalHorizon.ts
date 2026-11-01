@@ -17,14 +17,14 @@ const GAP_TEXT: Record<CapitalHorizonGap, string> = {
 const PACED = 'Paced with your current lifestyle & spending protected.';
 
 /** Why a goal has no date: the reason it cannot be paced, in words. */
-function whyNoDate({ gap, monthlySurplusMinor }: CapitalHorizonResponse): string {
+function whyNoDate({ gap }: CapitalHorizonResponse): string {
   if (gap) return GAP_TEXT[gap];
-  return (monthlySurplusMinor ?? 0) < 0 ? 'Spending is above income, so there is no date yet.' : 'Nothing is left over each month, so there is no date yet.';
+  return 'Set aside a monthly surplus and your date appears here.';
 }
 
 function describeWhen({ title, achieved, monthsRemaining }: CapitalMilestonePacingDto): string {
   if (achieved) return `${title}: Goal achieved!`;
-  if (monthsRemaining === null) return `${title}: no date yet`;
+  if (monthsRemaining === null) return `${title}: your date starts with your first monthly surplus`;
   return `${title}: ${monthsRemaining} ${monthsRemaining === 1 ? 'month' : 'months'} away`;
 }
 

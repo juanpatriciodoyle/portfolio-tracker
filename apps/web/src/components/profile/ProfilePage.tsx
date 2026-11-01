@@ -6,6 +6,10 @@ import { useLivingPhases } from '../../hooks/useLivingPhases';
 import { usePhaseComparison } from '../../hooks/usePhaseComparison';
 import { useProfile } from '../../hooks/useProfile';
 import { useBenchmarks } from '../../hooks/useBenchmarks';
+import { useCapitalHorizon } from '../../hooks/useCapitalHorizon';
+import { useSecondSalary } from '../../hooks/useSecondSalary';
+import CapitalHorizonCard from '../CapitalHorizonCard';
+import SecondSalaryCard from '../SecondSalaryCard';
 import { combineStatuses, type MutationResult } from '../../lib/apiErrors';
 import { vendorHistory } from './vendorHistory';
 import type { BillingView } from './billingView';
@@ -46,6 +50,9 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
   // Bills and benchmarks depend on the phases: they load once those are ready and again whenever they change.
   const dataReady = phasesApi.status === 'ready';
   const benchmarksApi = useBenchmarks(dataReady, entries);
+  // The goals read the portfolio and the costs of the home lived in today, so they follow the phases.
+  const { secondSalary } = useSecondSalary(dataReady, entries);
+  const { capitalHorizon, save: saveCapitalMilestones } = useCapitalHorizon(dataReady, entries);
   // A bill moves the monthly costs of its phase, so the timeline reloads after it.
   const afterBillChange = phasesApi.reload;
   const billsApi = useBillingRecords(dataReady, entries, afterBillChange);
@@ -168,6 +175,13 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
             <p className="profile-page__loading" role="status">
               Loading…
             </p>
+          )}
+
+          {dataReady && !(profileEmpty && phases.length === 0) && (secondSalary || capitalHorizon) && (
+            <div className="profile-aspirations">
+              {secondSalary && <SecondSalaryCard secondSalary={secondSalary} />}
+              {capitalHorizon && <CapitalHorizonCard capitalHorizon={capitalHorizon} onSave={saveCapitalMilestones} />}
+            </div>
           )}
 
           {profileApi.status === 'ready' && profileApi.profile && profileEmpty && (

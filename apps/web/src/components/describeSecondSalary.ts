@@ -42,7 +42,7 @@ const COVERING: Record<MilestoneKind, string> = {
 const REACHED_TEXT: Record<MilestoneDto['id'], string> = {
   1: 'Covers 100% of your utilities & subscriptions.',
   2: 'Covers 100% of your rent.',
-  3: '100% Living Cost Autonomy (Your capital matches your burn).',
+  3: '100% Living Cost Autonomy (Your capital covers your monthly living costs).',
 };
 
 const GAP_TEXT: Record<SecondSalaryGap, string> = {
@@ -60,7 +60,9 @@ function describeSubtext(result: SecondSalaryResponse): string {
   if (result.gap) return GAP_TEXT[result.gap];
   if (result.reachedMilestone) return REACHED_TEXT[result.reachedMilestone];
   const next = nextMilestone(result.milestones);
-  return next ? `${Math.floor(next.progress * 100)}% of the way to covering ${COVERING[next.kind]}.` : '';
+  if (!next) return '';
+  const percent = Math.floor(next.progress * 100);
+  return percent === 0 ? `Every euro invested moves you toward covering ${COVERING[next.kind]}.` : `${percent}% of the way to covering ${COVERING[next.kind]}.`;
 }
 
 /** Wording and geometry of the second-salary card. The server did the maths: this only decides how to show it. */
@@ -70,7 +72,7 @@ export function describeSecondSalary(result: SecondSalaryResponse, locale: strin
   const range = `${money(target.minMonthlyMinor)}–${money(target.maxMonthlyMinor)}`;
 
   return {
-    badge: `Second Salary: ${money(result.secondSalaryMinor)} / month`,
+    badge: result.secondSalaryMinor > 0 ? `Second Salary: ${money(result.secondSalaryMinor)} / month` : 'Second Salary: your first investment starts it',
     subtext: describeSubtext(result),
     bar: {
       fill: target.progress,
