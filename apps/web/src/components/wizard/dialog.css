@@ -417,3 +417,14 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* The bills step: the list, the form and the add button breathe apart from one another. */
+.wizard__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.wizard__stack .wizard-list {
+  gap: 12px;
+}

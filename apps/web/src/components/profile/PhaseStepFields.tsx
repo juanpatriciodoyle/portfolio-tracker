@@ -1,7 +1,8 @@
 import { Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { HOUSING_TENURES, type CreateFixedCostRequest } from "../../contracts";
 import { currencyOptions } from "../../lib/currencies";
+import { clampDateYear, keepDecimal, keepNameCharacters } from "../../lib/inputFilters";
 import { formatMinor } from "../../lib/money";
 import WizardField from "../wizard/WizardField";
 import CountrySelect from "./CountrySelect";
@@ -27,6 +28,8 @@ interface PhaseStepFieldsProps {
   onCostsChange: (costs: CreateFixedCostRequest[]) => void;
   /** Asks for a first income. Left out when changing an existing home, whose income is listed on its own. */
   includeIncome?: boolean;
+  /** Told whenever the form to add a bill opens or closes: the flow hides its own main button while it is open. */
+  onAddingBillChange?: (adding: boolean) => void;
 }
 
 /** The questions of one step of "Add a living phase". The same steps serve the first-time flow and the phase editor. */
@@ -40,9 +43,16 @@ export default function PhaseStepFields({
   costs,
   onCostsChange,
   includeIncome = true,
+  onAddingBillChange,
 }: PhaseStepFieldsProps) {
   const currencies = useMemo(() => currencyOptions(), []);
-  const [addingBill, setAddingBill] = useState(false);
+  const [addingBill, setAddingBillState] = useState(false);
+  const setAddingBill = (adding: boolean) => {
+    setAddingBillState(adding);
+    onAddingBillChange?.(adding);
+  };
+  // Leaving the step closes the form, so the flow's main button must come back with it.
+  useEffect(() => () => onAddingBillChange?.(false), [onAddingBillChange]);
   const id = (field: keyof PhaseFormState) => `${idPrefix}-${field}`;
   const describedBy = (field: keyof PhaseFormState) =>
     feedback.errorOf(field) ? `${id(field)}-error` : undefined;
@@ -77,7 +87,9 @@ export default function PhaseStepFields({
             autoComplete="off"
             maxLength={80}
             value={form.city}
-            onChange={(event) => onChange("city", event.target.value)}
+            onChange={(event) =>
+              onChange("city", keepNameCharacters(event.target.value))
+            }
             aria-invalid={feedback.errorOf("city") !== undefined || undefined}
             aria-describedby={describedBy("city")}
           />
@@ -118,7 +130,9 @@ export default function PhaseStepFields({
               className="form-input"
               max={today}
               value={form.startDate}
-              onChange={(event) => onChange("startDate", event.target.value)}
+              onChange={(event) =>
+                onChange("startDate", clampDateYear(event.target.value))
+              }
               aria-invalid={
                 feedback.errorOf("startDate") !== undefined || undefined
               }
@@ -138,7 +152,9 @@ export default function PhaseStepFields({
               max={today}
               value={form.endDate}
               disabled={form.stillLivingHere}
-              onChange={(event) => onChange("endDate", event.target.value)}
+              onChange={(event) =>
+                onChange("endDate", clampDateYear(event.target.value))
+              }
               aria-invalid={
                 feedback.errorOf("endDate") !== undefined || undefined
               }
@@ -178,71 +194,53 @@ export default function PhaseStepFields({
               ))}
             </select>
           </WizardField>
-          <WizardField id={id("tenure")} label="Housing">
-            <select
-              id={id("tenure")}
-              className="form-input"
-              value={form.tenure}
-              onChange={(event) =>
-                onChange(
-                  "tenure",
-                  event.target.value as PhaseFormState["tenure"],
-                )
-              }
-            >
-              {HOUSING_TENURES.map((tenure) => (
-                <option key={tenure} value={tenure}>
-                  {TENURE_LABELS[tenure]}
-                </option>
-              ))}
-            </select>
-          </WizardField>
-        </div>
-        {includeIncome && (
-          <WizardField
-            id={id("monthlyIncome")}
-            label="Monthly net income (optional)"
-            error={feedback.errorOf("monthlyIncome")}
-            valid={feedback.isValid("monthlyIncome")}
-          >
-            <input
+          {includeIncome && (
+            <WizardField
               id={id("monthlyIncome")}
-              className="form-input"
-              inputMode="decimal"
-              autoComplete="off"
-              placeholder="3,200"
-              value={form.monthlyIncome}
-              onChange={(event) =>
-                onChange("monthlyIncome", event.target.value)
-              }
-              aria-invalid={
-                feedback.errorOf("monthlyIncome") !== undefined || undefined
-              }
-              aria-describedby={describedBy("monthlyIncome")}
-            />
-          </WizardField>
-        )}
-        <WizardField
-          id={id("notes")}
-          label="Notes (optional)"
-          error={feedback.errorOf("notes")}
-          valid={feedback.isValid("notes")}
-        >
-          <textarea
-            id={id("notes")}
-            className="form-input phase-editor__notes"
-            rows={2}
-            maxLength={500}
-            value={form.notes}
-            onChange={(event) => onChange("notes", event.target.value)}
-          />
+              label="Monthly net income (optional)"
+              error={feedback.errorOf("monthlyIncome")}
+              valid={feedback.isValid("monthlyIncome")}
+            >
+              <input
+                id={id("monthlyIncome")}
+                className="form-input"
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="3,200"
+                value={form.monthlyIncome}
+                onChange={(event) =>
+                  onChange("monthlyIncome", keepDecimal(event.target.value))
+                }
+                aria-invalid={
+                  feedback.errorOf("monthlyIncome") !== undefined || undefined
+                }
+                aria-describedby={describedBy("monthlyIncome")}
+              />
+            </WizardField>
+          )}
+        </div>
+        <WizardField id={id("tenure")} label="Housing">
+          <select
+            id={id("tenure")}
+            className="form-input"
+            value={form.tenure}
+            onChange={(event) =>
+              onChange("tenure", event.target.value as PhaseFormState["tenure"])
+            }
+          >
+            {HOUSING_TENURES.map((tenure) => (
+              <option key={tenure} value={tenure}>
+                {TENURE_LABELS[tenure]}
+              </option>
+            ))}
+          </select>
         </WizardField>
       </>
     );
   }
 
   return (
-    <>
+    <div className="wizard__stack">
       {costs.length > 0 && (
         <ul className="wizard-list" aria-label="Bills added">
           {costs.map((cost, position) => (
@@ -292,6 +290,6 @@ export default function PhaseStepFields({
           <Plus size={14} aria-hidden="true" /> Add a bill
         </button>
       )}
-    </>
+    </div>
   );
 }

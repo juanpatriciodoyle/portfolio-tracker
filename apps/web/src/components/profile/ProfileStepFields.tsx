@@ -5,6 +5,7 @@ import { EMPLOYMENT_LABELS } from './labels';
 import NationalitiesInput from './NationalitiesInput';
 import type { OnboardingStepId, ProfileDraft } from './profileDraft';
 import Stepper from './Stepper';
+import { keepDigits, keepNameCharacters } from '../../lib/inputFilters';
 
 interface ProfileStepFieldsProps {
   step: OnboardingStepId;
@@ -30,7 +31,7 @@ export default function ProfileStepFields({ step, idPrefix, draft, onChange, err
             autoComplete="name"
             maxLength={120}
             value={draft.fullName}
-            onChange={(event) => onChange('fullName', event.target.value)}
+            onChange={(event) => onChange('fullName', keepNameCharacters(event.target.value))}
             aria-invalid={errorOf('fullName') !== undefined || undefined}
             aria-describedby={describedBy('fullName')}
           />
@@ -48,7 +49,7 @@ export default function ProfileStepFields({ step, idPrefix, draft, onChange, err
             maxLength={4}
             placeholder="1990"
             value={draft.birthYear}
-            onChange={(event) => onChange('birthYear', event.target.value)}
+            onChange={(event) => onChange('birthYear', keepDigits(event.target.value, 4))}
             aria-invalid={errorOf('birthYear') !== undefined || undefined}
             aria-describedby={describedBy('birthYear')}
           />

@@ -6,7 +6,7 @@ export type PhaseFlowStepId = PhaseStepId | 'bills';
 export const PHASE_STEP_COPY: Record<PhaseFlowStepId, { label: string; heading: string }> = {
   place: {
     label: 'Where',
-    heading: 'Where did you live?',
+    heading: 'Where do you live?',
   },
   dates: {
     label: 'When',

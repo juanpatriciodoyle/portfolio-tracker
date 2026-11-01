@@ -6,6 +6,7 @@ export const MONTHS_PER_CADENCE: Readonly<Record<CostCadence, number>> = {
   MONTHLY: 1,
   BIMONTHLY: 2,
   QUARTERLY: 3,
+  SEMI_ANNUALLY: 6,
   ANNUAL: 12,
 };
 
@@ -17,6 +18,7 @@ const MAX_PERIOD_DAYS: Readonly<Record<CostCadence, number>> = {
   MONTHLY: 35,
   BIMONTHLY: 66,
   QUARTERLY: 100,
+  SEMI_ANNUALLY: 190,
   ANNUAL: 370,
 };
 

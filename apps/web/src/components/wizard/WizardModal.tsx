@@ -14,6 +14,8 @@ interface WizardModalProps {
   resumed?: boolean;
   error?: string | null;
   busy?: boolean;
+  /** Hides the main button while the step holds a form with a main button of its own. */
+  hideNext?: boolean;
   finishLabel: string;
   onBack: () => void;
   onNext: () => void;
@@ -34,6 +36,7 @@ export default function WizardModal({
   resumed = false,
   error,
   busy = false,
+  hideNext = false,
   finishLabel,
   onBack,
   onNext,
@@ -91,9 +94,11 @@ export default function WizardModal({
           <button type="button" className="btn-secondary-cancel" onClick={isFirst ? onClose : onBack} disabled={busy}>
             {isFirst ? 'Cancel' : 'Back'}
           </button>
-          <button type="button" className="btn-primary-apply wizard__next" onClick={onNext} disabled={busy}>
-            {busy ? 'Saving…' : isLast ? finishLabel : 'Continue'}
-          </button>
+          {!hideNext && (
+            <button type="button" className="btn-primary-apply wizard__next" onClick={onNext} disabled={busy}>
+              {busy ? 'Saving…' : isLast ? finishLabel : 'Continue'}
+            </button>
+          )}
         </footer>
       </div>
     </Modal>

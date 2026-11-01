@@ -1,9 +1,10 @@
-import { FileText, Pencil, Trash2 } from 'lucide-react';
+import { CalendarX, FileText, Pencil, Trash2 } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
 import type { CreateBillingRecordRequest, CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest, UpdateLivingPhaseRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import { formatMonths } from '../../lib/duration';
-import { formatMinor } from '../../lib/money';
+import { clampDateYear } from '../../lib/inputFilters';
+import { formatCalendarDate, formatMinor } from '../../lib/money';
 import BenchmarksCard from './BenchmarksCard';
 import BillsLedger from './BillsLedger';
 import type { BillFormContext } from './billForm';
@@ -36,6 +37,8 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onUpdateCost
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [endingId, setEndingId] = useState<string | null>(null);
+  const [lastDay, setLastDay] = useState('');
   const [removeError, setRemoveError] = useState<string | null>(null);
 
   const monthly = entry?.fixedCostsByCategoryMinor;
@@ -76,6 +79,17 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onUpdateCost
     return result;
   };
 
+  const endCost = async (costId: string) => {
+    const result = await onUpdateCost(phase.id, costId, { endDate: lastDay });
+    if (result.ok) {
+      setEndingId(null);
+      setRemoveError(null);
+      announce('Subscription ended');
+    } else {
+      setRemoveError(describeFailure(result.failure));
+    }
+  };
+
   const removeCost = async (costId: string) => {
     const result = await onDeleteCost(phase.id, costId);
     if (result.ok) {
@@ -90,6 +104,26 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onUpdateCost
   /** Edit and remove for one declared cost, or the question that confirms removing it. */
   const costControls = (cost: LivingPhaseDto['fixedCosts'][number]): ReactNode => {
     const name = `${CATEGORY_LABELS[cost.category]}${cost.label ? ` ${cost.label}` : ''}`;
+    if (endingId === cost.id) {
+      return (
+        <div className="confirm-inline" role="group" aria-label={`Confirm ending ${name}`}>
+          <label htmlFor={`${id}-last-day-${cost.id}`}>Last day</label>
+          <input
+            id={`${id}-last-day-${cost.id}`}
+            type="date"
+            className="form-input"
+            value={lastDay}
+            onChange={(event) => setLastDay(clampDateYear(event.target.value))}
+          />
+          <button type="button" className="profile-danger-button" disabled={lastDay === ''} onClick={() => endCost(cost.id)}>
+            End subscription
+          </button>
+          <button type="button" className="profile-text-button" onClick={() => setEndingId(null)}>
+            Keep
+          </button>
+        </div>
+      );
+    }
     return confirmingId === cost.id ? (
       <div className="confirm-inline" role="group" aria-label={`Confirm removing ${name}`}>
         <span>Remove this cost?</span>
@@ -102,6 +136,21 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onUpdateCost
       </div>
     ) : (
       <div className="cost-row__actions">
+        {cost.endDate === null && (
+          <button
+            type="button"
+            className="profile-icon-button"
+            aria-label={`End subscription ${name}`}
+            onClick={() => {
+              setEndingId(cost.id);
+              setLastDay(billing?.asOf ?? '');
+              setConfirmingId(null);
+              setEditingId(null);
+            }}
+          >
+            <CalendarX size={14} aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
           className="profile-icon-button"
@@ -164,9 +213,9 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onUpdateCost
                   {group.rows.map((row) => {
                     // One declared cost that no bill has replaced is the row itself: nothing is repeated underneath it.
                     const sole = row.declared.length === 1 && !row.replaced ? row.declared[0] : null;
-                    const cadence = sole && sole.category !== 'TAXES' ? CADENCE_LABELS[sole.cadence] : null;
+                    const cadence = sole?.endDate ? `Ended ${formatCalendarDate(sole.endDate)}` : sole && sole.category !== 'TAXES' ? CADENCE_LABELS[sole.cadence] : null;
                     return (
-                      <li key={row.category} className="phase-breakdown__item" data-category={row.category}>
+                      <li key={row.category} className={`phase-breakdown__item${sole?.endDate ? ' is-ended' : ''}`} data-category={row.category}>
                         {sole && editingId === sole.id ? (
                           <FixedCostEditor initial={sole} currency={phase.currency} onSubmit={updateCost(sole.id)} onCancel={() => setEditingId(null)} />
                         ) : (
@@ -176,7 +225,7 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onUpdateCost
                               <span>{CATEGORY_LABELS[row.category]}</span>
                               {cadence && <span className="phase-breakdown__note">{cadence}</span>}
                             </span>
-                            <span className="phase-breakdown__amount">{formatMinor(row.amountMinor, phase.currency)}</span>
+                            {!sole?.endDate && <span className="phase-breakdown__amount">{formatMinor(row.amountMinor, phase.currency)}</span>}
                             {sole && costControls(sole)}
                           </div>
                         )}
@@ -188,7 +237,7 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onUpdateCost
                               return (
                                 <li
                                   key={cost.id}
-                                  className={`cost-row${row.replaced ? ' is-replaced' : ''}`}
+                                  className={`cost-row${row.replaced ? ' is-replaced' : ''}${cost.endDate ? ' is-ended' : ''}`}
                                   data-category={cost.category}
                                   title={row.replaced ? 'Replaced by your bills' : undefined}
                                 >
@@ -199,6 +248,7 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onUpdateCost
                                       <div className="cost-row__main">
                                         <span className="cost-row__name">
                                           <span className="cost-row__struck">{cost.label ?? 'Declared'}</span>
+                                          {cost.endDate && <span className="phase-breakdown__note"> Ended {formatCalendarDate(cost.endDate)}</span>}
                                         </span>
                                       </div>
                                       <span className="cost-row__amount">

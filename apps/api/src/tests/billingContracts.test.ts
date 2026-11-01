@@ -22,7 +22,7 @@ const bill = {
 
 describe('billing vocabulary', () => {
   it('has the recurring cadences plus one-off, and the three rolling windows', () => {
-    expect(BILLING_CADENCES).toEqual(['MONTHLY', 'BIMONTHLY', 'QUARTERLY', 'ANNUAL', 'ONE_OFF']);
+    expect(BILLING_CADENCES).toEqual(['MONTHLY', 'BIMONTHLY', 'QUARTERLY', 'SEMI_ANNUALLY', 'ANNUAL', 'ONE_OFF']);
     expect(ROLLING_WINDOW_MONTHS).toEqual([3, 6, 12]);
     expect(FX_RATE_SOURCES).toEqual(['ECB', 'BCRA_OFFICIAL', 'REFERENCE']);
   });

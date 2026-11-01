@@ -9,7 +9,7 @@ import {
   type CostBasis,
   type FixedCostCategory,
 } from '../contracts/vocabulary';
-import { MONTHS_PER_PAYMENT, type FixedCost } from './fixedCosts';
+import { MONTHS_PER_PAYMENT, isActiveOn, type FixedCost } from './fixedCosts';
 import { roundHalfAwayFromZero } from './money';
 
 /** A rate the person declared for a living phase, with the name they gave it. */
@@ -115,34 +115,45 @@ function isSupersededByBills(cost: DeclaredCost, billsOfCategory: readonly Bille
  *   arrive, then the monthly cost follows the average of the latest three months of bills, sender by sender,
  *   so a change of plan moves the cost gradually without splitting the phase.
  *
+ * - A declared cost that ended before `asOf` is left out, and so are the bills of the sender it was declared
+ *   for: what it cost while it ran is history, not today's burn.
+ *
  * The categories are rounded together so they always add up to the total.
  */
 export function effectiveMonthlyCosts(input: {
   readonly declared: readonly DeclaredCost[];
   readonly bills: readonly BilledCost[];
+  /** The day the monthly cost is worked out for: costs ended before it no longer count. */
+  readonly asOf: CalendarDate;
 }): EffectiveCosts {
+  const running = input.declared.filter((cost) => isActiveOn(cost, input.asOf));
+  const ended = input.declared.filter((cost) => !isActiveOn(cost, input.asOf) && cost.label !== null);
+  const bills = input.bills.filter(
+    (bill) => !ended.some((cost) => cost.category === bill.category && vendorNamesMatch(cost.label as string, bill.vendor))
+  );
+
   const accumulators = Object.fromEntries(
     FIXED_COST_CATEGORIES.map((category) => [category, { share: NO_SHARE, declared: false, billCount: 0 } satisfies Accumulator])
   ) as Record<FixedCostCategory, Accumulator>;
 
   for (const category of FIXED_COST_CATEGORIES) {
-    const bills = input.bills.filter((bill) => bill.category === category);
+    const ofCategory = bills.filter((bill) => bill.category === category);
     const total = accumulators[category];
 
-    if (VARIABLE.has(category) && bills.length > 0) {
-      const months = bills.reduce((sum, bill) => sum + monthsCovered(bill), 0);
-      total.share = shareOf(bills.reduce((sum, bill) => sum + bill.amountMinor, 0), months);
-      total.billCount = bills.length;
+    if (VARIABLE.has(category) && ofCategory.length > 0) {
+      const months = ofCategory.reduce((sum, bill) => sum + monthsCovered(bill), 0);
+      total.share = shareOf(ofCategory.reduce((sum, bill) => sum + bill.amountMinor, 0), months);
+      total.billCount = ofCategory.length;
     } else {
-      for (const senderBills of groupBySender(bills)) {
+      for (const senderBills of groupBySender(ofCategory)) {
         const { share, used } = trailingAverage(senderBills);
         total.share = addShares(total.share, share);
         total.billCount += used;
       }
     }
 
-    for (const cost of input.declared) {
-      if (cost.category !== category || isSupersededByBills(cost, bills)) continue;
+    for (const cost of running) {
+      if (cost.category !== category || isSupersededByBills(cost, ofCategory)) continue;
       total.share = addShares(total.share, shareOf(cost.amountMinor * (MONTHS_PER_YEAR / MONTHS_PER_PAYMENT[cost.cadence]), MONTHS_PER_YEAR));
       total.declared = true;
     }

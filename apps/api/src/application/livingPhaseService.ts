@@ -192,6 +192,7 @@ export class LivingPhaseService {
       label: request.label ?? null,
       amountMinor: request.amountMinor,
       notes: request.notes ?? null,
+      endDate: request.endDate ?? null,
     };
 
     const added = await this.repository.addFixedCost(userId, phaseId, {
@@ -215,6 +216,7 @@ export class LivingPhaseService {
       label: change.label === undefined ? current.label : change.label,
       amountMinor: change.amountMinor ?? current.amountMinor,
       notes: change.notes === undefined ? current.notes : change.notes,
+      endDate: change.endDate === undefined ? current.endDate : change.endDate,
     };
     const category = change.category ?? existing.category;
     const cadence = change.cadence ?? existing.cadence;
@@ -247,7 +249,7 @@ export class LivingPhaseService {
         endDate: dto.endDate,
         currency: dto.currency,
         incomeStreams: dto.incomeStreams,
-        fixedCosts: dto.fixedCosts.map(({ id, category, cadence, amountMinor, label }) => ({ id, category, cadence, amountMinor, label })),
+        fixedCosts: dto.fixedCosts.map(({ id, category, cadence, amountMinor, label, endDate }) => ({ id, category, cadence, amountMinor, label, endDate })),
         bills: bills?.get(dto.id) ?? [],
       });
       return { dto, phase };
@@ -277,6 +279,7 @@ export class LivingPhaseService {
           amountMinor: sealed.amountMinor,
           label: sealed.label,
           notes: sealed.notes,
+          endDate: sealed.endDate,
         };
       }),
     };
@@ -332,7 +335,7 @@ export class LivingPhaseService {
         category: cost.category,
         cadence: cost.cadence,
         payload: this.vault.seal(
-          { label: cost.label ?? null, amountMinor: cost.amountMinor, notes: cost.notes ?? null } satisfies CostPayload,
+          { label: cost.label ?? null, amountMinor: cost.amountMinor, notes: cost.notes ?? null, endDate: cost.endDate ?? null } satisfies CostPayload,
           costContext(userId, cost.id)
         ),
       })),

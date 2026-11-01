@@ -37,6 +37,8 @@ export const costPayloadSchema = z
     label: z.string().nullable(),
     amountMinor: amountMinorSchema,
     notes: z.string().nullable(),
+    /** Costs saved before they could end have none. */
+    endDate: calendarDateSchema.nullable().default(null),
   })
   .strict();
 export type CostPayload = z.infer<typeof costPayloadSchema>;

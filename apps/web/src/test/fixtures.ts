@@ -11,7 +11,7 @@ import {
 } from '../contracts';
 
 export function makeCost(overrides: Partial<FixedCostDto> = {}): FixedCostDto {
-  return { id: 'c1', category: 'RENT', cadence: 'MONTHLY', amountMinor: 120000, label: null, notes: null, ...overrides };
+  return { id: 'c1', category: 'RENT', cadence: 'MONTHLY', amountMinor: 120000, label: null, notes: null, endDate: null, ...overrides };
 }
 
 export function makePhase(overrides: Partial<LivingPhaseDto> = {}): LivingPhaseDto {

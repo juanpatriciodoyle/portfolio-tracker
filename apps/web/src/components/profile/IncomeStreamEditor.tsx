@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent } from 'react';
 import type { IncomeStreamDto, LivingPhaseDto } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
+import { clampDateYear, keepDecimal } from '../../lib/inputFilters';
 import { describeFailure } from './failureMessage';
 import {
   emptyIncomeStreamForm,
@@ -47,6 +48,8 @@ export default function IncomeStreamEditor({ phase, initial, onSubmit, onCancel 
         {errors[field]}
       </p>
     );
+  const setFiltered = (field: keyof IncomeStreamForm, filter: (value: string) => string) => (event: { target: { value: string } }) =>
+    setForm((current) => ({ ...current, [field]: filter(event.target.value) }));
   const set = (field: keyof IncomeStreamForm) => (event: { target: { value: string } }) => setForm((current) => ({ ...current, [field]: event.target.value }));
 
   return (
@@ -80,7 +83,7 @@ export default function IncomeStreamEditor({ phase, initial, onSubmit, onCancel 
             autoComplete="off"
             placeholder="3500"
             value={form.amount}
-            onChange={set('amount')}
+            onChange={setFiltered('amount', keepDecimal)}
             aria-invalid={errors.amount !== undefined || undefined}
             aria-describedby={describedBy('amount')}
           />
@@ -98,7 +101,7 @@ export default function IncomeStreamEditor({ phase, initial, onSubmit, onCancel 
             type="date"
             className="form-input"
             value={form.startDate}
-            onChange={set('startDate')}
+            onChange={setFiltered('startDate', clampDateYear)}
             aria-invalid={errors.startDate !== undefined || undefined}
             aria-describedby={describedBy('startDate')}
           />
@@ -113,7 +116,7 @@ export default function IncomeStreamEditor({ phase, initial, onSubmit, onCancel 
             type="date"
             className="form-input"
             value={form.endDate}
-            onChange={set('endDate')}
+            onChange={setFiltered('endDate', clampDateYear)}
             aria-invalid={errors.endDate !== undefined || undefined}
             aria-describedby={describedBy('endDate')}
           />

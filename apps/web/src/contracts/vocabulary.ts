@@ -26,7 +26,7 @@ export type FixedCostCategory = (typeof FIXED_COST_CATEGORIES)[number];
 export const UTILITY_CATEGORIES = ['ELECTRICITY', 'GAS', 'WATER', 'HEATING_COOLING'] as const satisfies readonly FixedCostCategory[];
 
 /** How often a bill is paid. Each cadence covers a whole number of months per payment. */
-export const COST_CADENCES = ['MONTHLY', 'BIMONTHLY', 'QUARTERLY', 'ANNUAL'] as const;
+export const COST_CADENCES = ['MONTHLY', 'BIMONTHLY', 'QUARTERLY', 'SEMI_ANNUALLY', 'ANNUAL'] as const;
 export type CostCadence = (typeof COST_CADENCES)[number];
 
 /** Bills as they were actually issued: the recurring cadences, plus a single charge that is not recurring. */

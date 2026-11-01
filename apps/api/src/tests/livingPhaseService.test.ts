@@ -342,6 +342,26 @@ describe('fixed costs of a phase', () => {
     });
   });
 
+  it('ends a cost with a date, keeps it listed, and can bring it back', async () => {
+    const { service, repository } = build();
+    const { id: phaseId } = await service.createPhase(USER, request(madridInput));
+    const rent = (await service.listPhases(USER))[0].fixedCosts[0];
+    expect(rent.endDate).toBeNull();
+
+    await service.updateFixedCost(USER, phaseId, rent.id, { endDate: '2024-03-31' });
+    expect((await service.listPhases(USER))[0].fixedCosts[0]).toMatchObject({ id: rent.id, endDate: '2024-03-31', amountMinor: 120000 });
+    expect(JSON.stringify(repository.dump())).not.toContain('2024-03-31');
+
+    await service.updateFixedCost(USER, phaseId, rent.id, { endDate: null });
+    expect((await service.listPhases(USER))[0].fixedCosts[0].endDate).toBeNull();
+  });
+
+  it('reads a cost saved before end dates existed as one that never ends', async () => {
+    const { service } = build();
+    await service.createPhase(USER, request(madridInput));
+    expect((await service.listPhases(USER))[0].fixedCosts.every((cost) => cost.endDate === null)).toBe(true);
+  });
+
   it('clears a label with null', async () => {
     const { service } = build();
     const { id: phaseId } = await service.createPhase(USER, request(madridInput));

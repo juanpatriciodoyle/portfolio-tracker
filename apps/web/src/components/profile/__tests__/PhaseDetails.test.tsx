@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { formatCalendarDate } from '../../../lib/money';
 import { makeBill, makeCost, makeEntry, makePhase, noBasis } from '../../../test/fixtures';
 import { createMemoryStorage } from '../../../test/memoryStorage';
 import type { BillingView } from '../billingView';
@@ -222,5 +223,46 @@ describe('adding bills from PDFs', () => {
     fireEvent.drop(zone, { dataTransfer: { files: [new File(['x'], 'photo.png', { type: 'image/png' })] } });
 
     expect(screen.queryByRole('dialog', { name: /from PDFs?|from a PDF/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('ending a subscription', () => {
+  const subscription = makeCost({ id: 'c9', category: 'SUBSCRIPTIONS', label: 'Netflix', amountMinor: 1299 });
+  const withSubscription = (cost = subscription, monthly = 1299) => ({
+    phase: makePhase({ fixedCosts: [cost] }),
+    entry: makeEntry({
+      fixedCostsByCategoryMinor: { RENT: 0, ELECTRICITY: 0, GAS: 0, WATER: 0, HEATING_COOLING: 0, INTERNET: 0, PHONE: 0, SUBSCRIPTIONS: monthly, TAXES: 0, OTHER: 0 },
+    }),
+  });
+
+  it('asks for the last day, starting from today, and sends only the end date', async () => {
+    const { props } = renderDetails(withSubscription());
+
+    fireEvent.click(screen.getByRole('button', { name: /End subscription Subscriptions Netflix|End Subscriptions Netflix/i }));
+    const day = screen.getByLabelText('Last day');
+    expect(day).toHaveValue('2026-10-31');
+    fireEvent.change(day, { target: { value: '2026-09-30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'End subscription' }));
+
+    await waitFor(() => expect(props.onUpdateCost).toHaveBeenCalledWith('p1', 'c9', { endDate: '2026-09-30' }));
+    expect(props.onDeleteCost).not.toHaveBeenCalled();
+  });
+
+  it('keeps an ended cost listed, marked as ended, and out of the monthly figure', () => {
+    renderDetails(withSubscription(makeCost({ ...subscription, endDate: '2026-03-31' }), 0));
+
+    const row = screen.getByText('Subscriptions').closest('li') as HTMLElement;
+    expect(within(row).getByText(`Ended ${formatCalendarDate('2026-03-31')}`)).toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: /End subscription/i })).not.toBeInTheDocument();
+  });
+
+  it('can leave without ending it', () => {
+    const { props } = renderDetails(withSubscription());
+
+    fireEvent.click(screen.getByRole('button', { name: /End subscription/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep' }));
+
+    expect(props.onUpdateCost).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Last day')).not.toBeInTheDocument();
   });
 });

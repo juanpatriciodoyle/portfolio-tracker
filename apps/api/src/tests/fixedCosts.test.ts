@@ -15,7 +15,7 @@ const cost = (
 
 describe('MONTHS_PER_PAYMENT', () => {
   it('covers one, two, three and twelve months per payment', () => {
-    expect(MONTHS_PER_PAYMENT).toEqual({ MONTHLY: 1, BIMONTHLY: 2, QUARTERLY: 3, ANNUAL: 12 });
+    expect(MONTHS_PER_PAYMENT).toEqual({ MONTHLY: 1, BIMONTHLY: 2, QUARTERLY: 3, SEMI_ANNUALLY: 6, ANNUAL: 12 });
   });
 });
 
@@ -29,6 +29,7 @@ describe('monthlyFixedCostBurn', () => {
     ['a monthly bill counts as is', cost('RENT', 'MONTHLY', 120000), 120000],
     ['a bimonthly bill is half per month', cost('ELECTRICITY', 'BIMONTHLY', 9600), 4800],
     ['a quarterly bill is a third per month', cost('WATER', 'QUARTERLY', 9000), 3000],
+    ['a bill every 6 months is a sixth per month', cost('SUBSCRIPTIONS', 'SEMI_ANNUALLY', 6000), 1000],
     ['an annual bill is a twelfth per month', cost('TAXES', 'ANNUAL', 36000), 3000],
   ])('%s', (_label, item, expected) => {
     expect(monthlyFixedCostBurn([item])).toBe(expected);

@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent } from 'react';
 import { CAPITAL_MILESTONE_CATEGORIES, type CapitalMilestone } from '../contracts';
 import type { MutationResult } from '../lib/apiErrors';
+import { keepDecimal, keepDigits } from '../lib/inputFilters';
 import { describeFailure } from './profile/failureMessage';
 import Modal from './Modal';
 import { CATEGORY_LABELS, validateMilestoneForm, withCategory, type MilestoneErrors, type MilestoneForm } from './capitalMilestoneForm';
@@ -43,6 +44,8 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
     void finish(() => onSave(result.milestone));
   };
 
+  const setFiltered = (field: 'amount' | 'percentage', filter: (value: string) => string) => (event: { target: { value: string } }) =>
+    setForm((current) => ({ ...current, [field]: filter(event.target.value) }));
   const set = (field: 'title' | 'amount' | 'percentage') => (event: { target: { value: string } }) => setForm((current) => ({ ...current, [field]: event.target.value }));
   const describedBy = (field: keyof MilestoneErrors) => (errors[field] ? `${fieldId}-${field}-error` : undefined);
   const fieldError = (field: keyof MilestoneErrors) =>
@@ -102,7 +105,7 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
               autoComplete="off"
               placeholder="350000"
               value={form.amount}
-              onChange={set('amount')}
+              onChange={setFiltered('amount', keepDecimal)}
               aria-invalid={errors.amount !== undefined || undefined}
               aria-describedby={describedBy('amount')}
             />
@@ -118,7 +121,7 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
               inputMode="numeric"
               autoComplete="off"
               value={form.percentage}
-              onChange={set('percentage')}
+              onChange={setFiltered('percentage', (value) => keepDigits(value, 3))}
               aria-invalid={errors.percentage !== undefined || undefined}
               aria-describedby={describedBy('percentage')}
             />

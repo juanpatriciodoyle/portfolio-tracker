@@ -88,6 +88,7 @@ export default function OnboardingWizard({
   const feedback = usePhaseFormFeedback(phase.form, today);
   const [tried, setTried] = useState<ReadonlySet<OnboardingStepId>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [addingBill, setAddingBill] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   /** The profile is saved before the phase, and only once, even if the phase has to be retried. */
   const profileSaved = useRef(false);
@@ -184,6 +185,7 @@ export default function OnboardingWizard({
       resumed={resumedAtStep === step}
       error={formError}
       busy={saving}
+      hideNext={addingBill}
       finishLabel="Finish"
       onBack={() => setStep(step - 1)}
       onNext={next}
@@ -200,6 +202,7 @@ export default function OnboardingWizard({
         />
       ) : (
         <PhaseStepFields
+          onAddingBillChange={setAddingBill}
           step={stepId}
           idPrefix="onboarding-phase"
           form={phase.form}

@@ -29,7 +29,7 @@ describe('labels', () => {
   });
 
   it('offers every cadence, with the quarterly one worded as every 3 months', () => {
-    expect(CADENCE_OPTIONS.map((option) => option.label)).toEqual(['Monthly', 'Every 2 months', 'Every 3 months', 'Yearly']);
+    expect(CADENCE_OPTIONS.map((option) => option.label)).toEqual(['Monthly', 'Every 2 months', 'Every 3 months', 'Every 6 months', 'Yearly']);
     expect(Object.values(CADENCE_LABELS)).not.toContain('Quarterly');
   });
 

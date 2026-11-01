@@ -45,7 +45,7 @@ describe('PhaseWizard', () => {
     renderWizard();
 
     expect(screen.getByRole('dialog', { name: 'Add a living phase' })).toBeInTheDocument();
-    expect(heading()).toBe('Where did you live?');
+    expect(heading()).toBe('Where do you live?');
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'Step 1 of 4: Where');
   });
 
@@ -65,6 +65,15 @@ describe('PhaseWizard', () => {
     expect(screen.getByLabelText('Moved in')).toHaveFocus();
   });
 
+  it('refuses digits in the city and keeps them in the address', async () => {
+    renderWizard();
+    await fillPlace('Madrid2');
+    fireEvent.change(screen.getByLabelText('Address (optional)'), { target: { value: 'Calle Mayor 1, 4D' } });
+
+    expect(screen.getByLabelText('City')).toHaveValue('Madrid');
+    expect(screen.getByLabelText('Address (optional)')).toHaveValue('Calle Mayor 1, 4D');
+  });
+
   it('asks for what is missing before moving on', () => {
     renderWizard();
 
@@ -72,7 +81,7 @@ describe('PhaseWizard', () => {
 
     expect(screen.getByText('Choose a country.')).toBeInTheDocument();
     expect(screen.getByText('Which city was it?')).toBeInTheDocument();
-    expect(heading()).toBe('Where did you live?');
+    expect(heading()).toBe('Where do you live?');
   });
 
   it('does not explain how the header is generated while the place is typed', async () => {
@@ -327,5 +336,88 @@ describe('PhaseWizard drafts', () => {
 
     expect(loadDraft(sessionStorage, 'phase:p2', phaseDraftSchema)?.values.form.city).toBe('Porto');
     expect(loadDraft(sessionStorage, 'phase:new', phaseDraftSchema)).toBeNull();
+  });
+
+  describe('the money step', () => {
+    const toMoney = async () => {
+      renderWizard();
+      await fillPlace();
+      clickContinue();
+      fillDates();
+      clickContinue();
+    };
+
+    it('puts the currency and the monthly net income on one row, with housing underneath', async () => {
+      await toMoney();
+
+      const currency = screen.getByLabelText('Currency');
+      const income = screen.getByLabelText('Monthly net income (optional)');
+      const housing = screen.getByLabelText('Housing');
+      expect(currency.closest('.wizard__row')).toBe(income.closest('.wizard__row'));
+      expect(housing.closest('.wizard__row')).not.toBe(currency.closest('.wizard__row'));
+      expect(currency.compareDocumentPosition(housing) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('has no notes field and no subtitle', async () => {
+      await toMoney();
+
+      expect(screen.queryByLabelText(/Notes/)).not.toBeInTheDocument();
+      expect(document.querySelector('.wizard__hint')).toBeNull();
+    });
+
+    it('accepts only numbers in the income', async () => {
+      await toMoney();
+
+      fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '3a2b0c0' } });
+
+      expect(screen.getByLabelText('Monthly net income (optional)')).toHaveValue('3200');
+    });
+
+    it('keeps the notes of an existing home when it is edited', async () => {
+      const onSubmit = vi.fn().mockResolvedValue(ok);
+      renderWizard({ phase: makePhase({ notes: 'Close to the office' }), onSubmit });
+      clickContinue();
+      clickContinue();
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0][0].update.notes).toBe('Close to the office');
+    });
+  });
+
+  describe('the bills step', () => {
+    const toBills = async () => {
+      renderWizard();
+      await fillPlace();
+      clickContinue();
+      fillDates();
+      clickContinue();
+      clickContinue();
+    };
+
+    it('has no subtitle', async () => {
+      await toBills();
+
+      expect(document.querySelector('.wizard__hint')).toBeNull();
+    });
+
+    it('hides the finish button while a bill is being added, and brings it back after', async () => {
+      await toBills();
+      expect(screen.getByRole('button', { name: 'Add living phase' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /Add a bill/ }));
+      expect(screen.queryByRole('button', { name: 'Add living phase' })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.getByRole('button', { name: 'Add living phase' })).toBeInTheDocument();
+    });
+
+    it('offers every 6 months as a cadence and a neutral provider placeholder', async () => {
+      await toBills();
+      fireEvent.click(screen.getByRole('button', { name: /Add a bill/ }));
+
+      expect(screen.getByRole('radio', { name: 'Every 6 months' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Label (optional)')).toHaveAttribute('placeholder', 'Company / Provider');
+    });
   });
 });

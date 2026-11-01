@@ -7,7 +7,7 @@ import {
 } from '../contracts/vocabulary';
 import { allocateToMonths, type BillingRecord } from './billing';
 import { monthOf, monthsEndingAt, previousMonth, type CalendarMonth } from './calendarDate';
-import { monthlyFixedCostBurn } from './fixedCosts';
+import { isActiveOn, monthlyFixedCostBurn } from './fixedCosts';
 import type { LivingPhase } from './livingPhase';
 import { roundHalfAwayFromZero } from './money';
 
@@ -111,7 +111,7 @@ export function buildTrends(input: {
 
     const total = months.reduce((sum, month) => sum + monthTotals[month], 0);
     const observedMonthlyMinor = roundHalfAwayFromZero(total / months.length);
-    const declaredMonthlyMinor = monthlyFixedCostBurn(phase.fixedCosts);
+    const declaredMonthlyMinor = monthlyFixedCostBurn(phase.fixedCosts.filter((cost) => isActiveOn(cost, input.asOf)));
     return [
       {
         phaseId: phase.id,

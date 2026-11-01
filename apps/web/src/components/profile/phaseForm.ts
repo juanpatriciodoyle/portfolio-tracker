@@ -36,7 +36,7 @@ export type PhaseFieldErrors = Partial<Record<keyof PhaseFormState, string>>;
 export const PHASE_STEP_FIELDS = {
   place: ['countryCode', 'city', 'address'],
   dates: ['startDate', 'endDate', 'stillLivingHere'],
-  money: ['currency', 'tenure', 'monthlyIncome', 'notes'],
+  money: ['currency', 'tenure', 'monthlyIncome'],
 } as const satisfies Record<string, readonly (keyof PhaseFormState)[]>;
 
 export type PhaseStepId = keyof typeof PHASE_STEP_FIELDS;

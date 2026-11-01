@@ -43,6 +43,7 @@ export const CADENCE_LABELS: Record<CostCadence, string> = {
   MONTHLY: 'Monthly',
   BIMONTHLY: 'Every 2 months',
   QUARTERLY: 'Every 3 months',
+  SEMI_ANNUALLY: 'Every 6 months',
   ANNUAL: 'Yearly',
 };
 
@@ -51,6 +52,7 @@ export const CADENCE_PHRASES: Record<CostCadence, string> = {
   MONTHLY: 'every month',
   BIMONTHLY: 'every 2 months',
   QUARTERLY: 'every 3 months',
+  SEMI_ANNUALLY: 'every 6 months',
   ANNUAL: 'every year',
 };
 

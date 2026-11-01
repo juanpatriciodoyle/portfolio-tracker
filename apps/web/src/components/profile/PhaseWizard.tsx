@@ -39,6 +39,7 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
   const { form, costs } = values;
   const feedback = usePhaseFormFeedback(form, today);
   const [saving, setSaving] = useState(false);
+  const [addingBill, setAddingBill] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const stepId = stepIds[step];
@@ -92,12 +93,14 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
       resumed={resumedAtStep === step}
       error={formError}
       busy={saving}
+      hideNext={addingBill}
       finishLabel={phase ? 'Save changes' : 'Add living phase'}
       onBack={() => setStep(step - 1)}
       onNext={next}
       onClose={onClose}
     >
       <PhaseStepFields
+        onAddingBillChange={setAddingBill}
         step={stepId}
         idPrefix={`phase-${phase?.id ?? 'new'}`}
         form={form}

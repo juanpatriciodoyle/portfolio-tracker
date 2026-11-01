@@ -192,11 +192,12 @@ describe('date rules', () => {
 });
 
 describe('PHASE_STEP_FIELDS', () => {
+  // Notes are kept when a home is edited, but no step asks for them.
   it('assigns every field of the form to exactly one step', () => {
     const fields = Object.values(PHASE_STEP_FIELDS).flat();
 
     expect(new Set(fields).size).toBe(fields.length);
-    expect([...fields].sort()).toEqual(Object.keys(filled).filter((field) => field !== 'stillLivingHere').concat('stillLivingHere').sort());
+    expect([...fields].sort()).toEqual(Object.keys(filled).filter((field) => field !== 'stillLivingHere' && field !== 'notes').concat('stillLivingHere').sort());
   });
 });
 

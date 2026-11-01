@@ -1,5 +1,9 @@
 import { FIXED_COST_CATEGORIES, type FixedCostCategory } from '../contracts';
-import { effectiveMonthlyCosts, type BilledCost, type DeclaredCost } from '../domain/effectiveCosts';
+import { effectiveMonthlyCosts as effectiveMonthlyCostsAt, type BilledCost, type DeclaredCost } from '../domain/effectiveCosts';
+
+const AS_OF = '2026-10-15';
+/** These cases are about amounts, not end dates: any day will do. */
+const effectiveMonthlyCosts = (input: Omit<Parameters<typeof effectiveMonthlyCostsAt>[0], 'asOf'>) => effectiveMonthlyCostsAt({ ...input, asOf: AS_OF });
 import { monthlyBurnByCategory, monthlyFixedCostBurn } from '../domain/fixedCosts';
 
 const declared = (category: FixedCostCategory, amountMinor: number, cadence: DeclaredCost['cadence'] = 'MONTHLY', label: string | null = null): DeclaredCost => ({

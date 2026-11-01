@@ -15,6 +15,7 @@ import {
   type ProfileFieldErrors,
 } from './profileDraft';
 import Stepper from './Stepper';
+import { keepDigits, keepNameCharacters } from '../../lib/inputFilters';
 
 interface ProfileFormProps {
   profile: ProfileData;
@@ -162,7 +163,7 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
               autoComplete="name"
               maxLength={120}
               value={draft.fullName}
-              onChange={(event) => set('fullName', event.target.value)}
+              onChange={(event) => set('fullName', keepNameCharacters(event.target.value))}
               aria-invalid={errors.fullName !== undefined || undefined}
             />
             {errors.fullName && (
@@ -183,7 +184,7 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
               maxLength={4}
               placeholder="1990"
               value={draft.birthYear}
-              onChange={(event) => set('birthYear', event.target.value)}
+              onChange={(event) => set('birthYear', keepDigits(event.target.value, 4))}
               aria-invalid={errors.birthYear !== undefined || undefined}
               aria-describedby={errors.birthYear ? `${id}-birthYear-error` : undefined}
             />

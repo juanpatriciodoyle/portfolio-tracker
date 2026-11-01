@@ -1,5 +1,5 @@
 import { addMonths } from '../contracts/calendarDate';
-import { inferCadenceFromPeriod, maxPeriodDays, periodEndingOn, periodFitsCadence } from '../contracts/billingPeriod';
+import { MONTHS_PER_CADENCE, inferCadenceFromPeriod, maxPeriodDays, periodEndingOn, periodFitsCadence } from '../contracts/billingPeriod';
 
 describe('addMonths', () => {
   it.each([
@@ -95,5 +95,23 @@ describe('periodEndingOn', () => {
         expect(inferCadenceFromPeriod(periodStart, periodEnd)).toBe(cadence);
       }
     }
+  });
+});
+
+describe('the every 6 months cadence', () => {
+  it('covers six months and allows about 190 days', () => {
+    expect(MONTHS_PER_CADENCE.SEMI_ANNUALLY).toBe(6);
+    expect(maxPeriodDays('SEMI_ANNUALLY')).toBe(190);
+    expect(periodFitsCadence('SEMI_ANNUALLY', '2026-01-01', '2026-07-09')).toBe(true); // 190 days
+    expect(periodFitsCadence('SEMI_ANNUALLY', '2026-01-01', '2026-07-10')).toBe(false); // 191 days
+  });
+
+  it('is inferred between quarterly and yearly', () => {
+    expect(inferCadenceFromPeriod('2026-01-01', '2026-06-30')).toBe('SEMI_ANNUALLY');
+    expect(inferCadenceFromPeriod('2026-01-01', '2026-10-31')).toBe('ANNUAL');
+  });
+
+  it('starts the day after six months before the end day', () => {
+    expect(periodEndingOn('SEMI_ANNUALLY', '2026-07-15')).toEqual({ periodStart: '2026-01-16', periodEnd: '2026-07-15' });
   });
 });

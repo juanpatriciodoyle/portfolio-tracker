@@ -1,3 +1,4 @@
+import { clampDateYear, keepDecimal } from '../../lib/inputFilters';
 import type { BillErrors, BillField, BillForm, BillFormContext } from './billForm';
 import { withCadence, withCategory, withPeriod, withVendor } from './billForm';
 import CategoryChips from './CategoryChips';
@@ -40,7 +41,7 @@ export default function BillFields({ id, form, update, context, errors, blanks =
           className={inputClass('vendor', form.vendor.trim() !== '')}
           autoComplete="off"
           maxLength={80}
-          placeholder="Iberdrola"
+          placeholder="Company / Provider"
           value={form.vendor}
           onChange={(event) => update((current) => withVendor(current, event.target.value, context))}
           aria-invalid={errors.vendor !== undefined || undefined}
@@ -71,7 +72,7 @@ export default function BillFields({ id, form, update, context, errors, blanks =
           autoComplete="off"
           placeholder="96.50"
           value={form.amount}
-          onChange={(event) => update((current) => ({ ...current, amount: event.target.value }))}
+          onChange={(event) => update((current) => ({ ...current, amount: keepDecimal(event.target.value) }))}
           aria-invalid={errors.amount !== undefined || undefined}
           aria-describedby={describedBy('amount')}
         />
@@ -98,7 +99,7 @@ export default function BillFields({ id, form, update, context, errors, blanks =
             type="date"
             className={inputClass('periodStart', form.periodStart !== '')}
             value={form.periodStart}
-            onChange={(event) => update((current) => withPeriod(current, 'periodStart', event.target.value))}
+            onChange={(event) => update((current) => withPeriod(current, 'periodStart', clampDateYear(event.target.value)))}
             aria-invalid={errors.periodStart !== undefined || undefined}
             aria-describedby={describedBy('periodStart')}
           />
@@ -113,7 +114,7 @@ export default function BillFields({ id, form, update, context, errors, blanks =
             type="date"
             className={inputClass('periodEnd', form.periodEnd !== '')}
             value={form.periodEnd}
-            onChange={(event) => update((current) => withPeriod(current, 'periodEnd', event.target.value))}
+            onChange={(event) => update((current) => withPeriod(current, 'periodEnd', clampDateYear(event.target.value)))}
             aria-invalid={errors.periodEnd !== undefined || undefined}
             aria-describedby={describedBy('periodEnd')}
           />

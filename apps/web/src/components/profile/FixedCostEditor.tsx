@@ -10,6 +10,7 @@ import {
   suggestForVendor,
 } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
+import { clampDateYear, keepDecimal } from '../../lib/inputFilters';
 import { minorToInputString, parseMajorToMinor } from '../../lib/money';
 import CategoryChips from './CategoryChips';
 import { describeFailure } from './failureMessage';
@@ -44,6 +45,7 @@ export default function FixedCostEditor({ currency, initial, categories, suggest
   const [cadence, setCadence] = useState<CostCadence>(initial?.cadence ?? 'MONTHLY');
   const [amount, setAmount] = useState(initial ? minorToInputString(initial.amountMinor, currency) : '');
   const [label, setLabel] = useState(initial?.label ?? '');
+  const [endDate, setEndDate] = useState(initial?.endDate ?? '');
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
   /** What the person chose themselves: a label typed later never overrides it. */
@@ -75,6 +77,8 @@ export default function FixedCostEditor({ currency, initial, categories, suggest
       cadence,
       amountMinor,
       label: label.trim() === '' ? null : label,
+      // Only a changed end date is sent: emptying the date of an ended cost brings it back.
+      ...(endDate !== (initial?.endDate ?? '') ? { endDate: endDate === '' ? null : endDate } : {}),
     });
     if (!parsed.success) {
       for (const issue of parsed.error.issues) {
@@ -128,7 +132,7 @@ export default function FixedCostEditor({ currency, initial, categories, suggest
             autoComplete="off"
             placeholder="48.50"
             value={amount}
-            onChange={(event) => setAmount(event.target.value)}
+            onChange={(event) => setAmount(keepDecimal(event.target.value))}
             aria-invalid={errors.amount !== undefined || undefined}
             aria-describedby={errors.amount ? `${id}-amount-error` : undefined}
           />
@@ -146,7 +150,7 @@ export default function FixedCostEditor({ currency, initial, categories, suggest
             id={`${id}-label`}
             className="form-input"
             autoComplete="off"
-            placeholder="Iberdrola"
+            placeholder="Company / Provider"
             value={label}
             onChange={(event) => changeLabel(event.target.value)}
             aria-invalid={errors.label !== undefined || undefined}
@@ -170,6 +174,19 @@ export default function FixedCostEditor({ currency, initial, categories, suggest
           setPicked((previous) => ({ ...previous, cadence: true }));
         }}
       />
+
+      <div className="form-group">
+        <label className="form-label" htmlFor={`${id}-endDate`}>
+          Ends on (optional)
+        </label>
+        <input
+          id={`${id}-endDate`}
+          type="date"
+          className="form-input"
+          value={endDate}
+          onChange={(event) => setEndDate(clampDateYear(event.target.value))}
+        />
+      </div>
 
       {errors.form && (
         <p className="form-error-text" role="alert">

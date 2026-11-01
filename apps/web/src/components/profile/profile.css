@@ -1731,3 +1731,10 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
+/* A cost that was ended stays listed for the past, quieter than the ones still running. */
+.phase-breakdown__item.is-ended .phase-breakdown__name,
+.cost-row.is-ended .cost-row__name,
+.cost-row.is-ended .cost-row__amount {
+  color: var(--text-muted);
+}

@@ -2,7 +2,7 @@ import type { CalendarDate, FixedCostCategory, PhaseStatus } from '../contracts/
 import { AVERAGE_DAYS_PER_MONTH, compareCalendarDates, daysInclusive } from './calendarDate';
 import { InvalidLivingPhaseError } from './errors';
 import { effectiveMonthlyCosts, type BilledCost, type CategoryCost } from './effectiveCosts';
-import { baselineSavingsCapacity, type FixedCost } from './fixedCosts';
+import { baselineSavingsCapacity, endedCostsBurnedMinor, type FixedCost } from './fixedCosts';
 import { averageMonthlyIncomeMinor, earnedIncomeMinor, monthlyIncomeOn, type IncomeStream } from './income';
 import { roundHalfAwayFromZero } from './money';
 import type { PhaseSnapshot } from './phaseComparison';
@@ -147,8 +147,15 @@ export function phaseSnapshot(
   asOf: CalendarDate
 ): PhaseSnapshot & { readonly savingsRate: number | null; readonly costBasisByCategory: TimelineEntry['costBasisByCategory'] } {
   const costs = effectiveMonthlyCosts({
-    declared: phase.fixedCosts.map(({ category, cadence, amountMinor, label }) => ({ category, cadence, amountMinor, label: label ?? null })),
+    declared: phase.fixedCosts.map(({ category, cadence, amountMinor, label, endDate }) => ({
+      category,
+      cadence,
+      amountMinor,
+      label: label ?? null,
+      endDate: endDate ?? null,
+    })),
     bills: phase.bills ?? [],
+    asOf,
   });
   const monthlyIncomeMinor = monthlyIncomeOn(phase.incomeStreams, referenceDay(phase, asOf));
   const { capacityMinor, savingsRate } = baselineSavingsCapacity({
@@ -193,7 +200,7 @@ export function buildTimeline(phases: readonly LivingPhase[], asOf: CalendarDate
       months,
       totalIncomeMinor: earnedIncomeMinor(span, asOf),
       ...average,
-      totalFixedCostsMinor: roundHalfAwayFromZero(snapshot.monthlyFixedCostsMinor * months),
+      totalFixedCostsMinor: roundHalfAwayFromZero(snapshot.monthlyFixedCostsMinor * months) + endedCostsBurnedMinor(phase.fixedCosts, phase, asOf),
     };
   });
 }
