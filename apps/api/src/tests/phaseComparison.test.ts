@@ -6,6 +6,7 @@ const zeroes = {
   ELECTRICITY: 0,
   GAS: 0,
   WATER: 0,
+  HEATING_COOLING: 0,
   INTERNET: 0,
   PHONE: 0,
   SUBSCRIPTIONS: 0,

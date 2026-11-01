@@ -3,10 +3,7 @@ export const MAX_TEXT_CHARS = 200_000;
 const MAX_LINE_CHARS = 400;
 const MIN_READABLE_CHARACTERS = 20;
 
-/** Lower case with accents removed, so "Telefónica" and "TELEFONICA" read the same. */
-export function fold(text: string): string {
-  return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-}
+export { fold } from '../../contracts/textFolding';
 
 /** Control characters become spaces, line ends are unified, and absurdly long lines are cut. */
 export function cleanLines(text: string): string[] {

@@ -1,7 +1,7 @@
 import type { BenchmarkGap, BenchmarksResponse, CalendarDate, PhaseBenchmarkDto } from '../contracts';
 import { compareShare, housingCostsMinor, housingShare, incomePercentile, internationalDollars, ratioOf, type Household } from '../domain/benchmarks';
 import { isLocalCurrency } from '../domain/countryCurrencies';
-import { monthlyBurnByCategory } from '../domain/fixedCosts';
+import { phaseSnapshot } from '../domain/livingPhase';
 import type { CountryStatisticsService } from './countryStatisticsService';
 import type { LivingPhaseService } from './livingPhaseService';
 import type { ProfileService } from './profileService';
@@ -27,14 +27,15 @@ export class BenchmarkService {
     const phases: PhaseBenchmarkDto[] = [];
     let previousPurchasing: { phaseId: string; dollars: number } | null = null;
     for (const { dto, phase } of loaded) {
+      const snapshot = phaseSnapshot(phase, asOf);
       const statistics = stored.get(dto.countryCode)?.statistics ?? null;
       const benchmark = benchmarkPhase({
         phaseId: dto.id,
         name: dto.name,
         countryCode: dto.countryCode,
         currency: dto.currency,
-        monthlyIncomeMinor: dto.monthlyIncomeMinor,
-        monthlyByCategory: monthlyBurnByCategory(phase.fixedCosts),
+        monthlyIncomeMinor: snapshot.monthlyIncomeMinor,
+        monthlyByCategory: snapshot.fixedCostsByCategoryMinor,
         household,
         statistics,
         previousPurchasing,

@@ -1,5 +1,5 @@
 import { ArrowLeft, Plus } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { LivingPhaseDto, TimelineEntryDto } from '../../contracts';
 import { useBillingRecords } from '../../hooks/useBillingRecords';
 import { useLivingPhases } from '../../hooks/useLivingPhases';
@@ -8,6 +8,7 @@ import { useProfile } from '../../hooks/useProfile';
 import { useBenchmarks } from '../../hooks/useBenchmarks';
 import { useTrends } from '../../hooks/useTrends';
 import { combineStatuses, type MutationResult } from '../../lib/apiErrors';
+import { vendorHistory } from './vendorHistory';
 import type { BillingView } from './billingView';
 import PhaseComparison from './PhaseComparison';
 import OnboardingWizard from './OnboardingWizard';
@@ -46,12 +47,20 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
   const dataReady = phasesApi.status === 'ready';
   const trendsApi = useTrends(dataReady, entries);
   const benchmarksApi = useBenchmarks(dataReady, entries);
-  const billsApi = useBillingRecords(dataReady, entries, trendsApi.reload);
+  // A bill moves the monthly costs of its phase, so the timeline reloads along with the trends.
+  const reloadPhases = phasesApi.reload;
+  const reloadTrends = trendsApi.reload;
+  const afterBillChange = useCallback(() => {
+    reloadTrends();
+    reloadPhases();
+  }, [reloadTrends, reloadPhases]);
+  const billsApi = useBillingRecords(dataReady, entries, afterBillChange);
+  const history = useMemo(() => vendorHistory(phases, billsApi.records), [phases, billsApi.records]);
   const billing: BillingView = {
     asOf: phasesApi.asOf,
     phases,
     recordsFor: (phaseId) => billsApi.records.filter((record) => record.phaseId === phaseId),
-    observedFor: (phaseId) => trendsApi.trends?.phases.find((observed) => observed.phaseId === phaseId),
+    history,
     onAdd: billsApi.createBill,
     onUpdate: billsApi.updateBill,
     onDelete: billsApi.deleteBill,
@@ -235,6 +244,7 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
                   onToggleCompare={toggleCompare}
                   onEdit={(phaseId) => setEditor({ mode: 'edit', phaseId })}
                   onDelete={removePhase}
+                  onUpdatePhase={phasesApi.updatePhase}
                   onAddCost={phasesApi.addFixedCost}
                   onUpdateCost={phasesApi.updateFixedCost}
                   onDeleteCost={phasesApi.deleteFixedCost}

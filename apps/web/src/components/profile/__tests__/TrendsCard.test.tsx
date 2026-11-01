@@ -92,7 +92,7 @@ describe('TrendsCard without bills', () => {
     const onOpenPhase = vi.fn();
     renderCard({ trends: makeEmptyTrends(), onOpenPhase, openPhaseName: 'Madrid' });
 
-    expect(screen.getByText(/No bills yet\./)).toHaveTextContent('Log a bill');
+    expect(screen.getByText(/No bills yet\./)).toHaveTextContent('Add an expense');
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Madrid' }));

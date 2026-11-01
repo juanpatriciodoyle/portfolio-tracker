@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { periodFitsCadence, maxPeriodDays } from './billingPeriod';
 import { fixedCostCategorySchema } from './fixedCost';
 import { amountMinorSchema, calendarDateSchema, currencyCodeSchema, hasAtLeastOneKey, optionalTextSchema } from './primitives';
 import { BILLING_CADENCES } from './vocabulary';
@@ -23,6 +24,12 @@ export const createBillingRecordRequest = z
   .superRefine((value, ctx) => {
     if (value.periodEnd < value.periodStart) {
       ctx.addIssue({ code: 'custom', message: 'The period cannot end before it starts', path: ['periodEnd'] });
+    } else if (!periodFitsCadence(value.cadence, value.periodStart, value.periodEnd)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `A ${value.cadence} bill cannot cover more than ${maxPeriodDays(value.cadence)} days`,
+        path: ['periodEnd'],
+      });
     }
   });
 export type CreateBillingRecordRequest = z.infer<typeof createBillingRecordRequest>;

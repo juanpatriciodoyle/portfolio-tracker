@@ -47,6 +47,14 @@ describe('identifyVendor', () => {
   });
 });
 
+describe('heating and cooling bills', () => {
+  it('reads an aerotermia sender as heating / cooling whatever else the bill says', () => {
+    expect(identifyVendor('NESS Energy\nFactura de aerotermia')?.categories).toEqual(['HEATING_COOLING']);
+    expect(inferCategory('Factura aerotermia\nCalefacción y refrigeración', ['HEATING_COOLING', 'ELECTRICITY'])).toBe('HEATING_COOLING');
+    expect(inferCategory('District heating invoice. Fernwärme.')).toBe('HEATING_COOLING');
+  });
+});
+
 describe('inferCategory', () => {
   it('uses the only category a sender can bill for', () => {
     expect(inferCategory('cualquier texto', ['WATER'])).toBe('WATER');

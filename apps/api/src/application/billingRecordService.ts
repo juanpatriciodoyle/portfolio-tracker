@@ -11,13 +11,14 @@ import { createBillingRecord, type BillingRecord } from '../domain/billing';
 import { billIdentity } from '../domain/billIdentity';
 import { DuplicateBillingRecordError } from '../domain/errors';
 import { buildTrends } from '../domain/trends';
+import { billingRecordContext } from './billedCosts';
 import { ResourceNotFoundError } from './errors';
 import type { LivingPhaseService } from './livingPhaseService';
 import { PayloadVault } from './payloadVault';
-import type { BillFingerprinter, BillingRecordRepository, CipherContext, FieldCipher, StoredBillingRecord } from './ports';
+import type { BillFingerprinter, BillingRecordRepository, FieldCipher, StoredBillingRecord } from './ports';
 import { billingPayloadSchema, type BillingPayload } from './storedPayloads';
 
-const recordContext = (userId: string, recordId: string): CipherContext => ({ table: 'BillingRecord', rowId: recordId, userId });
+const recordContext = billingRecordContext;
 
 export interface BillingRecordServiceDeps {
   readonly repository: BillingRecordRepository;

@@ -8,9 +8,30 @@ import {
   hasAtLeastOneKey,
   optionalTextSchema,
 } from './primitives';
-import { HOUSING_TENURES } from './vocabulary';
+import { HOUSING_TENURES, INCOME_REASONS } from './vocabulary';
 
 export const housingTenureSchema = z.enum(HOUSING_TENURES);
+export const incomeReasonSchema = z.enum(INCOME_REASONS);
+
+/**
+ * From `startDate` the monthly income is `amountMinor` (0 for a stretch without work), until `endDate` or, when
+ * that is null, until a later change takes over or the phase ends.
+ */
+export const incomeChangeSchema = z
+  .object({
+    startDate: calendarDateSchema,
+    endDate: calendarDateSchema.nullable().default(null),
+    amountMinor: amountMinorSchema,
+    reason: incomeReasonSchema.nullable().default(null),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.endDate !== null && value.endDate < value.startDate) {
+      ctx.addIssue({ code: 'custom', message: 'An income change cannot end before it starts', path: ['endDate'] });
+    }
+  });
+export type IncomeChangeDto = z.infer<typeof incomeChangeSchema>;
+export type IncomeChangeInput = z.input<typeof incomeChangeSchema>;
 
 const livingPhaseFields = {
   name: z.string().trim().min(1).max(80),
@@ -22,7 +43,10 @@ const livingPhaseFields = {
   /** null means "still living here": the current phase. */
   endDate: calendarDateSchema.nullable(),
   currency: currencyCodeSchema,
+  /** What came in each month before any income change. */
   monthlyIncomeMinor: amountMinorSchema,
+  /** Raises, new jobs and stretches without work. Sending the list replaces the one stored. */
+  incomeChanges: z.array(incomeChangeSchema).max(50),
   notes: optionalTextSchema(500),
 };
 
@@ -31,6 +55,7 @@ export const createLivingPhaseRequest = z
   .object({
     ...livingPhaseFields,
     endDate: calendarDateSchema.nullable().default(null),
+    incomeChanges: z.array(incomeChangeSchema).max(50).default([]),
     fixedCosts: z.array(createFixedCostRequest).max(50).default([]),
   })
   .strict()
@@ -65,6 +90,7 @@ export const livingPhaseDto = z.object({
   endDate: calendarDateSchema.nullable(),
   currency: currencyCodeSchema,
   monthlyIncomeMinor: amountMinorSchema,
+  incomeChanges: z.array(incomeChangeSchema),
   notes: z.string().nullable(),
   fixedCosts: z.array(fixedCostDto),
 });

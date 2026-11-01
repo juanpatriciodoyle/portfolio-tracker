@@ -1,6 +1,6 @@
 import { ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import { useId, useState } from 'react';
-import type { CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest } from '../../contracts';
+import type { CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest, UpdateLivingPhaseRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import { formatMinor, formatPercent, formatPhaseRange } from '../../lib/money';
 import { barWidthPercent } from '../../lib/scale';
@@ -19,6 +19,7 @@ interface LivingPhaseCardProps {
   onToggleCompare: () => void;
   onEdit: () => void;
   onDelete: () => Promise<MutationResult<unknown>>;
+  onUpdatePhase: (phaseId: string, input: UpdateLivingPhaseRequest) => Promise<MutationResult<unknown>>;
   onAddCost: (phaseId: string, input: CreateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onUpdateCost: (phaseId: string, costId: string, input: UpdateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onDeleteCost: (phaseId: string, costId: string) => Promise<MutationResult<unknown>>;
@@ -36,6 +37,7 @@ export default function LivingPhaseCard({
   onToggleCompare,
   onEdit,
   onDelete,
+  onUpdatePhase,
   onAddCost,
   onUpdateCost,
   onDeleteCost,
@@ -126,6 +128,7 @@ export default function LivingPhaseCard({
           <PhaseDetails
             phase={phase}
             entry={entry}
+            onUpdatePhase={onUpdatePhase}
             onAddCost={onAddCost}
             onUpdateCost={onUpdateCost}
             onDeleteCost={onDeleteCost}

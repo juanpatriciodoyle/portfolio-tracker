@@ -1,6 +1,7 @@
 import type { Express, Router } from 'express';
 import { Router as createRouter } from 'express';
 import type { PrismaClient } from '@prisma/client';
+import { BilledCostReader } from '../application/billedCosts';
 import { BillingRecordService } from '../application/billingRecordService';
 import { LivingPhaseService } from '../application/livingPhaseService';
 import { ProfileService } from '../application/profileService';
@@ -52,7 +53,13 @@ export interface ProfileFeatureDeps {
 /** Wires services to routes. Pure composition: easy to run with in-memory repositories in tests. */
 export function buildProfileFeature(deps: ProfileFeatureDeps): Router[] {
   const today = deps.today ?? (() => calendarDateOf(new Date()));
-  const phases = new LivingPhaseService({ repository: deps.livingPhaseRepository, cipher: deps.cipher, newId: deps.newId, fx: deps.fx });
+  const phases = new LivingPhaseService({
+    repository: deps.livingPhaseRepository,
+    cipher: deps.cipher,
+    newId: deps.newId,
+    fx: deps.fx,
+    billedCosts: new BilledCostReader(deps.billingRecordRepository, deps.cipher),
+  });
   const limits = deps.documentLimits ?? {};
   const documents = deps.pdfTextExtractor
     ? [

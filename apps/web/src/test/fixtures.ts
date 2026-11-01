@@ -1,13 +1,14 @@
-import type {
-  BillingRecordDto,
-  CurrencyWindowsDto,
-  FixedCostDto,
-  LivingPhaseDto,
-  PhaseObservedDto,
-  ProfileData,
-  TimelineEntryDto,
-  TrendsResponse,
-  WindowAverageDto,
+import {
+  FIXED_COST_CATEGORIES,
+  type BillingRecordDto,
+  type CurrencyWindowsDto,
+  type FixedCostDto,
+  type LivingPhaseDto,
+  type PhaseObservedDto,
+  type ProfileData,
+  type TimelineEntryDto,
+  type TrendsResponse,
+  type WindowAverageDto,
 } from '../contracts';
 
 export function makeCost(overrides: Partial<FixedCostDto> = {}): FixedCostDto {
@@ -26,8 +27,17 @@ export function makePhase(overrides: Partial<LivingPhaseDto> = {}): LivingPhaseD
     endDate: null,
     currency: 'EUR',
     monthlyIncomeMinor: 320000,
+    incomeChanges: [],
     notes: null,
     fixedCosts: [makeCost()],
+    ...overrides,
+  };
+}
+
+/** Every category with nothing declared or billed: tests overwrite the ones they care about. */
+export function noBasis(overrides: Partial<TimelineEntryDto['costBasisByCategory']> = {}): TimelineEntryDto['costBasisByCategory'] {
+  return {
+    ...(Object.fromEntries(FIXED_COST_CATEGORIES.map((category) => [category, { basis: null, billCount: 0 }])) as TimelineEntryDto['costBasisByCategory']),
     ...overrides,
   };
 }
@@ -51,12 +61,14 @@ export function makeEntry(overrides: Partial<TimelineEntryDto> = {}): TimelineEn
       ELECTRICITY: 15000,
       GAS: 0,
       WATER: 5000,
+      HEATING_COOLING: 0,
       INTERNET: 5000,
       PHONE: 0,
       SUBSCRIPTIONS: 5000,
       TAXES: 0,
       OTHER: 0,
     },
+    costBasisByCategory: noBasis(),
     months: 14,
     totalIncomeMinor: 4480000,
     totalFixedCostsMinor: 2100000,
@@ -115,6 +127,7 @@ export function makeObserved(overrides: Partial<PhaseObservedDto> = {}): PhaseOb
       ELECTRICITY: 4800,
       GAS: 0,
       WATER: 1500,
+      HEATING_COOLING: 0,
       INTERNET: 4700,
       PHONE: 0,
       SUBSCRIPTIONS: 0,

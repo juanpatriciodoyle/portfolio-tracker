@@ -386,7 +386,7 @@ describe('bills and trends over HTTP', () => {
 
     expect((await request(app).post('/api/billing-records').set(ALICE).send(bill(phaseId, { periodEnd: '2026-08-01' }))).status).toBe(400);
     expect((await request(app).post('/api/billing-records').set(ALICE).send(bill(phaseId, { userId: 'x' }))).status).toBe(400);
-    expect((await request(app).post('/api/billing-records').set(ALICE).send(bill(phaseId, { periodStart: '2023-01-01', periodEnd: '2026-01-01' }))).status).toBe(422);
+    expect((await request(app).post('/api/billing-records').set(ALICE).send(bill(phaseId, { cadence: 'ONE_OFF', periodStart: '2023-01-01', periodEnd: '2026-01-01' }))).status).toBe(422);
     expect((await request(app).post('/api/billing-records').set(BOB).send(bill(phaseId))).status).toBe(404);
   });
 

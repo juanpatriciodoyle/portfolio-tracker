@@ -74,7 +74,7 @@ export function incomePercentile(
 }
 
 /** What statistics offices count as housing costs: rent, the utilities and property taxes. Not internet, phone or subscriptions. */
-const HOUSING_CATEGORIES: readonly FixedCostCategory[] = ['RENT', 'ELECTRICITY', 'GAS', 'WATER', 'TAXES'];
+const HOUSING_CATEGORIES: readonly FixedCostCategory[] = ['RENT', 'ELECTRICITY', 'GAS', 'WATER', 'HEATING_COOLING', 'TAXES'];
 
 export function housingCostsMinor(monthlyByCategory: Readonly<Record<FixedCostCategory, number>>): number {
   return HOUSING_CATEGORIES.reduce((total, category) => total + monthlyByCategory[category], 0);

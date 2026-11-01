@@ -99,7 +99,7 @@ export default function TrendsCard({ status, trends, message, onRetry, onOpenPha
       {trends && !hasAnyBills(trends) && (
         <div className="trends-card__empty">
           <p className="phase-details__hint">
-            No bills yet. Open a living phase and choose <strong>Log a bill</strong> to see how your monthly costs are trending.
+            No bills yet. Open a living phase and choose <strong>Add an expense</strong> to see how your monthly costs are trending.
           </p>
           {onOpenPhase && openPhaseName && (
             <button type="button" className="profile-text-button" onClick={onOpenPhase}>

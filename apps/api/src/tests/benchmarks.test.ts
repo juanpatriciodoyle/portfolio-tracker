@@ -82,7 +82,7 @@ describe('incomePercentile', () => {
 });
 
 describe('housing costs and their share of income', () => {
-  const byCategory = { RENT: 120000, ELECTRICITY: 9600, GAS: 4000, WATER: 2500, INTERNET: 4000, PHONE: 3000, SUBSCRIPTIONS: 1500, TAXES: 1000, OTHER: 700 };
+  const byCategory = { RENT: 120000, ELECTRICITY: 9600, GAS: 4000, WATER: 2500, HEATING_COOLING: 0, INTERNET: 4000, PHONE: 3000, SUBSCRIPTIONS: 1500, TAXES: 1000, OTHER: 700 };
 
   it('counts rent, electricity, gas, water and property taxes, not internet, phone or subscriptions', () => {
     expect(housingCostsMinor(byCategory)).toBe(120000 + 9600 + 4000 + 2500 + 1000);

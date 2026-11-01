@@ -1,5 +1,5 @@
-import type { PhaseObservedDto, TrendsResponse, WindowAverageDto } from '../../contracts';
-import { displayLocale, formatMinor, formatSignedMinor } from '../../lib/money';
+import type { TrendsResponse, WindowAverageDto } from '../../contracts';
+import { displayLocale, formatMinor } from '../../lib/money';
 
 export interface WindowFigure {
   windowMonths: number;
@@ -60,28 +60,4 @@ export function hasAnyBills(trends: TrendsResponse): boolean {
     group.windows.some((window) => window.coveredMonths > 0)
   );
   return covered || trends.phases.some((phase) => phase.coveredMonths > 0);
-}
-
-export interface DriftDescription {
-  sentence: string;
-  /** Which way the bills came out, for colour: higher than declared, lower, or the same. */
-  direction: 'higher' | 'lower' | 'same';
-  basis: string;
-}
-
-/** "Bills say about €1,310 a month vs €1,293 declared (+€17)." Hidden (null) when no bill backs it. */
-export function describeDrift(observed: PhaseObservedDto | undefined, locale: string = displayLocale()): DriftDescription | null {
-  if (!observed || observed.coveredMonths === 0) return null;
-  const { currency, observedMonthlyMinor, declaredMonthlyMinor, driftMinor } = observed;
-  const actual = formatMinor(observedMonthlyMinor, currency, locale);
-  const basis = `Based on ${observed.coveredMonths} ${observed.coveredMonths === 1 ? 'month' : 'months'} of bills.`;
-
-  if (driftMinor === 0) {
-    return { sentence: `Bills match what you declared: about ${actual} a month.`, direction: 'same', basis };
-  }
-  return {
-    sentence: `Bills say about ${actual} a month vs ${formatMinor(declaredMonthlyMinor, currency, locale)} declared (${formatSignedMinor(driftMinor, currency, locale)}).`,
-    direction: driftMinor > 0 ? 'higher' : 'lower',
-    basis,
-  };
 }

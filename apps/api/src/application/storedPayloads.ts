@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { amountMinorSchema } from '../contracts';
+import { amountMinorSchema, incomeChangeSchema } from '../contracts';
 
 /** What is sealed inside a living phase row. */
 export const phasePayloadSchema = z
@@ -8,6 +8,8 @@ export const phasePayloadSchema = z
     city: z.string(),
     address: z.string().nullable(),
     monthlyIncomeMinor: amountMinorSchema,
+    /** Phases saved before income changes existed have none. */
+    incomeChanges: z.array(incomeChangeSchema).default([]),
     notes: z.string().nullable(),
   })
   .strict();

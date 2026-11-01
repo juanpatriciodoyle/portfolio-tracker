@@ -1,6 +1,7 @@
 import {
   BILLING_CADENCES,
   COST_CADENCES,
+  INCOME_REASONS,
   UTILITY_CATEGORIES,
   type BillingCadence,
   type CostCadence,
@@ -8,6 +9,7 @@ import {
   type FixedCostCategory,
   type FxRateSource,
   type HousingTenure,
+  type IncomeReason,
   type PhaseStatus,
 } from '../../contracts';
 
@@ -16,6 +18,7 @@ export const CATEGORY_LABELS: Record<FixedCostCategory, string> = {
   ELECTRICITY: 'Electricity',
   GAS: 'Gas',
   WATER: 'Water',
+  HEATING_COOLING: 'Heating / cooling',
   INTERNET: 'Internet',
   PHONE: 'Phone',
   SUBSCRIPTIONS: 'Subscriptions',
@@ -30,7 +33,7 @@ export interface CategoryGroup {
   categories: readonly FixedCostCategory[];
 }
 
-/** How categories are laid out wherever they are picked or listed. Utilities stay together. */
+/** How categories are laid out wherever they are picked or listed, in this order. Utilities stay together. */
 export const CATEGORY_GROUPS: readonly CategoryGroup[] = [
   { id: 'rent', label: null, categories: ['RENT'] },
   { id: 'utilities', label: 'Utilities', categories: UTILITY_CATEGORIES },
@@ -41,7 +44,7 @@ export const CATEGORY_GROUPS: readonly CategoryGroup[] = [
 export const CADENCE_LABELS: Record<CostCadence, string> = {
   MONTHLY: 'Monthly',
   BIMONTHLY: 'Every 2 months',
-  QUARTERLY: 'Quarterly',
+  QUARTERLY: 'Every 3 months',
   ANNUAL: 'Yearly',
 };
 
@@ -91,6 +94,15 @@ export const EMPLOYMENT_LABELS: Record<EmploymentStatus, string> = {
   RETIRED: 'Retired',
   OTHER: 'Other',
 };
+
+export const INCOME_REASON_LABELS: Record<IncomeReason, string> = {
+  PROMOTION: 'Promotion',
+  NEW_JOB: 'New job',
+  UNEMPLOYMENT: 'Unemployment',
+  OTHER: 'Other',
+};
+
+export const INCOME_REASON_OPTIONS = INCOME_REASONS.map((value) => ({ value, label: INCOME_REASON_LABELS[value] }));
 
 export const STATUS_LABELS: Record<PhaseStatus, string> = {
   past: 'Past',

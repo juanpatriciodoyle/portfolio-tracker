@@ -1,4 +1,5 @@
 import type { BillingCadence, CalendarDate, FixedCostCategory } from '../contracts/vocabulary';
+import { periodFitsCadence, maxPeriodDays } from '../contracts/billingPeriod';
 import { daysInclusive, firstDayOf, lastDayOf, monthOf, nextMonth, type CalendarMonth } from './calendarDate';
 import { InvalidBillingRecordError } from './errors';
 
@@ -23,6 +24,9 @@ export function createBillingRecord(input: BillingRecord): BillingRecord {
   }
   if (input.periodEnd < input.periodStart) {
     throw new InvalidBillingRecordError('A bill period cannot end before it starts');
+  }
+  if (!periodFitsCadence(input.cadence, input.periodStart, input.periodEnd)) {
+    throw new InvalidBillingRecordError(`A ${input.cadence} bill cannot cover more than ${maxPeriodDays(input.cadence)} days`);
   }
   if (daysInclusive(input.periodStart, input.periodEnd) > MAX_PERIOD_DAYS) {
     throw new InvalidBillingRecordError('A bill cannot cover more than two years');

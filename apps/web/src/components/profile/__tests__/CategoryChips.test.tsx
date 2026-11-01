@@ -13,7 +13,7 @@ describe('CategoryChips', () => {
     expect(new Set(radios.map((radio) => radio.getAttribute('name')))).toEqual(new Set(['cost']));
   });
 
-  it('keeps electricity, gas and water together under Utilities', () => {
+  it('keeps electricity, gas, water and heating / cooling together under Utilities', () => {
     render(<CategoryChips name="cost" value={null} onChange={vi.fn()} />);
 
     const utilities = screen.getByRole('group', { name: 'Utilities' });
@@ -22,6 +22,7 @@ describe('CategoryChips', () => {
       'ELECTRICITY',
       'GAS',
       'WATER',
+      'HEATING_COOLING',
     ]);
   });
 

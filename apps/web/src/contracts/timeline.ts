@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import { fixedCostCategorySchema } from './fixedCost';
 import { calendarDateSchema, countryCodeSchema, currencyCodeSchema } from './primitives';
-import { FX_RATE_SOURCES, PHASE_STATUSES } from './vocabulary';
+import { COST_BASES, FX_RATE_SOURCES, PHASE_STATUSES } from './vocabulary';
 
 /** Whole minor units that may be negative (deficits and deltas). */
 const signedMinor = z.number().int();
@@ -26,6 +26,11 @@ export const timelineEntryDto = z.object({
   /** Savings capacity as a fraction of income; null when there is no income. */
   savingsRate: z.number().nullable(),
   fixedCostsByCategoryMinor: amountsByCategory,
+  /** Where each category's cost comes from (null: nothing declared or billed) and how many bills it was worked out from. */
+  costBasisByCategory: z.record(
+    fixedCostCategorySchema,
+    z.object({ basis: z.enum(COST_BASES).nullable(), billCount: z.number().int().nonnegative() })
+  ),
   /** Months lived in the phase up to the "as of" day (0 for upcoming phases). */
   months: z.number().nonnegative(),
   totalIncomeMinor: signedMinor,

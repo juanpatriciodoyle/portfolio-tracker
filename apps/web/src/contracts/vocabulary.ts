@@ -13,6 +13,7 @@ export const FIXED_COST_CATEGORIES = [
   'ELECTRICITY',
   'GAS',
   'WATER',
+  'HEATING_COOLING',
   'INTERNET',
   'PHONE',
   'SUBSCRIPTIONS',
@@ -22,7 +23,7 @@ export const FIXED_COST_CATEGORIES = [
 export type FixedCostCategory = (typeof FIXED_COST_CATEGORIES)[number];
 
 /** The categories the UI groups under "Utilities". */
-export const UTILITY_CATEGORIES = ['ELECTRICITY', 'GAS', 'WATER'] as const satisfies readonly FixedCostCategory[];
+export const UTILITY_CATEGORIES = ['ELECTRICITY', 'GAS', 'WATER', 'HEATING_COOLING'] as const satisfies readonly FixedCostCategory[];
 
 /** How often a bill is paid. Each cadence covers a whole number of months per payment. */
 export const COST_CADENCES = ['MONTHLY', 'BIMONTHLY', 'QUARTERLY', 'ANNUAL'] as const;
@@ -31,6 +32,20 @@ export type CostCadence = (typeof COST_CADENCES)[number];
 /** Bills as they were actually issued: the recurring cadences, plus a single charge that is not recurring. */
 export const BILLING_CADENCES = [...COST_CADENCES, 'ONE_OFF'] as const;
 export type BillingCadence = (typeof BILLING_CADENCES)[number];
+
+/**
+ * Categories whose bill changes from one period to the next. Their monthly cost is always the average of the
+ * bills logged for the living phase; a declared rate is only the starting guess until the first bill arrives.
+ */
+export const VARIABLE_COST_CATEGORIES = ['ELECTRICITY', 'GAS', 'WATER', 'HEATING_COOLING', 'TAXES'] as const satisfies readonly FixedCostCategory[];
+
+/** Where a category's monthly cost comes from. MIXED: partly from bills, partly from a rate still only declared. */
+export const COST_BASES = ['DECLARED', 'BILLS', 'MIXED'] as const;
+export type CostBasis = (typeof COST_BASES)[number];
+
+/** Why an income changed during a living phase. */
+export const INCOME_REASONS = ['PROMOTION', 'NEW_JOB', 'UNEMPLOYMENT', 'OTHER'] as const;
+export type IncomeReason = (typeof INCOME_REASONS)[number];
 
 /** Rolling-average windows, in complete months. */
 export const ROLLING_WINDOW_MONTHS = [3, 6, 12] as const;

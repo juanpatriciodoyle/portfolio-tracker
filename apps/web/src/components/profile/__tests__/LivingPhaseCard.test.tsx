@@ -21,6 +21,7 @@ function renderCard(overrides: Partial<React.ComponentProps<typeof LivingPhaseCa
     onToggleCompare: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn().mockResolvedValue(ok),
+    onUpdatePhase: vi.fn().mockResolvedValue(ok),
     onAddCost: vi.fn().mockResolvedValue(ok),
     onUpdateCost: vi.fn().mockResolvedValue(ok),
     onDeleteCost: vi.fn().mockResolvedValue(ok),
@@ -118,7 +119,7 @@ describe('LivingPhaseCard expanding and comparing', () => {
   });
 
   it('invites the first bill when there are none', () => {
-    const nothing = { RENT: 0, ELECTRICITY: 0, GAS: 0, WATER: 0, INTERNET: 0, PHONE: 0, SUBSCRIPTIONS: 0, TAXES: 0, OTHER: 0 };
+    const nothing = { RENT: 0, ELECTRICITY: 0, GAS: 0, WATER: 0, HEATING_COOLING: 0, INTERNET: 0, PHONE: 0, SUBSCRIPTIONS: 0, TAXES: 0, OTHER: 0 };
     renderCard({
       expanded: true,
       entry: makeEntry({ monthlyFixedCostsMinor: 0, fixedCostsByCategoryMinor: nothing }),
@@ -141,56 +142,25 @@ describe('LivingPhaseCard expanding and comparing', () => {
   });
 });
 
-describe('LivingPhaseCard bills', () => {
-  it('lists each bill with what one payment costs and how often it is paid', () => {
+describe('LivingPhaseCard costs', () => {
+  it('lists each declared cost under its category, with what one payment costs and how often it is paid', () => {
     renderCard({ expanded: true });
 
-    const bills = within(screen.getByRole('list', { name: 'Fixed costs' })).getAllByRole('listitem');
-    expect(bills).toHaveLength(2);
-    expect(bills[0]).toHaveTextContent('Rent · Landlord');
-    expect(bills[0]).toHaveTextContent('€1,200 every month');
-    expect(bills[1]).toHaveTextContent('Water');
-    expect(bills[1]).toHaveTextContent('€42 every 2 months');
+    const rent = within(screen.getByRole('list', { name: 'Declared Rent costs' })).getAllByRole('listitem');
+    expect(rent).toHaveLength(1);
+    expect(rent[0]).toHaveTextContent('Landlord');
+    expect(rent[0]).toHaveTextContent('€1,200 every month');
+    const water = within(screen.getByRole('list', { name: 'Declared Water costs' })).getAllByRole('listitem');
+    expect(water[0]).toHaveTextContent('€42 every 2 months');
   });
 
-  it('adds a bill without leaving the card', async () => {
-    const { props } = renderCard({ expanded: true });
+  it('has no separate "add a cost" or "add a bill" buttons, and no "your bills" or "bills received" sections', () => {
+    renderCard({ expanded: true });
 
-    fireEvent.click(screen.getByRole('button', { name: /Add a cost/ }));
-    fireEvent.click(screen.getByLabelText('Water'));
-    fireEvent.change(screen.getByLabelText('Amount each time'), { target: { value: '42,50' } });
-    fireEvent.click(screen.getByLabelText('Every 2 months'));
-    fireEvent.click(screen.getByRole('button', { name: 'Add cost' }));
-
-    await waitFor(() =>
-      expect(props.onAddCost).toHaveBeenCalledWith('p1', { category: 'WATER', cadence: 'BIMONTHLY', amountMinor: 4250, label: null })
-    );
-    await waitFor(() => expect(props.announce).toHaveBeenCalledWith('Cost added'));
-    expect(screen.queryByRole('button', { name: 'Add cost' })).not.toBeInTheDocument();
-  });
-
-  it('asks for the category and the amount before adding', () => {
-    const { props } = renderCard({ expanded: true });
-
-    fireEvent.click(screen.getByRole('button', { name: /Add a cost/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add cost' }));
-
-    expect(screen.getByText('Pick what this bill is for.')).toBeInTheDocument();
-    expect(screen.getByText('Enter an amount such as 48 or 48.50.')).toBeInTheDocument();
-    expect(props.onAddCost).not.toHaveBeenCalled();
-  });
-
-  it('shows why a bill could not be added and keeps the form open', async () => {
-    const onAddCost = vi.fn().mockResolvedValue({ ok: false, failure: { kind: 'network', message: 'Could not reach the server.' } });
-    renderCard({ expanded: true, onAddCost });
-
-    fireEvent.click(screen.getByRole('button', { name: /Add a cost/ }));
-    fireEvent.click(screen.getByLabelText('Rent'));
-    fireEvent.change(screen.getByLabelText('Amount each time'), { target: { value: '900' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add cost' }));
-
-    expect(await screen.findByText('Could not reach the server.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add cost' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add a cost/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add a bill/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/your bills/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/bills received/i)).not.toBeInTheDocument();
   });
 
   it('edits a bill with its current values filled in', async () => {

@@ -4,6 +4,7 @@ import { fold } from './text';
 const KEYWORDS: Readonly<Record<FixedCostCategory, readonly RegExp[]>> = {
   ELECTRICITY: [/\belectricidad\b/, /\belectricity\b/, /\belectrica\b/, /potencia contratada/, /\bkwh\b/, /\bkw\b/, /\bluz\b/, /\bstrom\b/, /\belectricite\b/],
   GAS: [/gas natural/, /\bgas\b/, /\bpcs\b/, /natural gas/, /\btherms?\b/, /\bgaz\b/],
+  HEATING_COOLING: [/aerotermia/, /calefaccion/, /heating/, /cooling/, /district heating/, /fernwarme/, /chauffage/],
   WATER: [/\bagua\b/, /\bwater\b/, /alcantarillado/, /sewerage/, /saneamiento/, /\bm3\b/, /\bm³\b/, /\beau\b/, /\bwasser\b/],
   INTERNET: [/\binternet\b/, /\bfibra\b/, /banda ancha/, /broadband/, /\bwi-?fi\b/, /\bfiber\b/, /\bfibre\b/, /\bmbps\b/],
   PHONE: [/\bmovil\b/, /\bmobile\b/, /\broaming\b/, /\btelefonia\b/, /\bprepago\b/, /\bsms\b/],

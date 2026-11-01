@@ -35,7 +35,21 @@ describe('createBillingRecordRequest', () => {
   });
 
   it.each(BILLING_CADENCES)('accepts the cadence %s', (cadence) => {
-    expect(createBillingRecordRequest.safeParse({ ...bill, cadence }).success).toBe(true);
+    expect(createBillingRecordRequest.safeParse({ ...bill, cadence, periodStart: '2026-09-01', periodEnd: '2026-09-30' }).success).toBe(true);
+  });
+
+  it.each([
+    ['MONTHLY', '2026-10-05', true],
+    ['MONTHLY', '2026-10-06', false],
+    ['BIMONTHLY', '2026-11-05', true],
+    ['BIMONTHLY', '2026-11-06', false],
+    ['QUARTERLY', '2026-12-09', true],
+    ['QUARTERLY', '2026-12-10', false],
+    ['ONE_OFF', '2027-12-31', true],
+  ])('a %s bill starting 2026-09-01 and ending %s is accepted: %s', (cadence, periodEnd, accepted) => {
+    const result = createBillingRecordRequest.safeParse({ ...bill, cadence, periodStart: '2026-09-01', periodEnd });
+    expect(result.success).toBe(accepted);
+    if (!accepted) expect(result.error?.issues.map((issue) => issue.path.join('.'))).toEqual(['periodEnd']);
   });
 
   it('accepts a one-day period but not one that ends before it starts', () => {

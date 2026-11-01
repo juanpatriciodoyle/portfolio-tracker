@@ -20,6 +20,7 @@ import {
   type LivingPhase,
 } from '../domain/livingPhase';
 import { comparePhases } from '../domain/phaseComparison';
+import type { BilledCostReader } from './billedCosts';
 import { ResourceNotFoundError } from './errors';
 import { PayloadVault } from './payloadVault';
 import type { CipherContext, FieldCipher, FxRateProvider, LivingPhaseRepository, StoredLivingPhase } from './ports';
@@ -35,6 +36,8 @@ export interface LivingPhaseServiceDeps {
   readonly newId?: () => string;
   /** Without it, phases in different currencies cannot be compared. */
   readonly fx?: FxRateProvider;
+  /** Where bills are read from, so received bills can move a phase's monthly costs. Without it only declared costs count. */
+  readonly billedCosts?: BilledCostReader;
 }
 
 export interface LoadedPhase {
@@ -51,10 +54,12 @@ export class LivingPhaseService {
   private readonly vault: PayloadVault;
   private readonly newId: () => string;
   private readonly fx?: FxRateProvider;
+  private readonly billedCosts?: BilledCostReader;
 
-  constructor({ repository, cipher, newId = () => randomUUID(), fx }: LivingPhaseServiceDeps) {
+  constructor({ repository, cipher, newId = () => randomUUID(), fx, billedCosts }: LivingPhaseServiceDeps) {
     this.repository = repository;
     this.fx = fx;
+    this.billedCosts = billedCosts;
     this.vault = new PayloadVault(cipher);
     this.newId = newId;
   }
@@ -93,7 +98,7 @@ export class LivingPhaseService {
 
     let result;
     try {
-      result = comparePhases(phaseSnapshot(from.phase), phaseSnapshot(to.phase), { fx: quote?.rates });
+      result = comparePhases(phaseSnapshot(from.phase, asOf), phaseSnapshot(to.phase, asOf), { fx: quote?.rates });
     } catch (error) {
       if (error instanceof MissingFxRateError || error instanceof InvalidFxRateError) return fxRequired;
       throw error;
@@ -145,6 +150,7 @@ export class LivingPhaseService {
       city: change.city ?? current.city,
       address: change.address === undefined ? current.address : change.address,
       monthlyIncomeMinor: change.monthlyIncomeMinor ?? current.monthlyIncomeMinor,
+      incomeChanges: change.incomeChanges ?? current.incomeChanges,
       notes: change.notes === undefined ? current.notes : change.notes,
     };
     const columns = {
@@ -155,7 +161,7 @@ export class LivingPhaseService {
       tenure: change.tenure ?? stored.tenure,
     };
 
-    createLivingPhase({ id: phaseId, ...columns, monthlyIncomeMinor: payload.monthlyIncomeMinor, fixedCosts: [] });
+    createLivingPhase({ id: phaseId, ...columns, monthlyIncomeMinor: payload.monthlyIncomeMinor, incomeChanges: payload.incomeChanges, fixedCosts: [] });
     const conflicts = findConflicts({ id: phaseId, startDate: columns.startDate, endDate: columns.endDate }, all);
     if (conflicts.length > 0) throw new PhaseOverlapError(conflicts);
 
@@ -223,15 +229,18 @@ export class LivingPhaseService {
 
   /** Every phase of the person, decrypted: the display form and the domain form. */
   async loadPhases(userId: string): Promise<LoadedPhase[]> {
-    return (await this.repository.list(userId)).map((stored) => {
-      const dto = this.toDto(userId, stored);
+    const [stored, bills] = await Promise.all([this.repository.list(userId), this.billedCosts?.byPhase(userId)]);
+    return stored.map((row) => {
+      const dto = this.toDto(userId, row);
       const phase = createLivingPhase({
         id: dto.id,
         startDate: dto.startDate,
         endDate: dto.endDate,
         currency: dto.currency,
         monthlyIncomeMinor: dto.monthlyIncomeMinor,
-        fixedCosts: dto.fixedCosts.map(({ id, category, cadence, amountMinor }) => ({ id, category, cadence, amountMinor })),
+        incomeChanges: dto.incomeChanges,
+        fixedCosts: dto.fixedCosts.map(({ id, category, cadence, amountMinor, label }) => ({ id, category, cadence, amountMinor, label })),
+        bills: bills?.get(dto.id) ?? [],
       });
       return { dto, phase };
     });
@@ -250,6 +259,7 @@ export class LivingPhaseService {
       endDate: stored.endDate,
       currency: stored.currency,
       monthlyIncomeMinor: payload.monthlyIncomeMinor,
+      incomeChanges: payload.incomeChanges,
       notes: payload.notes,
       fixedCosts: stored.fixedCosts.map((cost) => {
         const sealed = this.vault.open(costPayloadSchema, cost.payload, costContext(userId, cost.id));
@@ -281,6 +291,7 @@ export class LivingPhaseService {
         endDate: request.endDate,
         currency: request.currency,
         monthlyIncomeMinor: request.monthlyIncomeMinor,
+        incomeChanges: request.incomeChanges,
         fixedCosts: costs.map(({ id: costId, category, cadence, amountMinor }) => ({ id: costId, category, cadence, amountMinor })),
       })
     );
@@ -306,6 +317,7 @@ export class LivingPhaseService {
           city: request.city,
           address: request.address ?? null,
           monthlyIncomeMinor: request.monthlyIncomeMinor,
+          incomeChanges: request.incomeChanges,
           notes: request.notes ?? null,
         } satisfies PhasePayload,
         phaseContext(userId, id)

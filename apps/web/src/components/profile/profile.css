@@ -21,6 +21,7 @@
 [data-category='ELECTRICITY'] { --category-color: var(--color-cost-electricity); }
 [data-category='GAS'] { --category-color: var(--color-cost-gas); }
 [data-category='WATER'] { --category-color: var(--color-cost-water); }
+[data-category='HEATING_COOLING'] { --category-color: var(--color-cost-heating-cooling); }
 [data-category='INTERNET'] { --category-color: var(--color-cost-internet); }
 [data-category='PHONE'] { --category-color: var(--color-cost-phone); }
 [data-category='SUBSCRIPTIONS'] { --category-color: var(--color-cost-subscriptions); }
@@ -826,7 +827,7 @@
 .phase-breakdown {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 18px;
 }
 
 .phase-breakdown__group-label {
@@ -849,16 +850,57 @@
   gap: 6px;
 }
 
+.phase-breakdown__list {
+  gap: 14px;
+}
+
+.phase-breakdown__item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .phase-breakdown__row {
   display: flex;
   align-items: center;
   gap: 10px;
+  /* The width of the buttons that appear on the rows below, so every amount ends in the same place. */
+  padding-right: 74px;
   font-size: 13.5px;
 }
 
 .phase-breakdown__name {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   color: var(--text-heading);
+}
+
+.phase-breakdown__note {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Declared lines sit quietly under their category. Their amounts line up with the category's: both leave room for the hidden buttons (62px and a 12px gap). */
+.cost-list--nested {
+  margin-left: 20px;
+  gap: 2px;
+}
+
+.cost-list--nested .cost-row {
+  grid-template-columns: 1fr auto 62px;
+  padding: 2px 0;
+  background: none;
+  border: none;
+  font-size: 13px;
+}
+
+.phase-details__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 12px;
 }
 
 .phase-breakdown__amount {
@@ -910,6 +952,31 @@
 .cost-row__actions {
   display: inline-flex;
   gap: 6px;
+  /* Edit and remove stay out of sight until the row is pointed at or focused; touch screens have no hover, so they show there. */
+  opacity: 0;
+  transition: opacity var(--motion-quick) ease;
+}
+
+.cost-row:hover .cost-row__actions,
+.cost-row:focus-within .cost-row__actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .cost-row__actions {
+    opacity: 1;
+  }
+}
+
+.cost-row.is-replaced .cost-row__name,
+.cost-row.is-replaced .cost-row__amount {
+  color: var(--text-muted);
+}
+
+.cost-row.is-replaced .cost-row__struck,
+.cost-row.is-replaced .cost-row__amount {
+  text-decoration: line-through;
+  text-decoration-color: var(--text-muted);
 }
 
 .cost-editor {
@@ -1057,11 +1124,7 @@
   }
 }
 
-/* ---------- Bills received ---------- */
-
-.bills-section {
-  margin-top: 4px;
-}
+/* ---------- Bills, expenses and documents ---------- */
 
 .bill-row__main {
   align-items: flex-start;
@@ -1081,31 +1144,6 @@
 .bill-row__period {
   font-size: 12px;
   color: var(--text-muted);
-}
-
-.bills-drift {
-  margin: 0 0 10px 0;
-  font-size: 13.5px;
-  line-height: 1.5;
-  color: var(--text-heading);
-}
-
-.bills-drift.is-higher {
-  color: var(--color-drift-higher);
-}
-
-.bills-drift.is-lower {
-  color: var(--color-drift-lower);
-}
-
-.bills-drift__basis {
-  display: block;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.bills-section__more {
-  margin-top: 8px;
 }
 
 /* ---------- Trends ---------- */
@@ -1245,16 +1283,10 @@
 
 /* ---------- Reading a bill from a PDF ---------- */
 
-.form-unread-note {
-  color: var(--text-accent);
-  font-size: 12px;
-  margin: 6px 0 0 0;
-}
-
 .document-review {
   position: fixed;
   inset: 0;
-  z-index: 110;
+  z-index: 1200; /* above the dialogs it can be opened from */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1286,6 +1318,12 @@
   margin: 0;
   font-size: 18px;
   color: var(--text-heading);
+}
+
+.document-review__progress {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 .document-review__body {
@@ -1333,12 +1371,6 @@
   .document-review__preview {
     min-height: 240px;
   }
-}
-
-.bills-section__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 /* ---------- Benchmarks ---------- */
@@ -1456,4 +1488,59 @@
   margin-top: 12px;
   font-size: 12.5px;
   color: var(--text-muted);
+}
+
+/* ---------- Expense dialogs, PDF drop zone, income, warning borders ---------- */
+
+.expense-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 4px;
+}
+
+.pdf-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-subtle-color);
+  border-radius: 10px;
+  transition: border-color var(--motion-quick) ease, background-color var(--motion-quick) ease;
+}
+
+.pdf-picker.is-dragging {
+  border-color: var(--accent-primary);
+  background-color: var(--accent-blue-subtle);
+}
+
+.pdf-picker__button {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.income-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* A field the document could not give us, still empty: yellow, with no extra words. */
+.form-input.is-unread,
+.profile-chips.is-unread,
+.profile-segmented.is-unread {
+  border: 1px solid var(--color-warning);
+}
+
+.profile-chips.is-unread,
+.profile-segmented.is-unread {
+  padding: 8px 10px;
+  border-radius: 10px;
 }

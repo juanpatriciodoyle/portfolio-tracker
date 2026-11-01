@@ -1,13 +1,9 @@
 import { FIXED_COST_CATEGORIES, type CostCadence, type FixedCostCategory } from '../contracts/vocabulary';
+import { MONTHS_PER_CADENCE } from '../contracts/billingPeriod';
 import { roundHalfAwayFromZero } from './money';
 
 /** How many months one payment covers. */
-export const MONTHS_PER_PAYMENT: Readonly<Record<CostCadence, number>> = {
-  MONTHLY: 1,
-  BIMONTHLY: 2,
-  QUARTERLY: 3,
-  ANNUAL: 12,
-};
+export const MONTHS_PER_PAYMENT = MONTHS_PER_CADENCE;
 
 const MONTHS_PER_YEAR = 12;
 

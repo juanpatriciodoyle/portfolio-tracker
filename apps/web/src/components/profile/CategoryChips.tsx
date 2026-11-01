@@ -10,6 +10,10 @@ interface CategoryChipsProps {
   /** Id of the element that explains an error, so screen readers announce it with the group. */
   errorId?: string;
   invalid?: boolean;
+  /** The document did not say this and it is still empty: drawn with a warning border. */
+  unread?: boolean;
+  /** Offer only these categories; all of them when absent. */
+  only?: readonly FixedCostCategory[];
 }
 
 /** Pick what a bill is for. Real radio buttons underneath, so arrow keys and screen readers just work. */
@@ -20,12 +24,16 @@ export default function CategoryChips({
   legend = 'What is it for?',
   errorId,
   invalid = false,
+  unread = false,
+  only,
 }: CategoryChipsProps) {
   return (
-    <fieldset className="profile-chips" aria-describedby={errorId}>
+    <fieldset className={`profile-chips${unread ? ' is-unread' : ''}`} aria-describedby={errorId}>
       <legend className="form-label">{legend}</legend>
       <div className="profile-chips__groups">
-        {CATEGORY_GROUPS.map((group) => (
+        {CATEGORY_GROUPS.map((group) => ({ ...group, categories: group.categories.filter((category) => !only || only.includes(category)) }))
+          .filter((group) => group.categories.length > 0)
+          .map((group) => (
           <div
             key={group.id}
             className="profile-chips__group"

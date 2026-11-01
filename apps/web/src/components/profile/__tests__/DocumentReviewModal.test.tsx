@@ -8,7 +8,6 @@ import { createMemoryStorage } from '../../../test/memoryStorage';
 import DocumentReviewModal from '../DocumentReviewModal';
 
 type DocumentReviewModalProps = React.ComponentProps<typeof DocumentReviewModal>;
-import { UNREAD_FIELD_NOTE } from '../BillFields';
 
 const madrid = makePhase({ id: 'p1', name: 'Madrid', currency: 'EUR' });
 const buenosAires = makePhase({ id: 'p2', name: 'Buenos Aires', currency: 'ARS', startDate: '2020-01-01', endDate: '2022-08-31' });
@@ -41,14 +40,18 @@ describe('DocumentReviewModal', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  function renderModal(response: ExtractionResponse | Response, overrides: { onSave?: DocumentReviewModalProps['onSave']; file?: File } = {}) {
+  function renderModal(response: ExtractionResponse | Response, overrides: { onSave?: DocumentReviewModalProps['onSave']; file?: File; history?: DocumentReviewModalProps['history'] } = {}) {
     fetchMock.mockResolvedValue(response instanceof Object && 'ok' in response ? response : reply(200, response));
     const onSave = vi.fn(overrides.onSave ?? (async () => ok));
     const onClose = vi.fn();
     const file = overrides.file ?? pdf();
-    const view = render(<DocumentReviewModal file={file} phases={phases} openedFromPhaseId="p1" onSave={onSave} onClose={onClose} />);
+    const view = render(
+      <DocumentReviewModal files={[file]} phases={phases} today="2026-10-31" history={overrides.history ?? []} openedFromPhaseId="p1" onSave={onSave} onClose={onClose} />
+    );
     return { onSave, onClose, file, ...view };
   }
+
+  const unread = (control: HTMLElement) => control.className.includes('is-unread') || control.closest('fieldset')?.className.includes('is-unread') === true;
 
   it('uploads the raw PDF with its content type and the bearer token, naming the phase it was opened from', async () => {
     const { file } = renderModal(complete);
@@ -66,7 +69,7 @@ describe('DocumentReviewModal', () => {
     fetchMock.mockResolvedValue(reply(200, complete));
     const { container } = render(
       <div data-testid="collapsed-card" style={{ opacity: 0 }}>
-        <DocumentReviewModal file={pdf()} phases={phases} openedFromPhaseId="p1" onSave={vi.fn()} onClose={vi.fn()} />
+        <DocumentReviewModal files={[pdf()]} phases={phases} today="2026-10-31" history={[]} openedFromPhaseId="p1" onSave={vi.fn()} onClose={vi.fn()} />
       </div>
     );
 
@@ -88,7 +91,7 @@ describe('DocumentReviewModal', () => {
     expect(screen.getByLabelText('Covers from')).toHaveValue('2026-07-15');
     expect(screen.getByLabelText('Until')).toHaveValue('2026-09-14');
     expect(screen.getByRole('radio', { name: 'Every 2 months' })).toBeChecked();
-    expect(screen.queryByText(UNREAD_FIELD_NOTE)).not.toBeInTheDocument();
+    expect(document.querySelector('.is-unread')).toBeNull();
   });
 
   it('preselects the phase the bill belongs to, not the one it was opened from', async () => {
@@ -99,11 +102,17 @@ describe('DocumentReviewModal', () => {
     expect(select).toHaveValue('p2');
   });
 
-  it('flags each field the document did not say, leaves it blank, and keeps it mandatory', async () => {
+  it('outlines in yellow each field the document did not say, with no extra text, and keeps it mandatory', async () => {
     const { onSave } = renderModal({ ...complete, draft: { ...emptyDraft, amountMinor: 9650, currency: 'EUR' } });
     await screen.findByRole('form', { name: 'Review the bill' });
 
-    expect(screen.getAllByText(UNREAD_FIELD_NOTE)).toHaveLength(5);
+    expect(screen.queryByText(/couldn't read this/i)).not.toBeInTheDocument();
+    expect(unread(screen.getByLabelText('Who sent it?'))).toBe(true);
+    expect(unread(screen.getByLabelText('Covers from'))).toBe(true);
+    expect(unread(screen.getByLabelText('Until'))).toBe(true);
+    expect(unread(screen.getByRole('radio', { name: 'Electricity' }))).toBe(true);
+    expect(unread(screen.getByRole('radio', { name: 'Monthly' }))).toBe(true);
+    expect(unread(screen.getByLabelText('Total on the bill'))).toBe(false);
     expect(screen.getByLabelText('Who sent it?')).toHaveValue('');
     expect(screen.getByLabelText('Covers from')).toHaveValue('');
     expect(screen.queryAllByRole('radio', { checked: true })).toHaveLength(0);
@@ -119,11 +128,26 @@ describe('DocumentReviewModal', () => {
   it('removes a flag once the person fills the field in', async () => {
     renderModal({ ...complete, draft: { ...complete.draft, vendor: null } });
     await screen.findByRole('form', { name: 'Review the bill' });
-    expect(screen.getAllByText(UNREAD_FIELD_NOTE)).toHaveLength(1);
+    expect(unread(screen.getByLabelText('Who sent it?'))).toBe(true);
 
     fireEvent.change(screen.getByLabelText('Who sent it?'), { target: { value: 'Endesa' } });
 
-    expect(screen.queryByText(UNREAD_FIELD_NOTE)).not.toBeInTheDocument();
+    expect(unread(screen.getByLabelText('Who sent it?'))).toBe(false);
+  });
+
+  it('preselects the category from the sender when the document did not say it, and the flag goes with it', async () => {
+    renderModal({ ...complete, draft: { ...complete.draft, category: null, vendor: 'Octopus Energy' } }, { history: [{ vendor: 'Octopus', category: 'ELECTRICITY', cadence: 'BIMONTHLY' }] });
+    await screen.findByRole('form', { name: 'Review the bill' });
+
+    expect(screen.getByRole('radio', { name: 'Electricity' })).toBeChecked();
+    expect(unread(screen.getByRole('radio', { name: 'Electricity' }))).toBe(false);
+  });
+
+  it('works out the cadence from the dates the document gave', async () => {
+    renderModal({ ...complete, draft: { ...complete.draft, cadence: null, periodStart: '2026-09-01', periodEnd: '2026-09-30' } });
+    await screen.findByRole('form', { name: 'Review the bill' });
+
+    expect(screen.getByRole('radio', { name: 'Monthly' })).toBeChecked();
   });
 
   it('saves the reviewed bill for the chosen phase and closes', async () => {
@@ -245,5 +269,79 @@ describe('DocumentReviewModal', () => {
     unmount();
     expect(opener).toHaveFocus();
     opener.remove();
+  });
+
+  describe('with several PDFs', () => {
+    const many = [new File([new Uint8Array(50)], 'enero.pdf', { type: 'application/pdf' }), new File([new Uint8Array(50)], 'febrero.pdf', { type: 'application/pdf' }), new File([new Uint8Array(50)], 'marzo.pdf', { type: 'application/pdf' })];
+
+    function renderBatch(onSave = vi.fn(async () => ok)) {
+      fetchMock.mockImplementation(async () => reply(200, complete));
+      const onClose = vi.fn();
+      render(<DocumentReviewModal files={many} phases={phases} today="2026-10-31" history={[]} openedFromPhaseId="p1" onSave={onSave} onClose={onClose} />);
+      return { onSave, onClose };
+    }
+
+    it('reads and reviews one PDF at a time, saying where the person is in the batch', async () => {
+      renderBatch();
+
+      await screen.findByRole('form', { name: 'Review the bill' });
+
+      expect(screen.getByRole('dialog', { name: 'Add bills from PDFs' })).toBeInTheDocument();
+      expect(screen.getByText('Bill 1 of 3 · enero.pdf')).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][1].body).toBe(many[0]);
+    });
+
+    it('logs a bill, then moves on to the next PDF, and closes after the last one', async () => {
+      const { onSave, onClose } = renderBatch();
+      await screen.findByRole('form', { name: 'Review the bill' });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Log bill and next' }));
+      expect(await screen.findByText('Bill 2 of 3 · febrero.pdf')).toBeInTheDocument();
+      await screen.findByRole('form', { name: 'Review the bill' });
+      expect(fetchMock.mock.calls[1][1].body).toBe(many[1]);
+      expect(onClose).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Log bill and next' }));
+      expect(await screen.findByText('Bill 3 of 3 · marzo.pdf')).toBeInTheDocument();
+      await screen.findByRole('form', { name: 'Review the bill' });
+      fireEvent.click(screen.getByRole('button', { name: 'Log bill' }));
+
+      await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+      expect(onSave).toHaveBeenCalledTimes(3);
+    });
+
+    it('skips a PDF without logging it', async () => {
+      const { onSave } = renderBatch();
+      await screen.findByRole('form', { name: 'Review the bill' });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Skip this one' }));
+
+      expect(await screen.findByText('Bill 2 of 3 · febrero.pdf')).toBeInTheDocument();
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it('stops the whole batch from the last button, and keeps what was already logged', async () => {
+      const { onSave, onClose } = renderBatch();
+      await screen.findByRole('form', { name: 'Review the bill' });
+      fireEvent.click(screen.getByRole('button', { name: 'Log bill and next' }));
+      await screen.findByText('Bill 2 of 3 · febrero.pdf');
+      await screen.findByRole('form', { name: 'Review the bill' });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Stop here' }));
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers to skip a PDF that could not be read, and goes on with the rest', async () => {
+      fetchMock.mockResolvedValueOnce(reply(422, { error: 'x', code: 'UNREADABLE_DOCUMENT' })).mockResolvedValue(reply(200, complete));
+      render(<DocumentReviewModal files={many} phases={phases} today="2026-10-31" history={[]} openedFromPhaseId="p1" onSave={vi.fn()} onClose={vi.fn()} />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Skip this one' }));
+
+      expect(await screen.findByText('Bill 2 of 3 · febrero.pdf')).toBeInTheDocument();
+      expect(await screen.findByRole('form', { name: 'Review the bill' })).toBeInTheDocument();
+    });
   });
 });

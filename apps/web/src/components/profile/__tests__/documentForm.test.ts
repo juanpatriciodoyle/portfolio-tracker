@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BillingDraft } from '../../../contracts';
 import { blankFields, reviewFormFrom, validateReview } from '../documentForm';
+import type { BillFormContext } from '../billForm';
 
 const empty: BillingDraft = { amountMinor: null, currency: null, vendor: null, category: null, cadence: null, periodStart: null, periodEnd: null };
 const full: BillingDraft = {
@@ -22,11 +23,43 @@ describe('reviewFormFrom', () => {
       amount: '96.50',
       periodStart: '2026-07-15',
       periodEnd: '2026-09-14',
+      suggested: { category: false, cadence: false },
     });
   });
 
   it('leaves everything blank for an empty draft, including the cadence', () => {
-    expect(reviewFormFrom(empty, 'EUR')).toEqual({ category: null, cadence: null, vendor: '', amount: '', periodStart: '', periodEnd: '' });
+    expect(reviewFormFrom(empty, 'EUR')).toEqual({
+      category: null,
+      cadence: null,
+      vendor: '',
+      amount: '',
+      periodStart: '',
+      periodEnd: '',
+      suggested: { category: false, cadence: false },
+    });
+  });
+
+  it('works out the cadence from the dates when the document did not say it', () => {
+    expect(reviewFormFrom({ ...full, cadence: null, periodStart: '2026-09-01', periodEnd: '2026-09-30' }, 'EUR')).toMatchObject({ cadence: 'MONTHLY' });
+  });
+
+  describe('with what is known about the sender', () => {
+    const context: BillFormContext = { today: '2026-11-01', countryCode: 'ES', history: [{ vendor: 'Octopus', category: 'ELECTRICITY', cadence: 'BIMONTHLY' }] };
+
+    it('preselects a category the document did not say, from the sender', () => {
+      const form = reviewFormFrom({ ...full, category: null, vendor: 'Octopus Energy' }, 'EUR', context);
+      expect(form).toMatchObject({ category: 'ELECTRICITY', suggested: { category: true } });
+    });
+
+    it('never replaces a category or cadence the document did state', () => {
+      const form = reviewFormFrom({ ...full, category: 'GAS', vendor: 'Octopus Energy' }, 'EUR', context);
+      expect(form).toMatchObject({ category: 'GAS', cadence: 'BIMONTHLY', suggested: { category: false, cadence: false } });
+    });
+
+    it('suggests how often it comes, but leaves dates the document did not state blank', () => {
+      const form = reviewFormFrom({ ...empty, vendor: 'Octopus Energy' }, 'EUR', context);
+      expect(form).toMatchObject({ category: 'ELECTRICITY', cadence: 'BIMONTHLY', periodStart: '', periodEnd: '' });
+    });
   });
 
   it('formats the amount with the exponent of the phase currency', () => {

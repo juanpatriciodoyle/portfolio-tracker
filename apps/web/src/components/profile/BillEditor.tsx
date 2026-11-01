@@ -1,33 +1,31 @@
 import { useId, useState, type FormEvent } from 'react';
 import type { BillingRecordDto, CreateBillingRecordRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
-import { billFormFrom, emptyBillForm, type BillErrors } from './billForm';
+import { billFormFrom, emptyBillForm, validateBill, type BillErrors, type BillForm, type BillFormContext } from './billForm';
 import BillFields from './BillFields';
-import { validateReview, type ReviewForm } from './documentForm';
 import { describeFailure } from './failureMessage';
 
 interface BillEditorProps {
   phaseId: string;
   currency: string;
-  /** Today as the server sees it, so a new bill starts with last month's dates. */
-  asOf: string | null;
+  /** Today, the home's country and the senders the person already has: what the form needs to suggest and to fill in days. */
+  context: BillFormContext;
   /** Present when changing a bill that was already logged. */
   initial?: BillingRecordDto;
   onSubmit: (input: CreateBillingRecordRequest) => Promise<MutationResult<unknown>>;
   onCancel: () => void;
 }
 
-/** Log, or correct, one bill that actually arrived: who sent it, what it cost, and what it covers. */
-export default function BillEditor({ phaseId, currency, asOf, initial, onSubmit, onCancel }: BillEditorProps) {
+/** Add, or correct, one expense that actually arrived: who sent it, what it cost, and what it covers. */
+export default function BillEditor({ phaseId, currency, context, initial, onSubmit, onCancel }: BillEditorProps) {
   const id = useId();
-  const [form, setForm] = useState<ReviewForm>(() => (initial ? billFormFrom(initial) : emptyBillForm(asOf)));
+  const [form, setForm] = useState<BillForm>(() => (initial ? billFormFrom(initial) : emptyBillForm()));
   const [errors, setErrors] = useState<BillErrors>({});
   const [saving, setSaving] = useState(false);
 
-  const set = <K extends keyof ReviewForm>(key: K, value: ReviewForm[K]) => setForm((previous) => ({ ...previous, [key]: value }));
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const result = validateReview(form, phaseId, currency);
+    const result = validateBill(form, phaseId, currency);
     if (!result.ok) {
       setErrors(result.errors);
       return;
@@ -41,8 +39,8 @@ export default function BillEditor({ phaseId, currency, asOf, initial, onSubmit,
   };
 
   return (
-    <form className="cost-editor bill-editor" onSubmit={handleSubmit} noValidate aria-label={initial ? 'Edit bill' : 'Log a bill'}>
-      <BillFields id={id} form={form} set={set} errors={errors} />
+    <form className="cost-editor bill-editor" onSubmit={handleSubmit} noValidate aria-label={initial ? 'Edit bill' : 'Add an expense'}>
+      <BillFields id={id} form={form} update={(change) => setForm(change)} context={context} errors={errors} />
 
       {errors.form && (
         <p className="form-error-text" role="alert">
@@ -52,7 +50,7 @@ export default function BillEditor({ phaseId, currency, asOf, initial, onSubmit,
 
       <div className="cost-editor__actions">
         <button type="submit" className="btn-primary-apply" disabled={saving}>
-          {saving ? 'Saving…' : initial ? 'Save changes' : 'Log bill'}
+          {saving ? 'Saving…' : initial ? 'Save changes' : 'Add expense'}
         </button>
         <button type="button" className="btn-secondary-cancel" onClick={onCancel}>
           Cancel

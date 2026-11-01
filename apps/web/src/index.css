@@ -104,6 +104,7 @@
   --color-cost-electricity: var(--chart-color-3);
   --color-cost-gas: var(--chart-color-7);
   --color-cost-water: var(--chart-color-6);
+  --color-cost-heating-cooling: var(--chart-color-2);
   --color-cost-internet: var(--chart-color-4);
   --color-cost-phone: var(--chart-color-5);
   --color-cost-subscriptions: var(--chart-color-8);
@@ -129,8 +130,6 @@
   --color-phase-past: var(--text-muted);
 
   /* Bills against what was declared */
-  --color-drift-higher: var(--color-warning);
-  --color-drift-lower: var(--color-profit);
 
   /* Motion (the Profile view); components switch these off for prefers-reduced-motion */
   --motion-quick: 0.15s;

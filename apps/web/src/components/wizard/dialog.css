@@ -33,6 +33,20 @@
   animation: dialog-rise var(--motion-dialog) cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.dialog__title {
+  margin: 0;
+  padding-right: 32px;
+  font-size: 18px;
+  color: var(--text-heading);
+}
+
+.dialog__hint {
+  margin: 6px 0 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
 .dialog__close {
   position: absolute;
   top: 16px;

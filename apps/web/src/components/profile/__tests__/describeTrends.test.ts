@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeEmptyTrends, makeObserved, makeTrends, makeWindow, makeWindows } from '../../../test/fixtures';
-import { describeDrift, describeWindow, groupTrendsByCurrency, hasAnyBills } from '../describeTrends';
+import { describeWindow, groupTrendsByCurrency, hasAnyBills } from '../describeTrends';
 
 describe('describeWindow', () => {
   it('shows the average with no hint when every month of the window has bills', () => {
@@ -72,38 +72,5 @@ describe('hasAnyBills', () => {
   it('is true when any window or any phase is covered', () => {
     expect(hasAnyBills(makeTrends())).toBe(true);
     expect(hasAnyBills({ ...makeEmptyTrends(), phases: [makeObserved()] })).toBe(true);
-  });
-});
-
-describe('describeDrift', () => {
-  it('says bills came out higher than declared, with the signed difference', () => {
-    expect(describeDrift(makeObserved(), 'en-US')).toEqual({
-      sentence: 'Bills say about €1,310 a month vs €1,293 declared (+€17).',
-      direction: 'higher',
-      basis: 'Based on 5 months of bills.',
-    });
-  });
-
-  it('says bills came out lower than declared', () => {
-    expect(describeDrift(makeObserved({ observedMonthlyMinor: 120000, declaredMonthlyMinor: 129300, driftMinor: -9300 }), 'en-US')).toMatchObject({
-      sentence: 'Bills say about €1,200 a month vs €1,293 declared (-€93).',
-      direction: 'lower',
-    });
-  });
-
-  it('says so when they match', () => {
-    expect(describeDrift(makeObserved({ driftMinor: 0, observedMonthlyMinor: 129300 }), 'en-US')).toMatchObject({
-      sentence: 'Bills match what you declared: about €1,293 a month.',
-      direction: 'same',
-    });
-  });
-
-  it('uses the singular for one month of bills', () => {
-    expect(describeDrift(makeObserved({ coveredMonths: 1 }), 'en-US')?.basis).toBe('Based on 1 month of bills.');
-  });
-
-  it('is hidden when there are no bills behind it', () => {
-    expect(describeDrift(undefined)).toBeNull();
-    expect(describeDrift(makeObserved({ coveredMonths: 0 }))).toBeNull();
   });
 });

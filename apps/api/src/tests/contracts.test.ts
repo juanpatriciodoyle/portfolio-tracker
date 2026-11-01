@@ -204,6 +204,7 @@ describe('error bodies', () => {
 
 describe('response shapes', () => {
   const amounts = Object.fromEntries(FIXED_COST_CATEGORIES.map((category) => [category, 0]));
+  const basis = Object.fromEntries(FIXED_COST_CATEGORIES.map((category) => [category, { basis: null, billCount: 0 }]));
 
   it('describes a timeline entry with every category present', () => {
     const entry = {
@@ -220,6 +221,7 @@ describe('response shapes', () => {
       savingsCapacityMinor: 170000,
       savingsRate: 0.53125,
       fixedCostsByCategoryMinor: amounts,
+      costBasisByCategory: basis,
       months: 14.2,
       totalIncomeMinor: 4544000,
       totalFixedCostsMinor: 2130000,

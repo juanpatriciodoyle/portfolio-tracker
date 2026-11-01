@@ -28,8 +28,16 @@ describe('labels', () => {
     expect(Object.keys(STATUS_LABELS).sort()).toEqual([...PHASE_STATUSES].sort());
   });
 
-  it('offers every cadence, including every 2 months and quarterly', () => {
-    expect(CADENCE_OPTIONS.map((option) => option.label)).toEqual(['Monthly', 'Every 2 months', 'Quarterly', 'Yearly']);
+  it('offers every cadence, with the quarterly one worded as every 3 months', () => {
+    expect(CADENCE_OPTIONS.map((option) => option.label)).toEqual(['Monthly', 'Every 2 months', 'Every 3 months', 'Yearly']);
+    expect(Object.values(CADENCE_LABELS)).not.toContain('Quarterly');
+  });
+
+  it('lists the categories in the order of the cost breakdown, heating / cooling with the utilities', () => {
+    const order = CATEGORY_GROUPS.flatMap((group) => [...group.categories]);
+
+    expect(order).toEqual(['RENT', 'ELECTRICITY', 'GAS', 'WATER', 'HEATING_COOLING', 'INTERNET', 'PHONE', 'SUBSCRIPTIONS', 'TAXES', 'OTHER']);
+    expect(CATEGORY_LABELS.HEATING_COOLING).toBe('Heating / cooling');
   });
 
   it('puts every category in exactly one group, so none can go missing from the picker', () => {
@@ -38,7 +46,7 @@ describe('labels', () => {
     expect([...grouped].sort()).toEqual([...FIXED_COST_CATEGORIES].sort());
   });
 
-  it('keeps electricity, gas and water together as Utilities', () => {
+  it('keeps electricity, gas, water and heating / cooling together as Utilities', () => {
     const utilities = CATEGORY_GROUPS.find((group) => group.label === 'Utilities');
 
     expect(utilities?.categories).toEqual(UTILITY_CATEGORIES);

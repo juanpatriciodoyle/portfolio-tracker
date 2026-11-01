@@ -1,16 +1,20 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import type { CreateBillingRecordRequest, ExtractionResponse, LivingPhaseDto } from '../../contracts';
+import type { CreateBillingRecordRequest, ExtractionResponse, LivingPhaseDto, VendorHistoryEntry } from '../../contracts';
 import { useDocumentExtraction } from '../../hooks/useDocumentExtraction';
 import type { MutationResult } from '../../lib/apiErrors';
 import BillFields from './BillFields';
+import type { BillFormContext } from './billForm';
 import { describeDocumentFailure } from './describeDocument';
 import { blankFields, reviewFormFrom, validateReview, type ReviewErrors, type ReviewForm } from './documentForm';
 
 interface DocumentReviewModalProps {
-  /** The PDF the person picked. It stays in the browser: only its text is read on the server, and nothing is kept. */
-  file: File;
+  /** The PDFs the person picked, reviewed one after another. They stay in the browser: only the text is read on the server, and nothing is kept. */
+  files: readonly File[];
   phases: readonly LivingPhaseDto[];
+  /** Today as the server sees it, and the senders the person already has: they help fill in what a document did not say. */
+  today: string | null;
+  history: readonly VendorHistoryEntry[];
   /** The phase the person was looking at; used when the bill's dates point to no phase. */
   openedFromPhaseId: string;
   onSave: (request: CreateBillingRecordRequest) => Promise<MutationResult<unknown>>;
@@ -34,16 +38,26 @@ interface ReviewFormPanelProps {
   extraction: ExtractionResponse;
   phases: readonly LivingPhaseDto[];
   openedFromPhaseId: string;
+  today: string | null;
+  history: readonly VendorHistoryEntry[];
+  /** True when more PDFs wait behind this one. */
+  hasNext: boolean;
   onSave: DocumentReviewModalProps['onSave'];
+  /** The bill was logged: on to the next PDF, or done. */
+  onSaved: () => void;
+  /** Leave this PDF unlogged and move on. */
+  onSkip: () => void;
   onClose: () => void;
 }
 
-function ReviewFormPanel({ extraction, phases, openedFromPhaseId, onSave, onClose }: ReviewFormPanelProps) {
+function ReviewFormPanel({ extraction, phases, openedFromPhaseId, today, history, hasNext, onSave, onSaved, onSkip, onClose }: ReviewFormPanelProps) {
   const id = useId();
   const { draft, textFound, suggestedPhaseId } = extraction;
   const initialPhase = phases.find((phase) => phase.id === suggestedPhaseId) ?? phases.find((phase) => phase.id === openedFromPhaseId) ?? phases[0];
   const [phaseId, setPhaseId] = useState(initialPhase.id);
-  const [form, setForm] = useState<ReviewForm>(() => reviewFormFrom(draft, initialPhase.currency));
+  const [form, setForm] = useState<ReviewForm>(() =>
+    reviewFormFrom(draft, initialPhase.currency, { today, countryCode: initialPhase.countryCode, history })
+  );
   const [errors, setErrors] = useState<ReviewErrors>({});
   const [saving, setSaving] = useState(false);
   const submitting = useRef(false);
@@ -51,7 +65,7 @@ function ReviewFormPanel({ extraction, phases, openedFromPhaseId, onSave, onClos
 
   const phase = phases.find((candidate) => candidate.id === phaseId) ?? initialPhase;
   const currencyDiffers = draft.currency !== null && draft.currency !== phase.currency;
-  const set = <K extends keyof ReviewForm>(key: K, value: ReviewForm[K]) => setForm((previous) => ({ ...previous, [key]: value }));
+  const context: BillFormContext = { today, countryCode: phase.countryCode, history };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -68,7 +82,7 @@ function ReviewFormPanel({ extraction, phases, openedFromPhaseId, onSave, onClos
     const saved = await onSave(result.create);
     submitting.current = false;
     setSaving(false);
-    if (saved.ok) onClose();
+    if (saved.ok) onSaved();
     else setErrors({ form: describeDocumentFailure(saved.failure) });
   };
 
@@ -99,7 +113,7 @@ function ReviewFormPanel({ extraction, phases, openedFromPhaseId, onSave, onClos
         </p>
       )}
 
-      <BillFields id={id} form={form} set={set} errors={errors} blanks={blanks} />
+      <BillFields id={id} form={form} update={(change) => setForm(change)} context={context} errors={errors} blanks={blanks} />
 
       {errors.form && (
         <p className="form-error-text" role="alert">
@@ -109,22 +123,31 @@ function ReviewFormPanel({ extraction, phases, openedFromPhaseId, onSave, onClos
 
       <div className="cost-editor__actions">
         <button type="submit" className="btn-primary-apply" disabled={saving}>
-          {saving ? 'Saving…' : 'Log bill'}
+          {saving ? 'Saving…' : hasNext ? 'Log bill and next' : 'Log bill'}
         </button>
+        {hasNext && (
+          <button type="button" className="btn-secondary-cancel" onClick={onSkip} disabled={saving}>
+            Skip this one
+          </button>
+        )}
         <button type="button" className="btn-secondary-cancel" onClick={onClose}>
-          Cancel
+          {hasNext ? 'Stop here' : 'Cancel'}
         </button>
       </div>
     </form>
   );
 }
 
-/** Reads a bill's PDF and lets the person check it, fill in what could not be read, and log it. */
-export default function DocumentReviewModal({ file, phases, openedFromPhaseId, onSave, onClose }: DocumentReviewModalProps) {
+/** Reads each bill's PDF in turn and lets the person check it, fill in what could not be read, and log it. */
+export default function DocumentReviewModal({ files, phases, today, history, openedFromPhaseId, onSave, onClose }: DocumentReviewModalProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
+  const file = files[index];
+  const hasNext = index < files.length - 1;
   const previewUrl = usePreviewUrl(file);
   const extraction = useDocumentExtraction(file, openedFromPhaseId);
+  const next = () => (hasNext ? setIndex(index + 1) : onClose());
 
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -159,9 +182,16 @@ export default function DocumentReviewModal({ file, phases, openedFromPhaseId, o
     <div className="document-review" onKeyDown={handleKeyDown}>
       <div className="document-review__backdrop" onClick={onClose} aria-hidden="true" />
       <div ref={panelRef} className="document-review__panel" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-        <h2 className="document-review__title" id={titleId}>
-          Add a bill from a PDF
-        </h2>
+        <div className="document-review__heading">
+          <h2 className="document-review__title" id={titleId}>
+            {files.length > 1 ? 'Add bills from PDFs' : 'Add a bill from a PDF'}
+          </h2>
+          {files.length > 1 && (
+            <p className="document-review__progress" role="status">
+              Bill {index + 1} of {files.length} · {file.name}
+            </p>
+          )}
+        </div>
 
         <div className="document-review__body">
           {previewUrl && (
@@ -185,6 +215,11 @@ export default function DocumentReviewModal({ file, phases, openedFromPhaseId, o
                 <button type="button" className="btn-primary-apply" onClick={extraction.retry}>
                   Try again
                 </button>
+                {hasNext && (
+                  <button type="button" className="btn-secondary-cancel" onClick={next}>
+                    Skip this one
+                  </button>
+                )}
                 <button type="button" className="btn-secondary-cancel" onClick={onClose}>
                   Close
                 </button>
@@ -193,7 +228,19 @@ export default function DocumentReviewModal({ file, phases, openedFromPhaseId, o
           )}
 
           {extraction.status === 'ready' && extraction.result && (
-            <ReviewFormPanel extraction={extraction.result} phases={phases} openedFromPhaseId={openedFromPhaseId} onSave={onSave} onClose={onClose} />
+            <ReviewFormPanel
+              key={index}
+              extraction={extraction.result}
+              phases={phases}
+              openedFromPhaseId={openedFromPhaseId}
+              today={today}
+              history={history}
+              hasNext={hasNext}
+              onSave={onSave}
+              onSaved={next}
+              onSkip={next}
+              onClose={onClose}
+            />
           )}
         </div>
       </div>
