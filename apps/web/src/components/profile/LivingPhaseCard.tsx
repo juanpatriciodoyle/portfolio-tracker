@@ -2,7 +2,6 @@ import { ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
-import { countryName, flagEmoji } from '../../lib/countries';
 import { formatMinor, formatPercent, formatPhaseRange } from '../../lib/money';
 import { barWidthPercent } from '../../lib/scale';
 import type { BillingView } from './billingView';
@@ -88,7 +87,6 @@ export default function LivingPhaseCard({
       </header>
 
       <p className="phase-card__meta">
-        {flagEmoji(phase.countryCode)} {phase.city}, {countryName(phase.countryCode)} ·{' '}
         {formatPhaseRange(phase.startDate, phase.endDate, undefined, status === 'upcoming' ? 'open' : 'now')}
       </p>
 

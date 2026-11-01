@@ -1,29 +1,45 @@
+import { z } from 'zod';
 import {
+  HOUSING_TENURES,
+  createFixedCostRequest,
   createLivingPhaseRequest,
   updateLivingPhaseRequest,
+  type CreateFixedCostRequest,
   type CreateLivingPhaseRequest,
-  type HousingTenure,
   type LivingPhaseDto,
   type UpdateLivingPhaseRequest,
 } from '../../contracts';
 import { minorToInputString, parseMajorToMinor } from '../../lib/money';
+import { phaseDisplayName } from '../../lib/phaseName';
 
 /** What the editor holds while a person types: everything is text until it is validated. */
-export interface PhaseFormState {
-  name: string;
-  city: string;
-  countryCode: string;
-  tenure: HousingTenure;
-  currency: string;
-  startDate: string;
-  endDate: string;
-  stillLivingHere: boolean;
-  monthlyIncome: string;
-  address: string;
-  notes: string;
-}
+export const phaseFormSchema = z.object({
+  city: z.string(),
+  countryCode: z.string(),
+  tenure: z.enum(HOUSING_TENURES),
+  currency: z.string(),
+  startDate: z.string(),
+  endDate: z.string(),
+  stillLivingHere: z.boolean(),
+  monthlyIncome: z.string(),
+  address: z.string(),
+  notes: z.string(),
+});
+export type PhaseFormState = z.infer<typeof phaseFormSchema>;
+
+/** A new phase as it is kept between visits: the answers and the bills added so far. */
+export const phaseDraftSchema = z.object({ form: phaseFormSchema, costs: z.array(createFixedCostRequest) });
 
 export type PhaseFieldErrors = Partial<Record<keyof PhaseFormState, string>>;
+
+/** Which step of the guided flow asks for each field, so a step can show only its own errors. */
+export const PHASE_STEP_FIELDS = {
+  place: ['countryCode', 'city', 'address'],
+  dates: ['startDate', 'endDate', 'stillLivingHere'],
+  money: ['currency', 'tenure', 'monthlyIncome', 'notes'],
+} as const satisfies Record<string, readonly (keyof PhaseFormState)[]>;
+
+export type PhaseStepId = keyof typeof PHASE_STEP_FIELDS;
 
 /** One phase, ready to send either as a new phase or as a change to an existing one. */
 export interface PhasePayload {
@@ -39,7 +55,6 @@ export function initialPhaseForm(
 ): PhaseFormState {
   if (phase) {
     return {
-      name: phase.name,
       city: phase.city,
       countryCode: phase.countryCode,
       tenure: phase.tenure,
@@ -53,7 +68,6 @@ export function initialPhaseForm(
     };
   }
   return {
-    name: '',
     city: '',
     countryCode: '',
     tenure: 'RENT',
@@ -68,7 +82,6 @@ export function initialPhaseForm(
 }
 
 const REQUIRED_MESSAGES: Partial<Record<keyof PhaseFormState, string>> = {
-  name: 'Give this phase a name, for example "Madrid".',
   city: 'Which city was it?',
   address: 'Keep the address under 200 characters.',
   notes: 'Keep the notes under 500 characters.',
@@ -78,21 +91,38 @@ const REQUIRED_MESSAGES: Partial<Record<keyof PhaseFormState, string>> = {
 const FORM_FIELD_FOR_CONTRACT_FIELD: Record<string, keyof PhaseFormState> = { monthlyIncomeMinor: 'monthlyIncome' };
 
 function isFormField(field: string): field is keyof PhaseFormState {
-  return ['name', 'city', 'countryCode', 'tenure', 'currency', 'startDate', 'endDate', 'monthlyIncome', 'address', 'notes'].includes(field);
+  return ['city', 'countryCode', 'tenure', 'currency', 'startDate', 'endDate', 'monthlyIncome', 'address', 'notes'].includes(field);
 }
 
-/** Checks the form against the same contract the server uses, with messages written for people. */
-export function validatePhaseForm(form: PhaseFormState): PhaseFormResult {
+const FUTURE_MESSAGES = {
+  startDate: 'Moved in cannot be a day in the future.',
+  endDate: 'Moved out cannot be a day in the future.',
+} as const;
+
+/**
+ * Checks the form against the same contract the server uses, with messages written for people.
+ * Homes are lived in, not planned: both dates are on or before `today`, and moving out comes after moving in.
+ */
+export function validatePhaseForm(
+  form: PhaseFormState,
+  today: string,
+  fixedCosts: readonly CreateFixedCostRequest[] = []
+): PhaseFormResult {
   const errors: PhaseFieldErrors = {};
 
   const monthlyIncomeMinor = parseMajorToMinor(form.monthlyIncome, form.currency);
   if (monthlyIncomeMinor === null) errors.monthlyIncome = 'Enter your monthly net income, for example 3200 (0 if none).';
   if (form.startDate === '') errors.startDate = 'Add the day you moved in.';
-  if (!form.stillLivingHere && form.endDate === '') errors.endDate = 'Add the day you left, or tick "Still living here".';
+  else if (form.startDate > today) errors.startDate = FUTURE_MESSAGES.startDate;
+  if (!form.stillLivingHere) {
+    if (form.endDate === '') errors.endDate = 'Add the day you left, or tick "Still living here".';
+    else if (form.endDate > today) errors.endDate = FUTURE_MESSAGES.endDate;
+    else if (form.startDate !== '' && form.endDate <= form.startDate) errors.endDate = 'Moved out must be after the day you moved in.';
+  }
   if (form.countryCode === '') errors.countryCode = 'Choose a country.';
 
   const fields = {
-    name: form.name,
+    name: phaseDisplayName(form),
     city: form.city,
     address: form.address.trim() === '' ? null : form.address,
     countryCode: form.countryCode,
@@ -104,7 +134,7 @@ export function validatePhaseForm(form: PhaseFormState): PhaseFormResult {
     notes: form.notes.trim() === '' ? null : form.notes,
   };
 
-  const parsed = createLivingPhaseRequest.safeParse(fields);
+  const parsed = createLivingPhaseRequest.safeParse({ ...fields, fixedCosts });
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
       const contractField = String(issue.path[0] ?? '');
@@ -116,4 +146,40 @@ export function validatePhaseForm(form: PhaseFormState): PhaseFormResult {
 
   if (!parsed.success || Object.keys(errors).length > 0) return { ok: false, errors };
   return { ok: true, payload: { create: parsed.data, update: updateLivingPhaseRequest.parse(fields) } };
+}
+
+/** What is wrong with the fields of one step, ignoring every other step. */
+export function phaseStepErrors(form: PhaseFormState, today: string, step: PhaseStepId): PhaseFieldErrors {
+  const result = validatePhaseForm(form, today);
+  if (result.ok) return {};
+  const own: readonly string[] = PHASE_STEP_FIELDS[step];
+  return Object.fromEntries(Object.entries(result.errors).filter(([field]) => own.includes(field)));
+}
+
+const stepOfField = (field: keyof PhaseFormState): PhaseStepId =>
+  (Object.keys(PHASE_STEP_FIELDS) as PhaseStepId[]).find((step) => (PHASE_STEP_FIELDS[step] as readonly string[]).includes(field))!;
+
+const hasAnswer = (form: PhaseFormState, field: keyof PhaseFormState) => {
+  const value = form[field];
+  return typeof value === 'string' && value.trim() !== '';
+};
+
+export interface PhaseFeedback {
+  /** The message to show under a field now, if any. */
+  errorOf: (field: keyof PhaseFormState) => string | undefined;
+  /** Whether the field has an answer that passes, for a checkmark. */
+  isValid: (field: keyof PhaseFormState) => boolean;
+}
+
+/**
+ * What a person should see while filling the form: an empty field stays quiet until its step has been
+ * tried, but an answer that cannot be right is flagged at once, and one that passes is confirmed.
+ */
+export function phaseFeedback(form: PhaseFormState, today: string, tried: ReadonlySet<PhaseStepId>): PhaseFeedback {
+  const result = validatePhaseForm(form, today);
+  const errors: PhaseFieldErrors = result.ok ? {} : result.errors;
+  return {
+    errorOf: (field) => (hasAnswer(form, field) || tried.has(stepOfField(field)) ? errors[field] : undefined),
+    isValid: (field) => hasAnswer(form, field) && errors[field] === undefined,
+  };
 }

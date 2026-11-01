@@ -36,7 +36,7 @@ describe('LivingPhaseCard at a glance', () => {
     const { container } = renderCard();
 
     expect(screen.getByRole('heading', { level: 3, name: 'Madrid' })).toBeInTheDocument();
-    expect(screen.getByText('🇪🇸 Madrid, Spain · Sep 2022 – now')).toBeInTheDocument();
+    expect(screen.getByText('Sep 2022 – now')).toBeInTheDocument();
     expect(screen.getByText('Current')).toBeInTheDocument();
     expect(screen.getByText('Income').nextElementSibling?.nextElementSibling).toHaveTextContent('€3,200');
     expect(screen.getByText('Fixed costs').nextElementSibling?.nextElementSibling).toHaveTextContent('€1,500');

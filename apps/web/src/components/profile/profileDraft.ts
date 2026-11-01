@@ -1,15 +1,17 @@
-import { saveProfileRequest, type EmploymentStatus, type ProfileData } from '../../contracts';
+import { z } from 'zod';
+import { EMPLOYMENT_STATUSES, saveProfileRequest, type ProfileData } from '../../contracts';
 
 /** What the "About you" form holds while a person types. */
-export interface ProfileDraft {
-  fullName: string;
-  birthYear: string;
-  nationalities: string[];
-  taxResidence: string;
-  householdAdults: number;
-  dependentChildren: number;
-  employmentStatus: EmploymentStatus | '';
-}
+export const profileDraftSchema = z.object({
+  fullName: z.string(),
+  birthYear: z.string(),
+  nationalities: z.array(z.string()),
+  taxResidence: z.string(),
+  householdAdults: z.number().int(),
+  dependentChildren: z.number().int(),
+  employmentStatus: z.enum(EMPLOYMENT_STATUSES).or(z.literal('')),
+});
+export type ProfileDraft = z.infer<typeof profileDraftSchema>;
 
 export type ProfileFieldErrors = Partial<Record<keyof ProfileDraft, string>>;
 
@@ -70,4 +72,28 @@ export function validateProfileDraft(draft: ProfileDraft): ProfileFormResult {
 
   if (!parsed.success || Object.keys(errors).length > 0) return { ok: false, errors };
   return { ok: true, profile: parsed.data };
+}
+
+/** The steps of the first-time flow, and which fields each one asks for. */
+export const ONBOARDING_STEP_FIELDS = {
+  about: ['fullName', 'birthYear'],
+  roots: ['nationalities', 'taxResidence'],
+  life: ['employmentStatus', 'householdAdults', 'dependentChildren'],
+} as const satisfies Record<string, readonly (keyof ProfileDraft)[]>;
+
+export type OnboardingStepId = keyof typeof ONBOARDING_STEP_FIELDS;
+
+/**
+ * What is wrong with one step of the first-time flow. Everything is optional in a profile except that
+ * the flow wants a name, so a person who completes it is not asked to start again.
+ */
+export function onboardingStepErrors(draft: ProfileDraft, step: OnboardingStepId): ProfileFieldErrors {
+  const errors: ProfileFieldErrors = {};
+  const result = validateProfileDraft(draft);
+  if (!result.ok) {
+    const own: readonly string[] = ONBOARDING_STEP_FIELDS[step];
+    for (const [field, message] of Object.entries(result.errors)) if (own.includes(field)) errors[field as keyof ProfileDraft] = message;
+  }
+  if (step === 'about' && draft.fullName.trim() === '') errors.fullName = 'Tell us what to call you.';
+  return errors;
 }

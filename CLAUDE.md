@@ -53,6 +53,13 @@ Execute commands in this specific sequence[cite: 6, 11]:
 - Statistics are public, so they are cached unencrypted in `CountryStatistics` (run `npx prisma db push` after pulling) and refreshed when older than 35 days: on demand, and by a daily job that only fetches what is stale, under a Postgres advisory lock so several servers do not repeat it. `BENCHMARK_REFRESH=off` disables the job. A provider outage never overwrites good data, and an outage is never cached as "no data".
 - An income in a currency other than the country's cannot be compared with national figures; the phase gets `CURRENCY_MISMATCH` instead of a wrong number. Not built yet: city-level indices (Numbeo, paid), a financial/MEP peso rate, OECD data.
 
+### Guided flows (wizards)
+- Onboarding ("Tell us about yourself": About you, then the first living phase with its bills), adding or editing a living phase, and Log Transaction all open as a centered dialog (`components/Modal.tsx`). There are no side drawers. Multi-step flows use `components/wizard/WizardModal.tsx` (milestone progress bar, Back/Continue, Enter to continue); the caller owns the answers and decides when a step is complete.
+- Every step is saved as a draft in `sessionStorage` (`lib/stepDraft.ts`, `hooks/useStepDraft.ts`), so closing the dialog or refreshing resumes on the same step. A draft survives a refresh but not the end of the tab, is parsed with a Zod schema before use, is cleared when the flow saves, and `clearAllDrafts` runs on sign-out: personal answers are stored encrypted on the server, so they are not left readable in the browser.
+- A living phase has no name field. Its header is always `[flag] [City] [Address]` (`lib/phaseName.ts`), sent as `name` on save; `useLivingPhases` shows older phases under the same generated name. Dates: neither `Moved in` nor `Moved out` may be after today (the server's `asOf`), and `Moved out` must be after `Moved in` (`components/profile/phaseForm.ts`). The API still accepts what it accepted before; these rules are enforced in the web form.
+- `CountrySelect` is a type-to-search combobox (`lib/countrySearch.ts`): names in English and Spanish, from the beginning first and from anywhere inside after that, ignoring accents and case. Nationalities use `NationalitiesInput` (pills on Enter or comma).
+- Every `<select>` gets its chevron and right padding from one rule in `index.css` (`--select-chevron-inset`, `--select-padding-end`).
+
 ### Tests
 - `npm test` (inside `apps/api` or `apps/web`) is hermetic: no network, no database.
 - `npm run test:integration` (inside `apps/api`) needs `TEST_DATABASE_URL` pointing at a disposable database, never your real data.

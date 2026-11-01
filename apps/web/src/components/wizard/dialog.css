@@ -1,0 +1,405 @@
+/* =========================================================================
+   CENTERED DIALOGS, GUIDED FLOWS AND TYPE-TO-SEARCH FIELDS
+   Colours, spacing of chevrons and radii come from the tokens in index.css.
+   ========================================================================= */
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background-color: var(--bg-modal-overlay);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: dialog-fade var(--motion-dialog) ease-out;
+}
+
+.dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--dialog-width);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 24px;
+  background-color: var(--bg-card);
+  border: var(--border-card);
+  border-radius: var(--radius-dialog);
+  box-shadow: var(--shadow-dialog);
+  animation: dialog-rise var(--motion-dialog) cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dialog__close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.dialog__close:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-pill-hover);
+}
+
+.dialog button:focus-visible,
+.dialog input:focus-visible,
+.dialog select:focus-visible,
+.dialog textarea:focus-visible,
+.dialog [role='combobox']:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+@keyframes dialog-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dialog-rise {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- Guided flow ---------- */
+
+.wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.wizard__header {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-right: 32px;
+}
+
+.wizard__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.wizard__body {
+  /* Room for a country list to open without being clipped by a short step. */
+  min-height: 300px;
+}
+
+.wizard__step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: wizard-step-in var(--motion-step) ease-out;
+}
+
+@keyframes wizard-step-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+.wizard__heading {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-heading);
+}
+
+.wizard__hint,
+.wizard__resumed,
+.wizard-field__hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.wizard__resumed {
+  color: var(--text-accent);
+}
+
+.wizard__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.wizard__fields .form-input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.wizard__fields .form-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.wizard__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.wizard__row > * {
+  min-width: 0;
+}
+
+@media (max-width: 520px) {
+  .dialog {
+    padding: 20px 16px;
+  }
+
+  .wizard__row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wizard__error {
+  margin: 0;
+}
+
+.wizard__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wizard__next {
+  flex: none;
+  min-width: 140px;
+}
+
+.wizard__footer button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---------- Milestones ---------- */
+
+.milestones {
+  position: relative;
+}
+
+.milestones__track {
+  position: absolute;
+  top: 11px;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  border-radius: 1px;
+  background-color: var(--border-subtle-color);
+}
+
+.milestones__fill {
+  height: 100%;
+  border-radius: inherit;
+  background-color: var(--accent-primary);
+  transition: width var(--motion-step) ease-out;
+}
+
+.milestones__list {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.milestone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 24px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.milestone__dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--border-subtle-color);
+  background-color: var(--bg-card);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition: background-color var(--motion-step), border-color var(--motion-step), color var(--motion-step);
+}
+
+.milestone.is-current {
+  color: var(--text-heading);
+}
+
+.milestone.is-current .milestone__dot {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  box-shadow: 0 0 0 4px var(--accent-blue-subtle);
+}
+
+.milestone.is-done .milestone__dot {
+  border-color: var(--accent-primary);
+  background-color: var(--accent-primary);
+  color: var(--text-primary);
+  animation: milestone-pop var(--motion-step) ease-out;
+}
+
+@keyframes milestone-pop {
+  0% { transform: scale(0.7); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+@media (max-width: 520px) {
+  /* Names would collide on a narrow screen; the dots and the step heading say where you are. */
+  .milestone__label {
+    display: none;
+  }
+}
+
+/* ---------- Fields that confirm themselves ---------- */
+
+.wizard-field__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 16px;
+}
+
+.wizard-field__check {
+  color: var(--color-profit);
+  animation: check-in var(--motion-step) ease-out;
+}
+
+@keyframes check-in {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: none; }
+}
+
+.wizard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wizard-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-divider-color);
+  border-radius: 10px;
+  background-color: var(--bg-panel);
+  font-size: 13px;
+  color: var(--text-heading);
+}
+
+.wizard-list__item span:last-child {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+/* ---------- Type-to-search country field ---------- */
+
+.combobox {
+  position: relative;
+}
+
+.combobox__input {
+  width: 100%;
+  /* Room for the chevron so text never runs underneath it. */
+  padding-right: var(--select-padding-end);
+  text-overflow: ellipsis;
+}
+
+.combobox__chevron {
+  position: absolute;
+  top: 50%;
+  right: var(--select-chevron-inset);
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.combobox__list {
+  /* Placed from the field's position by CountrySelect, so a dialog's edge never cuts it off. */
+  position: fixed;
+  z-index: 1100;
+  max-height: 240px;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  background-color: var(--bg-popover);
+  border: 1px solid var(--border-popover);
+  border-radius: 10px;
+  box-shadow: var(--shadow-dialog);
+}
+
+.combobox__option,
+.combobox__empty {
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13.5px;
+  color: var(--text-popover);
+}
+
+.combobox__option {
+  cursor: pointer;
+}
+
+.combobox__option.is-active {
+  background-color: var(--accent-blue-subtle);
+  color: var(--text-primary);
+}
+
+.combobox__option.is-chosen {
+  font-weight: 600;
+}
+
+.combobox__empty {
+  color: var(--text-muted);
+}
+
+.tag-input__tags {
+  margin-bottom: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog-backdrop,
+  .dialog,
+  .wizard__step,
+  .milestone__dot,
+  .wizard-field__check,
+  .milestones__fill {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

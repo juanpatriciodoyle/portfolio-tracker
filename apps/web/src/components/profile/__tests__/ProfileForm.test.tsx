@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { MutationResult } from '../../../lib/apiErrors';
 import { makeProfile } from '../../../test/fixtures';
@@ -66,7 +66,9 @@ describe('ProfileForm editing', () => {
     const { onSave } = renderForm(makeProfile({ nationalities: ['AR'] }));
     edit();
 
-    fireEvent.change(screen.getByLabelText('Nationalities'), { target: { value: 'PT' } });
+    const field = screen.getByLabelText('Nationalities');
+    fireEvent.change(field, { target: { value: 'Portugal' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
     expect(screen.getByRole('list', { name: 'Chosen nationalities' })).toHaveTextContent('Portugal');
 
     fireEvent.click(screen.getByRole('button', { name: 'Remove Argentina' }));
@@ -74,22 +76,11 @@ describe('ProfileForm editing', () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  it('does not offer a nationality twice', () => {
-    renderForm(makeProfile({ nationalities: ['AR'] }));
-    edit();
-
-    const nationalities = within(screen.getByLabelText('Nationalities'));
-    expect(nationalities.queryByRole('option', { name: /Argentina/ })).not.toBeInTheDocument();
-    expect(nationalities.getByRole('option', { name: /Portugal/ })).toBeInTheDocument();
-  });
-
   it('stops at five nationalities', () => {
     renderForm(makeProfile({ nationalities: ['AR', 'ES', 'PT', 'FR', 'IT'] }));
     edit();
 
-    const select = screen.getByLabelText('Nationalities');
-    expect(select).toBeDisabled();
-    expect(screen.getByRole('option', { name: 'Up to five nationalities' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Nationalities')).toBeDisabled();
   });
 
   it('steps the household up and down within its limits', async () => {

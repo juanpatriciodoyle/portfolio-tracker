@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Plus, LogOut, UserRound } from 'lucide-react';
 import TransactionForm from './components/TransactionForm';
-import SideDrawer from './components/SideDrawer';
+import Modal from './components/Modal';
 import LoginModal from './components/LoginModal';
 import InflationSettingsModal from './components/InflationSettingsModal';
 import TransactionHistoryTable from './components/TransactionHistoryTable';
@@ -17,6 +17,7 @@ import { PROFILE_PATH, useHashRoute } from './hooks/useHashRoute';
 import { type ChartDataPoint, type ReportingPeriod, type DateRange } from './data/sampleChartData';
 import { authorizedFetch, readAuthToken } from './lib/authorizedFetch';
 import { endGuestSession } from './lib/guestSession';
+import { clearAllDrafts } from './lib/stepDraft';
 
 interface User {
   id: string;
@@ -63,7 +64,7 @@ function App() {
 
   const { path, navigate } = useHashRoute();
 
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isLogOpen, setIsLogOpen] = useState(false);
   const [isInflationModalOpen, setIsInflationModalOpen] = useState(false);
   const [isRealInflationMode, setIsRealInflationMode] = useState(false);
   const [tableKey, setTableKey] = useState(0);
@@ -144,11 +145,13 @@ function App() {
     void endGuestSession(user, readAuthToken());
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
+    // Half-filled forms hold personal answers: they do not outlive the session.
+    clearAllDrafts(sessionStorage);
     setUser(null);
   };
 
   const handleTransactionSuccess = () => {
-    setIsDrawerOpen(false);
+    setIsLogOpen(false);
     fetchStats();
     setTableKey((prev) => prev + 1);
   };
@@ -253,7 +256,7 @@ function App() {
 
           {/* Primary Log Transaction Button (Energetic Blue) */}
           <button
-            onClick={() => setIsDrawerOpen(true)}
+            onClick={() => setIsLogOpen(true)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -415,10 +418,12 @@ function App() {
         </div>
       </main>
 
-      {/* Side Drawer Modal for Logging Transaction */}
-      <SideDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)}>
-        <TransactionForm onSuccess={handleTransactionSuccess} />
-      </SideDrawer>
+      {/* Centered dialog for logging a transaction */}
+      {isLogOpen && (
+        <Modal label="Log Transaction" onClose={() => setIsLogOpen(false)}>
+          <TransactionForm onSuccess={handleTransactionSuccess} />
+        </Modal>
+      )}
 
       {/* Inflation Settings Modal */}
       {isInflationModalOpen && (

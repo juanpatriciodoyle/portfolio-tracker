@@ -1,10 +1,11 @@
-import { Pencil, X } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { EMPLOYMENT_STATUSES, type EmploymentStatus, type ProfileData } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import { countryName, flagEmoji } from '../../lib/countries';
 import CountrySelect from './CountrySelect';
 import { describeFailure } from './failureMessage';
+import NationalitiesInput from './NationalitiesInput';
 import { EMPLOYMENT_LABELS } from './labels';
 import {
   isProfileEmpty,
@@ -20,8 +21,6 @@ interface ProfileFormProps {
   onSave: (profile: ProfileData) => Promise<MutationResult>;
   announce: (message: string) => void;
 }
-
-const MAX_NATIONALITIES = 5;
 
 const adults = (count: number) => `${count} ${count === 1 ? 'adult' : 'adults'}`;
 const children = (count: number) => `${count} ${count === 1 ? 'child' : 'children'}`;
@@ -180,30 +179,11 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
             <label className="form-label" htmlFor={`${id}-nationality`}>
               Nationalities
             </label>
-            {draft.nationalities.length > 0 && (
-              <ul className="profile-tags" aria-label="Chosen nationalities">
-                {draft.nationalities.map((code) => (
-                  <li key={code} className="profile-tag">
-                    {flagEmoji(code)} {countryName(code)}
-                    <button
-                      type="button"
-                      className="profile-tag__remove"
-                      aria-label={`Remove ${countryName(code)}`}
-                      onClick={() => set('nationalities', draft.nationalities.filter((chosen) => chosen !== code))}
-                    >
-                      <X size={12} aria-hidden="true" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <CountrySelect
+            <NationalitiesInput
               id={`${id}-nationality`}
-              value=""
-              onChange={(code) => code && set('nationalities', [...draft.nationalities, code])}
-              placeholder={draft.nationalities.length >= MAX_NATIONALITIES ? 'Up to five nationalities' : 'Add a nationality…'}
-              exclude={draft.nationalities}
-              disabled={draft.nationalities.length >= MAX_NATIONALITIES}
+              value={draft.nationalities}
+              onChange={(codes) => set('nationalities', codes)}
+              invalid={errors.nationalities !== undefined}
             />
             {errors.nationalities && (
               <p className="form-error-text" role="alert">

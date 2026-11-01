@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { ENCRYPTION_NOT_CONFIGURED, type BillingRecordDto, type LivingPhaseDto, type TimelineEntryDto, type TrendsResponse } from '../../../contracts';
+import { ENCRYPTION_NOT_CONFIGURED, type BillingRecordDto, type LivingPhaseDto, type ProfileData, type TimelineEntryDto, type TrendsResponse } from '../../../contracts';
 import * as client from '../../../lib/apiClient';
 import { ApiError, type RequestOptions } from '../../../lib/apiClient';
 import { makeBill, makeEmptyTrends, makeEntry, makePhase, makeProfile, makeTrends } from '../../../test/fixtures';
+import { chooseCountry, clickContinue } from '../../../test/wizardHelpers';
 import ProfilePage from '../ProfilePage';
 
 vi.mock('../../../lib/apiClient', async (importOriginal) => {
@@ -40,6 +41,7 @@ const lisbonEntry = makeEntry({
 });
 
 interface World {
+  profile: ProfileData;
   phases: LivingPhaseDto[];
   entries: TimelineEntryDto[];
   records: BillingRecordDto[];
@@ -50,6 +52,7 @@ interface World {
 /** A tiny fake server. `failures` maps "METHOD /path" (GET has no method prefix) to an error. */
 function serve(initial: Partial<World> = {}) {
   const world: World = {
+    profile: makeProfile(),
     phases: [madrid, lisbon],
     entries: [madridEntry, lisbonEntry],
     records: [],
@@ -61,7 +64,7 @@ function serve(initial: Partial<World> = {}) {
     const route = path.split('?')[0];
     const key = options?.method && options.method !== 'GET' ? `${options.method} ${route}` : route;
     if (world.failures[key]) throw world.failures[key];
-    if (key === '/api/profile') return makeProfile();
+    if (key === '/api/profile') return world.profile;
     if (key === '/api/living-phases') return { phases: world.phases };
     if (key === '/api/living-phases/timeline') return { asOf: '2026-10-31', entries: world.entries };
     if (key === 'POST /api/living-phases') return { id: 'new-phase' };
@@ -97,12 +100,13 @@ function renderPage() {
 function cardFor(name: string) {
   const card = screen
     .queryAllByRole('article')
-    .find((candidate) => within(candidate).queryByRole('heading', { level: 3, name }) !== null);
+    .find((candidate) => within(candidate).queryByRole('heading', { level: 3, name: new RegExp(name) }) !== null);
   if (!card) throw new Error(`No card for "${name}" yet`);
   return card;
 }
 
 beforeEach(() => {
+  sessionStorage.clear(); // wizards keep drafts there
   apiRequest.mockReset();
   apiCommand.mockReset();
   apiCommand.mockResolvedValue(undefined);
@@ -115,7 +119,7 @@ describe('ProfilePage loading', () => {
 
     expect(await screen.findByRole('heading', { name: 'Living phases' })).toBeInTheDocument();
     expect(screen.getByText('Juan Doyle')).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual(['Madrid', 'Lisbon']);
+    expect(screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual(['🇪🇸 Madrid', '🇵🇹 Lisbon']);
   });
 
   it('invites the first living phase when there are none', async () => {
@@ -124,8 +128,12 @@ describe('ProfilePage loading', () => {
 
     expect(await screen.findByText('Where have you lived?')).toBeInTheDocument();
 
+    expect(screen.queryByRole('button', { name: 'Add living phase' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add your first living phase' }));
-    expect(screen.getByRole('heading', { name: 'Add a living phase' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Add a living phase' })).toBeInTheDocument();
+    await chooseCountry('Country', 'por', /Portugal/);
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Porto' } });
+    clickContinue();
     expect(screen.getByLabelText('Still living here')).toBeChecked();
   });
 
@@ -185,7 +193,7 @@ describe('ProfilePage comparing', () => {
     fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: 'Compare' }));
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Compare' }));
 
-    expect(await screen.findByText('Fixed costs in Madrid are €250 more per month than in Lisbon (20%).')).toBeInTheDocument();
+    expect(await screen.findByText('Fixed costs in 🇪🇸 Madrid are €250 more per month than in 🇵🇹 Lisbon (20%).')).toBeInTheDocument();
     expect(apiRequest.mock.calls.some(([path]) => path === '/api/living-phases/compare?from=p2&to=p1')).toBe(true);
     expect(screen.getByRole('heading', { level: 2, name: /Lisbon.*Madrid/ })).toBeInTheDocument();
   });
@@ -206,8 +214,8 @@ describe('ProfilePage comparing', () => {
 
   it('keeps only the two most recent choices', async () => {
     serve({
-      phases: [madrid, lisbon, makePhase({ id: 'p3', name: 'Porto', startDate: '2017-01-01', endDate: '2019-12-31', fixedCosts: [] })],
-      entries: [madridEntry, lisbonEntry, makeEntry({ phaseId: 'p3', name: 'Porto', status: 'past', startDate: '2017-01-01', endDate: '2019-12-31' })],
+      phases: [madrid, lisbon, makePhase({ id: 'p3', name: 'Porto', city: 'Porto', countryCode: 'PT', startDate: '2017-01-01', endDate: '2019-12-31', fixedCosts: [] })],
+      entries: [madridEntry, lisbonEntry, makeEntry({ phaseId: 'p3', name: 'Porto', city: 'Porto', countryCode: 'PT', status: 'past', startDate: '2017-01-01', endDate: '2019-12-31' })],
     });
     renderPage();
     await screen.findByRole('heading', { name: 'Living phases' });
@@ -235,52 +243,55 @@ describe('ProfilePage comparing', () => {
     await screen.findByRole('heading', { name: 'Living phases' });
     fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: 'Compare' }));
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Compare' }));
-    await screen.findByText(/Fixed costs in Madrid are €250 more per month/);
+    await screen.findByText(/Fixed costs in 🇪🇸 Madrid are €250 more per month/);
 
     delta = 40000; // what the server now says, after the person edits Lisbon
     world.entries = [madridEntry, { ...lisbonEntry, monthlyFixedCostsMinor: 110000 }];
-    fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Lisbon' }));
+    fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: /Lisbon/ }));
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: /Edit phase/ }));
+    clickContinue();
+    clickContinue();
     fireEvent.change(screen.getByLabelText('Monthly net income'), { target: { value: '2900' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
-    expect(await screen.findByText(/Fixed costs in Madrid are €400 more per month/)).toBeInTheDocument();
+    expect(await screen.findByText(/Fixed costs in 🇪🇸 Madrid are €400 more per month/)).toBeInTheDocument();
     expect(screen.queryByText(/€250 more per month/)).not.toBeInTheDocument();
   });
 });
 
 describe('ProfilePage changes', () => {
-  async function addLisbonLikePhase() {
+  async function addPortoPhase() {
     fireEvent.click(screen.getByRole('button', { name: /Add living phase/ }));
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Porto flat' } });
+    await chooseCountry('Country', 'portu', /Portugal/);
     fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Porto' } });
-    fireEvent.change(screen.getByLabelText('Country'), { target: { value: 'PT' } });
+    clickContinue();
     fireEvent.change(screen.getByLabelText('Moved in'), { target: { value: '2017-01-01' } });
     fireEvent.change(screen.getByLabelText('Moved out'), { target: { value: '2019-12-31' } });
+    clickContinue();
     fireEvent.change(screen.getByLabelText('Monthly net income'), { target: { value: '2100' } });
-    const form = screen.getByRole('form', { name: 'Add a living phase' });
-    fireEvent.click(within(form).getByRole('button', { name: 'Add living phase' }));
+    clickContinue();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
   }
 
-  it('adds a phase, closes the drawer and opens the new card for its bills', async () => {
+  it('adds a phase, closes the dialog and opens the new card for its bills', async () => {
     const world = serve();
     renderPage();
     await screen.findByRole('heading', { name: 'Living phases' });
-    world.phases = [...world.phases, makePhase({ id: 'new-phase', name: 'Porto flat', startDate: '2017-01-01', endDate: '2019-12-31', fixedCosts: [] })];
-    world.entries = [...world.entries, makeEntry({ phaseId: 'new-phase', name: 'Porto flat', status: 'past', startDate: '2017-01-01', endDate: '2019-12-31' })];
+    world.phases = [...world.phases, makePhase({ id: 'new-phase', name: 'Porto flat', city: 'Porto', countryCode: 'PT', startDate: '2017-01-01', endDate: '2019-12-31', fixedCosts: [] })];
+    world.entries = [...world.entries, makeEntry({ phaseId: 'new-phase', name: 'Porto flat', city: 'Porto', countryCode: 'PT', status: 'past', startDate: '2017-01-01', endDate: '2019-12-31' })];
 
-    await addLisbonLikePhase();
+    await addPortoPhase();
 
-    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Add a living phase' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     const post = apiRequest.mock.calls.find(([, , options]) => options?.method === 'POST');
     expect(post?.[0]).toBe('/api/living-phases');
-    expect(post?.[2]?.body).toMatchObject({ name: 'Porto flat', countryCode: 'PT', monthlyIncomeMinor: 210000, endDate: '2019-12-31' });
-    const card = await waitFor(() => cardFor('Porto flat'));
-    expect(within(card).getByRole('button', { name: 'Porto flat' })).toHaveAttribute('aria-expanded', 'true');
+    expect(post?.[2]?.body).toMatchObject({ name: '🇵🇹 Porto', city: 'Porto', countryCode: 'PT', monthlyIncomeMinor: 210000, endDate: '2019-12-31' });
+    const card = await waitFor(() => cardFor('Porto'));
+    expect(within(card).getByRole('button', { name: /Porto/ })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('Living phase added')).toBeInTheDocument();
   });
 
-  it('keeps the drawer open and names the clash when dates overlap', async () => {
+  it('keeps the dialog open on the dates and names the clash when they overlap', async () => {
     serve({
       failures: {
         'POST /api/living-phases': new ApiError(409, 'Phases overlap', { error: 'Phases overlap', conflictingPhaseIds: ['p2'] }),
@@ -289,37 +300,39 @@ describe('ProfilePage changes', () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Living phases' });
 
-    await addLisbonLikePhase();
+    await addPortoPhase();
 
-    expect(await screen.findByText(/These dates overlap Lisbon \(Jan 2020 – Aug 2022\)/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Add a living phase' })).toBeInTheDocument();
+    expect(await screen.findByText(/These dates overlap 🇵🇹 Lisbon \(Jan 2020 – Aug 2022\)/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'When were you there?' })).toBeInTheDocument();
   });
 
-  it('edits a phase through the drawer', async () => {
+  it('edits a phase through the dialog', async () => {
     serve();
     renderPage();
     await screen.findByRole('heading', { name: 'Living phases' });
-    fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Lisbon' }));
+    fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: /Lisbon/ }));
 
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: /Edit phase/ }));
-    expect(screen.getByRole('heading', { name: 'Edit living phase' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Edit living phase' })).toBeInTheDocument();
+    clickContinue();
+    clickContinue();
     fireEvent.change(screen.getByLabelText('Monthly net income'), { target: { value: '2900' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() =>
       expect(apiCommand).toHaveBeenCalledWith('/api/living-phases/p2', {
         method: 'PATCH',
-        body: expect.objectContaining({ monthlyIncomeMinor: 290000, name: 'Lisbon' }),
+        body: expect.objectContaining({ monthlyIncomeMinor: 290000, name: '🇵🇹 Lisbon' }),
       })
     );
-    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Edit living phase' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   it('deletes a phase after confirming', async () => {
     serve();
     renderPage();
     await screen.findByRole('heading', { name: 'Living phases' });
-    fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Lisbon' }));
+    fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: /Lisbon/ }));
 
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: /Delete phase/ }));
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Delete' }));
@@ -365,9 +378,9 @@ describe('ProfilePage trends and bills', () => {
     renderPage();
     await screen.findByText(/No bills yet\./);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Madrid' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open 🇪🇸 Madrid' }));
 
-    expect(within(cardFor('Madrid')).getByRole('button', { name: 'Madrid' })).toHaveAttribute('aria-expanded', 'true');
+    expect(within(cardFor('Madrid')).getByRole('button', { name: /Madrid/ })).toHaveAttribute('aria-expanded', 'true');
     expect(within(cardFor('Madrid')).getByRole('button', { name: /Log a bill/ })).toBeInTheDocument();
   });
 
@@ -379,7 +392,7 @@ describe('ProfilePage trends and bills', () => {
     renderPage();
     await screen.findByRole('row', { name: /^Fixed costs/ });
     await waitFor(() => expect(billLoads()).toBe(1));
-    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: 'Madrid' }));
+    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Madrid/ }));
 
     const bills = await within(cardFor('Madrid')).findByRole('list', { name: 'Bills received' });
     expect(within(bills).getByText(/Iberdrola/)).toBeInTheDocument();
@@ -393,7 +406,7 @@ describe('ProfilePage trends and bills', () => {
     await screen.findByText(/No bills yet\./);
     await waitFor(() => expect(trendLoads()).toBe(1));
     expect(billLoads()).toBe(1);
-    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: 'Madrid' }));
+    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Madrid/ }));
     fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Log a bill/ }));
 
     fireEvent.click(screen.getByRole('radio', { name: 'Electricity' }));
@@ -422,7 +435,7 @@ describe('ProfilePage trends and bills', () => {
     await screen.findByText(/No bills yet\./);
     world.trends = makeTrends();
     world.records = [makeBill({ phaseId: 'p1' })];
-    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: 'Madrid' }));
+    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Madrid/ }));
     fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Log a bill/ }));
     fireEvent.click(screen.getByRole('radio', { name: 'Electricity' }));
     fireEvent.change(screen.getByLabelText('Who sent it?'), { target: { value: 'Iberdrola' } });
@@ -440,7 +453,7 @@ describe('ProfilePage trends and bills', () => {
     await waitFor(() => expect(trendLoads()).toBe(1));
     world.entries = [madridEntry, { ...lisbonEntry, monthlyFixedCostsMinor: 100000 }];
 
-    fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Lisbon' }));
+    fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: /Lisbon/ }));
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: /Delete phase/ }));
     fireEvent.click(within(cardFor('Lisbon')).getByRole('button', { name: 'Delete' }));
 
@@ -455,6 +468,59 @@ describe('ProfilePage trends and bills', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/try again/i);
     expect(alert).not.toHaveTextContent(/internal server error/i);
-    expect(screen.getByRole('heading', { level: 3, name: 'Madrid' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: '🇪🇸 Madrid' })).toBeInTheDocument();
+  });
+});
+
+describe('ProfilePage first time', () => {
+  const emptyProfile = makeProfile({ fullName: null, birthYear: null, nationalities: [], taxResidence: null, employmentStatus: null });
+
+  it('offers one button, and no competing ways to add a home', async () => {
+    serve({ profile: emptyProfile, phases: [], entries: [] });
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Tell us about yourself' })).toBeInTheDocument();
+
+    expect(screen.queryByRole('button', { name: /Add living phase/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add your first living phase' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add details' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button').filter((button) => button.className.includes('btn-primary-apply'))).toHaveLength(1);
+  });
+
+  it('guides from the profile into the first living phase, then saves both', async () => {
+    serve({ profile: emptyProfile, phases: [], entries: [] });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Tell us about yourself' }));
+    expect(screen.getByRole('dialog', { name: 'Tell us about yourself' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Joe Doyle' } });
+    clickContinue();
+    clickContinue();
+    clickContinue();
+    await chooseCountry('Country', 'arg', /Argentina/);
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Buenos Aires' } });
+    clickContinue();
+    fireEvent.change(screen.getByLabelText('Moved in'), { target: { value: '2024-01-01' } });
+    clickContinue();
+    fireEvent.change(screen.getByLabelText('Monthly net income'), { target: { value: '1500' } });
+    clickContinue();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Finish' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(apiCommand).toHaveBeenCalledWith('/api/profile', { method: 'PUT', body: expect.objectContaining({ fullName: 'Joe Doyle' }) });
+    const post = apiRequest.mock.calls.find(([, , options]) => options?.method === 'POST');
+    expect(post?.[0]).toBe('/api/living-phases');
+    expect(post?.[2]?.body).toMatchObject({ name: '🇦🇷 Buenos Aires', countryCode: 'AR', startDate: '2024-01-01', endDate: null });
+    expect(screen.getByText('Profile saved')).toBeInTheDocument();
+  });
+
+  it('keeps a single call to action once the profile is filled in but there is no home yet', async () => {
+    serve({ phases: [], entries: [] });
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'Add your first living phase' })).toBeInTheDocument();
+
+    expect(screen.queryByRole('button', { name: /^Add living phase/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tell us about yourself' })).not.toBeInTheDocument();
   });
 });

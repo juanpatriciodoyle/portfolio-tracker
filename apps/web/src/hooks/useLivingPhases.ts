@@ -13,6 +13,7 @@ import {
 } from '../contracts';
 import { apiCommand, apiRequest } from '../lib/apiClient';
 import { attempt, statusFromFailure, type LoadStatus, type MutationResult } from '../lib/apiErrors';
+import { withDisplayNames } from '../lib/phaseName';
 
 interface LivingPhasesState {
   status: LoadStatus;
@@ -42,7 +43,7 @@ export function useLivingPhases() {
           apiRequest(PHASES_PATH, listLivingPhasesResponse),
           apiRequest(`${PHASES_PATH}/timeline`, timelineResponse),
         ]);
-        return { phases: list.phases, entries: timeline.entries, asOf: timeline.asOf };
+        return { ...withDisplayNames(list.phases, timeline.entries), asOf: timeline.asOf };
       });
       if (cancelled) return;
       setState((previous) =>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeProfile } from '../../../test/fixtures';
-import { isProfileEmpty, toProfileDraft, validateProfileDraft } from '../profileDraft';
+import { isProfileEmpty, onboardingStepErrors, toProfileDraft, validateProfileDraft } from '../profileDraft';
 
 describe('profile form', () => {
   it('round-trips a profile through the draft', () => {
@@ -61,5 +61,26 @@ describe('profile form', () => {
     ).toBe(true);
     expect(isProfileEmpty(makeProfile())).toBe(false);
     expect(isProfileEmpty(makeProfile({ fullName: null, birthYear: null, nationalities: [], taxResidence: null, employmentStatus: 'RETIRED' }))).toBe(false);
+  });
+});
+
+describe('onboardingStepErrors', () => {
+  const blank = toProfileDraft(makeProfile({ fullName: null, birthYear: null, nationalities: [], taxResidence: null }));
+
+  it('asks for a name on the first step, so the profile is no longer empty afterwards', () => {
+    expect(onboardingStepErrors(blank, 'about')).toEqual({ fullName: 'Tell us what to call you.' });
+    expect(onboardingStepErrors({ ...blank, fullName: '  ' }, 'about')).toEqual({ fullName: 'Tell us what to call you.' });
+    expect(onboardingStepErrors({ ...blank, fullName: 'Joe' }, 'about')).toEqual({});
+  });
+
+  it('checks the birth year on the step that asks for it', () => {
+    expect(onboardingStepErrors({ ...blank, fullName: 'Joe', birthYear: '90' }, 'about')).toEqual({
+      birthYear: 'Use a four-digit year such as 1990.',
+    });
+  });
+
+  it('lets the other steps through when they are left alone', () => {
+    expect(onboardingStepErrors(blank, 'roots')).toEqual({});
+    expect(onboardingStepErrors(blank, 'life')).toEqual({});
   });
 });

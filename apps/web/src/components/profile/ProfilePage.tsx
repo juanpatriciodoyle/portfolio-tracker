@@ -10,8 +10,10 @@ import { useTrends } from '../../hooks/useTrends';
 import { combineStatuses, type MutationResult } from '../../lib/apiErrors';
 import type { BillingView } from './billingView';
 import PhaseComparison from './PhaseComparison';
-import PhaseEditorDrawer from './PhaseEditorDrawer';
+import OnboardingWizard from './OnboardingWizard';
+import PhaseWizard from './PhaseWizard';
 import type { PhasePayload } from './phaseForm';
+import { isProfileEmpty } from './profileDraft';
 import PhaseTimeline from './PhaseTimeline';
 import ProfileForm from './ProfileForm';
 import TrendsCard from './TrendsCard';
@@ -24,7 +26,7 @@ interface ProfilePageProps {
   onSignedOut: () => void;
 }
 
-type EditorState = { mode: 'create' } | { mode: 'edit'; phaseId: string } | null;
+type EditorState = { mode: 'create' } | { mode: 'edit'; phaseId: string } | { mode: 'onboarding' } | null;
 
 /** The currency of the most recent home, as a sensible default for the next one. */
 function latestCurrency(phases: readonly LivingPhaseDto[]): string {
@@ -73,7 +75,11 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
   const comparison = usePhaseComparison(phasesApi.compare, from?.phaseId ?? null, to?.phaseId ?? null, entries);
 
   const editingPhase = editor?.mode === 'edit' ? (phases.find((phase) => phase.id === editor.phaseId) ?? null) : null;
-  const drawerOpen = editor !== null && (editor.mode === 'create' || editingPhase !== null);
+  const phaseWizardOpen = editor?.mode === 'create' || (editor?.mode === 'edit' && editingPhase !== null);
+  // Today comes from the server's clock, the same one that decides which phase is current.
+  const today = phasesApi.asOf ?? '';
+  const hasCurrentPhase = entries.some((entry) => entry.status === 'current');
+  const profileEmpty = profileApi.status === 'ready' && profileApi.profile !== null && isProfileEmpty(profileApi.profile);
 
   const retry = () => {
     phasesApi.reload();
@@ -98,6 +104,13 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
       setExpandedId(result.value.id);
       announce('Living phase added');
     }
+    return result;
+  };
+
+  /** The first-time flow adds the first home itself, so it only has to open it afterwards. */
+  const createFirstPhase = async (payload: PhasePayload): Promise<MutationResult<unknown>> => {
+    const result = await phasesApi.createPhase(payload.create);
+    if (result.ok) setExpandedId(result.value.id);
     return result;
   };
 
@@ -154,11 +167,23 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
             </p>
           )}
 
-          {profileApi.status === 'ready' && profileApi.profile && (
+          {profileApi.status === 'ready' && profileApi.profile && profileEmpty && (
+            <section className="profile-card profile-empty" aria-label="About you">
+              <h2 className="profile-empty__title">About you</h2>
+              <p className="profile-section__hint">
+                Tell us a little about yourself. Age, household and work let us compare your numbers with people like you.
+              </p>
+              <button type="button" className="btn-primary-apply profile-empty__action" onClick={() => setEditor({ mode: 'onboarding' })}>
+                Tell us about yourself
+              </button>
+            </section>
+          )}
+          {profileApi.status === 'ready' && profileApi.profile && !profileEmpty && (
             <ProfileForm profile={profileApi.profile} onSave={profileApi.save} announce={announce} />
           )}
 
-          {phasesApi.status === 'ready' && (
+          {/* Until the profile is filled in, the one button above leads the way into the first home too. */}
+          {phasesApi.status === 'ready' && !(profileEmpty && phases.length === 0) && (
             <section aria-labelledby="living-phases-heading" className="profile-phases">
               <div className="profile-section__header">
                 <div>
@@ -167,9 +192,11 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
                   </h2>
                   {phases.length > 1 && <p className="profile-section__hint">Pick two phases to compare them.</p>}
                 </div>
-                <button type="button" className="profile-add-button" onClick={() => setEditor({ mode: 'create' })}>
-                  <Plus size={16} aria-hidden="true" /> Add living phase
-                </button>
+                {phases.length > 0 && !profileEmpty && (
+                  <button type="button" className="profile-add-button" onClick={() => setEditor({ mode: 'create' })}>
+                    <Plus size={16} aria-hidden="true" /> Add living phase
+                  </button>
+                )}
               </div>
 
               {phases.length > 0 && (
@@ -220,15 +247,35 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
         </div>
       </main>
 
-      <PhaseEditorDrawer
-        isOpen={drawerOpen}
-        phase={editingPhase}
-        phases={phases}
-        hasCurrentPhase={entries.some((entry) => entry.status === 'current')}
-        defaultCurrency={latestCurrency(phases)}
-        onClose={() => setEditor(null)}
-        onSubmit={submitPhase}
-      />
+      {phaseWizardOpen && (
+        <PhaseWizard
+          key={editingPhase?.id ?? 'new'}
+          phase={editingPhase}
+          phases={phases}
+          hasCurrentPhase={hasCurrentPhase}
+          defaultCurrency={latestCurrency(phases)}
+          today={today}
+          onClose={() => setEditor(null)}
+          onSubmit={submitPhase}
+        />
+      )}
+
+      {editor?.mode === 'onboarding' && profileApi.profile && (
+        <OnboardingWizard
+          profile={profileApi.profile}
+          phases={phases}
+          hasCurrentPhase={hasCurrentPhase}
+          defaultCurrency={latestCurrency(phases)}
+          today={today}
+          onSaveProfile={profileApi.save}
+          onCreatePhase={createFirstPhase}
+          onClose={() => setEditor(null)}
+          onFinished={() => {
+            setEditor(null);
+            announce('Profile saved');
+          }}
+        />
+      )}
 
       <p className="visually-hidden" role="status" aria-live="polite">
         {announcement}
