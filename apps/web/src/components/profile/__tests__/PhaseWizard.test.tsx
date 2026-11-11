@@ -420,4 +420,72 @@ describe('PhaseWizard drafts', () => {
       expect(screen.getByLabelText('Label (optional)')).toHaveAttribute('placeholder', 'Company / Provider');
     });
   });
+
+  describe('keeping jobs from the previous home', () => {
+    const salary = { label: 'Salary', amountMinor: 320000, startDate: '2022-09-01', endDate: null };
+    const consulting = { label: 'Consulting', amountMinor: 50000, startDate: '2024-01-01', endDate: null };
+    const madrid = makePhase({ id: 'p1', name: '🇪🇸 Madrid', startDate: '2022-09-01', endDate: '2026-05-31', currency: 'EUR', incomeStreams: [salary, consulting] });
+
+    const toMoneyStep = async (country: [string, RegExp] = ['port', /Portugal/]) => {
+      await fillPlace('Lisbon', country);
+      clickContinue();
+      fillDates('2026-06-01', '2026-09-30');
+      clickContinue();
+    };
+
+    it('offers the jobs still paying, all ticked, and starts the copies on the first day of the new home', async () => {
+      const { props } = renderWizard({ phases: [madrid] });
+      await toMoneyStep();
+
+      const keep = screen.getByRole('group', { name: 'Keep these jobs?' });
+      expect(within(keep).getByLabelText(/Salary/)).toBeChecked();
+      expect(within(keep).getByLabelText(/Consulting/)).toBeChecked();
+      clickContinue();
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
+
+      await waitFor(() => expect(props.onSubmit).toHaveBeenCalled());
+      expect(vi.mocked(props.onSubmit).mock.calls[0][0].create.incomeStreams).toEqual([
+        { ...salary, startDate: '2026-06-01' },
+        { ...consulting, startDate: '2026-06-01' },
+      ]);
+    });
+
+    it('leaves out a job that is unticked', async () => {
+      const { props } = renderWizard({ phases: [madrid] });
+      await toMoneyStep();
+
+      fireEvent.click(within(screen.getByRole('group', { name: 'Keep these jobs?' })).getByLabelText(/Consulting/));
+      clickContinue();
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
+
+      await waitFor(() => expect(props.onSubmit).toHaveBeenCalled());
+      expect(vi.mocked(props.onSubmit).mock.calls[0][0].create.incomeStreams.map((stream) => stream.label)).toEqual(['Salary']);
+    });
+
+    it('asks for the amount again in another currency and does not save without it', async () => {
+      const { props } = renderWizard({ phases: [madrid], defaultCurrency: 'ARS' });
+      await toMoneyStep(['arg', /Argentina/]);
+
+      const keep = screen.getByRole('group', { name: 'Keep these jobs?' });
+      fireEvent.click(within(keep).getByRole('checkbox', { name: /Consulting/ }));
+      clickContinue();
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
+
+      expect(await screen.findByText(/Enter what Salary pays each month here, or untick it./)).toBeInTheDocument();
+      expect(props.onSubmit).not.toHaveBeenCalled();
+
+      fireEvent.change(screen.getByLabelText('Salary per month in ARS'), { target: { value: '4500000' } });
+      clickContinue();
+      fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
+
+      await waitFor(() => expect(props.onSubmit).toHaveBeenCalled());
+      expect(vi.mocked(props.onSubmit).mock.calls[0][0].create.incomeStreams).toEqual([{ ...salary, amountMinor: 450000000, startDate: '2026-06-01' }]);
+    });
+
+    it('offers nothing when the previous home had no jobs, or this is the first home', async () => {
+      renderWizard({ phases: [makePhase({ id: 'p1', startDate: '2022-09-01', endDate: '2026-05-31', incomeStreams: [] })] });
+      await toMoneyStep();
+      expect(screen.queryByRole('group', { name: 'Keep these jobs?' })).not.toBeInTheDocument();
+    });
+  });
 });

@@ -18,6 +18,16 @@ const statisticsSchema = z.object({
     })
     .nullable(),
   housingCostShare: z.object({ ...origin, percent: z.number() }).nullable(),
+  // Rows saved before areas existed lack these two, so they count as missing and are fetched again.
+  regionCode: z.string().nullable(),
+  referenceDistribution: z
+    .object({
+      ...origin,
+      areaName: z.string(),
+      priceIndex: z.record(z.string(), z.number()),
+      points: z.array(z.object({ percentile: z.number(), value: z.number() })),
+    })
+    .nullable(),
   purchasing: z.object({ ...origin, lcuPerInternationalDollar: z.number(), gniPerPersonDollars: z.number().nullable() }).nullable(),
 });
 

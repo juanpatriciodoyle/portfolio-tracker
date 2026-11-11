@@ -428,3 +428,8 @@
 .wizard__stack .wizard-list {
   gap: 12px;
 }
+
+/* A dialog with a document preview beside its form. */
+.dialog--wide {
+  max-width: 980px;
+}

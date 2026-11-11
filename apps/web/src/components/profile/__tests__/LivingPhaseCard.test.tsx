@@ -31,6 +31,13 @@ function renderCard(overrides: Partial<React.ComponentProps<typeof LivingPhaseCa
   return { props, ...view };
 }
 
+describe('LivingPhaseCard compare', () => {
+  it('has no Compare button when there is nothing to compare with', () => {
+    renderCard({ onToggleCompare: undefined });
+    expect(screen.queryByRole('button', { name: 'Compare' })).not.toBeInTheDocument();
+  });
+});
+
 describe('LivingPhaseCard at a glance', () => {
   it('shows the home, its dates, its status and what is left each month', () => {
     const { container } = renderCard();
@@ -322,5 +329,45 @@ describe('LivingPhaseCard phase actions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     expect(await screen.findByText(/no longer exists/)).toBeInTheDocument();
+  });
+});
+
+describe('LivingPhaseCard income & career', () => {
+  const stream = (label: string, amountMinor: number, startDate: string, endDate: string | null = null) => ({ label, amountMinor, startDate, endDate });
+  const asOf = { asOf: '2026-10-31' } as NonNullable<React.ComponentProps<typeof LivingPhaseCard>['billing']>;
+
+  it('says which job pays today, without opening the card', () => {
+    renderCard({ phase: makePhase({ incomeStreams: [stream('Designer', 320000, '2022-09-01')] }), billing: asOf });
+    expect(screen.getByText('Designer · €3,200/mo')).toBeInTheDocument();
+  });
+
+  it('says there is no income right now, and since when, once every job has ended', () => {
+    renderCard({ phase: makePhase({ incomeStreams: [stream('Designer', 320000, '2022-09-01', '2026-06-30')] }), billing: asOf });
+    expect(screen.getByText(/^No income right now · since .*2026/)).toBeInTheDocument();
+    expect(screen.queryByText(/Sabbatical/)).not.toBeInTheDocument();
+  });
+
+  it('counts the jobs when several pay at once, and keeps the other when one ends', () => {
+    const jobs = [stream('Designer', 320000, '2022-09-01'), stream('Consulting', 80000, '2024-01-01')];
+    const { unmount } = renderCard({ phase: makePhase({ incomeStreams: jobs }), billing: asOf });
+    expect(screen.getByText('2 jobs · €4,000/mo')).toBeInTheDocument();
+    unmount();
+    renderCard({ phase: makePhase({ incomeStreams: [jobs[0], { ...jobs[1], endDate: '2026-06-30' }] }), billing: asOf });
+    expect(screen.getByText('Designer · €3,200/mo')).toBeInTheDocument();
+  });
+
+  it('opens the income list from an always-visible trigger, and closes it again', () => {
+    renderCard({ phase: makePhase({ incomeStreams: [stream('Designer', 320000, '2022-09-01')] }), billing: asOf });
+    const trigger = screen.getByRole('button', { name: /Income & Career/ });
+    expect(trigger).toHaveTextContent('+ Add job or income');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('list', { name: 'Paying now' })).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('list', { name: 'Paying now' })).toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('list', { name: 'Paying now' })).not.toBeInTheDocument();
   });
 });

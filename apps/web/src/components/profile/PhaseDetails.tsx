@@ -1,25 +1,22 @@
 import { CalendarX, FileText, Pencil, Trash2 } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
-import type { CreateBillingRecordRequest, CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest, UpdateLivingPhaseRequest } from '../../contracts';
+import type { CreateBillingRecordRequest, CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import { formatMonths } from '../../lib/duration';
 import { clampDateYear } from '../../lib/inputFilters';
 import { formatCalendarDate, formatMinor } from '../../lib/money';
-import BenchmarksCard from './BenchmarksCard';
 import BillsLedger from './BillsLedger';
 import type { BillFormContext } from './billForm';
 import type { BillingView } from './billingView';
 import { describeCostBasis, describeDeclaredCadence } from './describeCosts';
-import DocumentReviewModal from './DocumentReviewModal';
+import ExpenseWizard from './ExpenseWizard';
 import { describeFailure } from './failureMessage';
 import FixedCostEditor from './FixedCostEditor';
-import IncomeSection from './IncomeSection';
 import { CADENCE_LABELS, CATEGORY_GROUPS, CATEGORY_LABELS } from './labels';
 
 interface PhaseDetailsProps {
   phase: LivingPhaseDto;
   entry: TimelineEntryDto | undefined;
-  onUpdatePhase: (phaseId: string, input: UpdateLivingPhaseRequest) => Promise<MutationResult<unknown>>;
   onUpdateCost: (phaseId: string, costId: string, input: UpdateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onDeleteCost: (phaseId: string, costId: string) => Promise<MutationResult<unknown>>;
   /** The bills received for this phase; absent where bills are not shown. */
@@ -31,7 +28,7 @@ interface PhaseDetailsProps {
 type Dialog = 'ledger' | null;
 
 /** What opens up when a phase card is expanded: the income, the monthly costs, and how to change them. */
-export default function PhaseDetails({ phase, entry, onUpdatePhase, onUpdateCost, onDeleteCost, billing, announce }: PhaseDetailsProps) {
+export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost, billing, announce }: PhaseDetailsProps) {
   const id = useId();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
@@ -188,8 +185,6 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onUpdateCost
         </dl>
       )}
 
-      <IncomeSection phase={phase} onUpdatePhase={onUpdatePhase} announce={announce} />
-
       <section aria-labelledby={`${id}-breakdown`}>
         <div className="phase-details__heading-row">
           <h4 className="phase-details__heading" id={`${id}-breakdown`}>
@@ -279,7 +274,6 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onUpdateCost
         )}
       </section>
 
-      {billing?.benchmarks && <BenchmarksCard phaseId={phase.id} view={billing.benchmarks} />}
 
       {billing && dialog === 'ledger' && (
         <BillsLedger
@@ -294,13 +288,14 @@ export default function PhaseDetails({ phase, entry, onUpdatePhase, onUpdateCost
         />
       )}
       {billing && pdfFiles.length > 0 && (
-        <DocumentReviewModal
-          files={pdfFiles}
+        <ExpenseWizard
+          initialFiles={pdfFiles}
           phases={billing.phases ?? [phase]}
-          today={billing.asOf}
-          history={billing.history}
+          context={context}
           openedFromPhaseId={phase.id}
-          onSave={saveFromDocument}
+          onSubmitReceipt={saveFromDocument}
+          // PDFs are always bills that arrived: nothing here is stored as a rate.
+          onSubmitRate={async () => ({ ok: false as const, failure: { kind: 'unknown' as const, message: 'Costs cannot be declared from a PDF.' } })}
           onClose={() => setPdfFiles([])}
         />
       )}

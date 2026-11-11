@@ -2,6 +2,12 @@ import { db } from './db';
 import { calculateHoldingPeriodInflation, syncCountryInflationHistory } from './inflationService';
 import { inflationLossAmount } from '../domain/inflation';
 import { REFERENCE_EUR_RATES } from '../infrastructure/fx/referenceFxRates';
+import type { PriceProvider } from '../application/ports';
+import { noPrices } from '../infrastructure/market/marketPrices';
+import { assertSaleCovered } from '../domain/holdingLedger';
+import { costBasisOfSale, valueOpenPosition } from '../domain/openPosition';
+import { summarizeReturn } from '../domain/portfolioReturn';
+import { buildPortfolioHistory } from '../domain/portfolioHistory';
 
 export interface ProcessTransactionParams {
   userId: string;
@@ -40,6 +46,15 @@ export async function processTransaction(params: ProcessTransactionParams) {
   const txDate = date ? new Date(date) : new Date();
 
   const targetUserId = userId;
+
+  // A sale needs the units to exist: checked before anything is written.
+  if (type === 'SOLD' && userId) {
+    const held = await db.transaction.findMany({
+      where: { userId, symbol: symbol.toUpperCase(), type: { in: ['BOUGHT', 'SOLD'] } },
+      select: { type: true, symbol: true, quantity: true, date: true },
+    });
+    assertSaleCovered(held, symbol, quantity, txDate);
+  }
 
   // 1. Log Transaction
   const transaction = await db.transaction.create({
@@ -124,8 +139,8 @@ export async function processTransaction(params: ProcessTransactionParams) {
       where: { userId: targetUserId, symbol: symbol.toUpperCase() },
     });
 
-    const costBasis = existingPosition ? existingPosition.investedAmount : amount;
-    const realizedCostBasis = Math.min(costBasis, amount);
+    // Only the units sold take their share of the cost with them.
+    const realizedCostBasis = existingPosition ? costBasisOfSale(existingPosition, quantity) : 0;
     const realizedPnl = netInflow - realizedCostBasis;
     const realizedPnlPercent = realizedCostBasis > 0 ? (realizedPnl / realizedCostBasis) * 100 : 0;
 
@@ -166,7 +181,7 @@ export async function processTransaction(params: ProcessTransactionParams) {
   return transaction;
 }
 
-export async function getPortfolioOverview(userId: string) {
+export async function getPortfolioOverview(userId: string, prices: PriceProvider = noPrices) {
   const targetUser = await db.user.findUnique({ where: { id: userId } });
 
   const cashBalance = targetUser ? targetUser.cashBalance : 0;
@@ -190,6 +205,12 @@ export async function getPortfolioOverview(userId: string) {
       })
     : [];
 
+  const priceBySymbol = await prices.pricesFor(positions.map((p) => p.symbol), baseCurrency);
+  const valued = positions.map((position) => ({
+    position,
+    value: valueOpenPosition(position, priceBySymbol.get(position.symbol.toUpperCase()) ?? null),
+  }));
+
   let openInvestedValue = 0;
 
   const regionTotals: Record<string, number> = {};
@@ -204,11 +225,11 @@ export async function getPortfolioOverview(userId: string) {
 
   // Calculate per-position holding period inflation
   let positionInflationEurosLoss = 0;
-  for (const pos of positions) {
+  for (const { position: pos, value } of valued) {
     openInvestedValue += pos.investedAmount;
-    regionTotals[pos.region] = (regionTotals[pos.region] || 0) + pos.investedAmount;
-    sectorTotals[pos.sector] = (sectorTotals[pos.sector] || 0) + pos.investedAmount;
-    assetClassTotals[pos.assetClass] = (assetClassTotals[pos.assetClass] || 0) + pos.investedAmount;
+    regionTotals[pos.region] = (regionTotals[pos.region] || 0) + value.marketValue;
+    sectorTotals[pos.sector] = (sectorTotals[pos.sector] || 0) + value.marketValue;
+    assetClassTotals[pos.assetClass] = (assetClassTotals[pos.assetClass] || 0) + value.marketValue;
 
     // Time-weighted inflation from purchase date to today for open holding
     const inflationPercent = await calculateHoldingPeriodInflation(country, pos.createdAt, new Date());
@@ -240,9 +261,7 @@ export async function getPortfolioOverview(userId: string) {
     });
   }
 
-  const netWorth = cashBalance + openInvestedValue;
   const soldProfit = realizedGains.reduce((sum, g) => sum + g.realizedPnl, 0);
-  const totalProfit = soldProfit;
 
   const deposits = targetUserId
     ? await db.transaction.aggregate({
@@ -272,11 +291,25 @@ export async function getPortfolioOverview(userId: string) {
       })
     : { _sum: { amount: 0 } };
 
+  const buyFeesAggregate = targetUserId
+    ? await db.transaction.aggregate({ where: { userId: targetUserId, type: 'BOUGHT' }, _sum: { fee: true } })
+    : { _sum: { fee: 0 } };
+
   const totalFees = feesAggregate._sum.fee || 0;
   const totalIncome = incomeAggregate._sum.amount || 0;
 
   const totalInvested = (deposits._sum.amount || 0) - (withdrawals._sum.amount || 0);
-  const allTimeRoiPercent = totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
+  // Dividends arrive as deposits: they are earnings, not money the person put in.
+  const summary = summarizeReturn({
+    realizedPnl: soldProfit,
+    dividends: totalIncome,
+    buyFees: buyFeesAggregate._sum.fee || 0,
+    contributed: totalInvested - totalIncome,
+    openPositions: valued.map(({ value }) => value),
+  });
+  const netWorth = cashBalance + summary.openValue;
+  const totalProfit = summary.totalReturn;
+  const allTimeRoiPercent = summary.totalReturnPercent;
 
   // Real Return calculation in Euros and %
   const totalInflationEurosLoss = positionInflationEurosLoss + soldAssetsInflationEurosLoss;
@@ -362,7 +395,11 @@ export async function getPortfolioOverview(userId: string) {
     cashBalances,
     totalInvested,
     openInvestedValue,
+    openMarketValue: summary.openValue,
     soldProfit,
+    openProfit: summary.unrealizedPnl,
+    dividends: totalIncome,
+    pricesAvailable: summary.allPriced,
     totalProfit,
     totalFees,
     totalIncome,
@@ -376,7 +413,7 @@ export async function getPortfolioOverview(userId: string) {
       sectors: formatBreakdown(sectorTotals, netWorth),
       assetClasses: formatBreakdown(assetClassTotals, netWorth),
     },
-    positions: positions.map((p) => {
+    positions: valued.map(({ position: p, value }) => {
       const holdingDays = Math.max(
         1,
         Math.floor((new Date().getTime() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24))
@@ -392,8 +429,10 @@ export async function getPortfolioOverview(userId: string) {
         quantity: p.quantity,
         investedAmount: p.investedAmount,
         costPerShare: Math.round(costPerShare * 100) / 100,
-        currentPrice: Math.round(costPerShare * 100) / 100,
-        currentValue: p.investedAmount,
+        currentPrice: value.priced && p.quantity > 0 ? Math.round((value.marketValue / p.quantity) * 100) / 100 : Math.round(costPerShare * 100) / 100,
+        currentValue: value.marketValue,
+        openProfit: value.unrealizedPnl,
+        priced: value.priced,
         holdingDays,
         createdAt: p.createdAt,
       };
@@ -402,7 +441,7 @@ export async function getPortfolioOverview(userId: string) {
   };
 }
 
-export async function getPortfolioHistory(userId: string) {
+export async function getPortfolioHistory(userId: string, prices: PriceProvider = noPrices) {
   const targetUser = await db.user.findUnique({ where: { id: userId } });
 
   if (!targetUser) return [];
@@ -429,79 +468,16 @@ export async function getPortfolioHistory(userId: string) {
     return [];
   }
 
-  const points: {
-    date_time: string;
-    portfolio_value_in_reporting_currency: number;
-    cumulative_cost_in_reporting_currency: number;
-    cashflow_in_reporting_currency: number;
-    benchmark_value_in_reporting_currency: number;
-    cumulative_time_weighted_return_rate: number;
-    cumulative_benchmark_time_weighted_return_rate: number;
-  }[] = [];
+  // Today's point is valued at market prices; the points before it stay at cost, as no price history is kept.
+  const positions = await db.position.findMany({ where: { userId: targetUser.id } });
+  const priceBySymbol = await prices.pricesFor(positions.map((p) => p.symbol), targetUser.baseCurrency);
+  const openProfit = positions.reduce((sum, p) => sum + valueOpenPosition(p, priceBySymbol.get(p.symbol.toUpperCase()) ?? null).unrealizedPnl, 0);
 
-  let runningCash = 0;
-  let runningInvestedInPositions = 0;
-  let cumulativeNetContributions = 0;
-  let cumulativeRealizedPnl = 0;
-
-  const positionCostMap = new Map<string, number>();
-
-  for (const tx of transactions) {
-    const txDate = new Date(tx.date);
-    let cashflow = 0;
-
-    if (tx.type === 'DEPOSIT') {
-      runningCash += tx.amount;
-      cumulativeNetContributions += tx.amount;
-      cashflow = tx.amount;
-    } else if (tx.type === 'WITHDRAWAL') {
-      runningCash -= tx.amount;
-      cumulativeNetContributions -= tx.amount;
-      cashflow = -tx.amount;
-    } else if (tx.type === 'BOUGHT') {
-      const outflow = tx.amount + (tx.fee || 0);
-      runningCash -= outflow;
-      const currentCost = positionCostMap.get(tx.symbol) || 0;
-      positionCostMap.set(tx.symbol, currentCost + tx.amount);
-      runningInvestedInPositions += tx.amount;
-    } else if (tx.type === 'SOLD') {
-      const inflow = tx.amount - (tx.fee || 0);
-      runningCash += inflow;
-      const currentCost = positionCostMap.get(tx.symbol) || tx.amount;
-      const realizedBasis = Math.min(currentCost, tx.amount);
-      const gain = inflow - realizedBasis;
-      cumulativeRealizedPnl += gain;
-      positionCostMap.set(tx.symbol, Math.max(0, currentCost - realizedBasis));
-      runningInvestedInPositions = Math.max(0, runningInvestedInPositions - realizedBasis);
-    }
-
-    const portfolioValue = Math.max(0, runningCash + runningInvestedInPositions + cumulativeRealizedPnl);
-    const twr = cumulativeNetContributions > 0
-      ? (portfolioValue - cumulativeNetContributions) / cumulativeNetContributions
-      : 0;
-
-    points.push({
-      date_time: txDate.toISOString(),
-      portfolio_value_in_reporting_currency: Math.round(portfolioValue * 100) / 100,
-      cumulative_cost_in_reporting_currency: Math.round(cumulativeNetContributions * 100) / 100,
-      cashflow_in_reporting_currency: Math.round(cashflow * 100) / 100,
-      benchmark_value_in_reporting_currency: Math.round(cumulativeNetContributions * 1.05 * 100) / 100,
-      cumulative_time_weighted_return_rate: Math.round(twr * 10000) / 10000,
-      cumulative_benchmark_time_weighted_return_rate: 0.05,
-    });
-  }
-
-  const now = new Date();
-  const lastPt = points[points.length - 1];
-  if (lastPt && new Date(lastPt.date_time).toDateString() !== now.toDateString()) {
-    points.push({
-      ...lastPt,
-      date_time: now.toISOString(),
-      cashflow_in_reporting_currency: 0,
-    });
-  }
-
-  return points;
+  return buildPortfolioHistory(
+    transactions.map((tx) => ({ type: tx.type, date: tx.date, symbol: tx.symbol, quantity: tx.quantity, amount: tx.amount, fee: tx.fee })),
+    new Date(),
+    { openPositionsUnrealizedPnl: openProfit }
+  );
 }
 
 export interface PerformancePeriodItem {
@@ -514,7 +490,7 @@ export interface PerformancePeriodItem {
   time_weighted_return_rate: number;
 }
 
-export async function getPortfolioPerformancePeriods(userId: string): Promise<PerformancePeriodItem[]> {
+export async function getPortfolioPerformancePeriods(userId: string, prices: PriceProvider = noPrices): Promise<PerformancePeriodItem[]> {
   const targetUser = await db.user.findUnique({ where: { id: userId } });
 
   if (!targetUser) return [];
@@ -524,7 +500,7 @@ export async function getPortfolioPerformancePeriods(userId: string): Promise<Pe
     orderBy: { date: 'asc' },
   });
 
-  const history = await getPortfolioHistory(userId);
+  const history = await getPortfolioHistory(userId, prices);
   if (!history || history.length === 0) return [];
 
   const getStateAt = (d: Date) => {

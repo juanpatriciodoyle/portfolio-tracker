@@ -2,6 +2,8 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Columns3, HelpCircle, X, ChevronUp, ChevronDown, Search } from 'lucide-react';
 import { formatCurrency } from '../data/sampleChartData';
 import { matchesHoldingsQuery } from '../lib/holdingsSearch';
+import { EMPTY_FILTERS, matchesHoldingsFilters, type HoldingsFilters } from '../lib/holdingsFilter';
+import HoldingsFilterMenu from './HoldingsFilterMenu';
 
 export interface PositionItem {
   id: string;
@@ -63,6 +65,7 @@ interface TableHoldingRow {
   symbol: string;
   assetClass: string;
   sector: string;
+  region: string;
   position: number;
   holding_period: number;
   net_cash_invested: number;
@@ -86,6 +89,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showClosed, setShowClosed] = useState(false);
   const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState<HoldingsFilters>(EMPTY_FILTERS);
   const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
@@ -123,6 +127,12 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
     }
   };
 
+  // What the filter can offer: every holding shown in the table, before any filter is applied.
+  const filterableRows = useMemo(
+    () => [...positions, ...(showClosed ? soldAssets : [])].map((h) => ({ assetClass: h.assetClass || 'Stock', sector: h.sector || '', region: h.region || '' })),
+    [positions, soldAssets, showClosed]
+  );
+
   // Convert positions and soldAssets into unified holding rows
   const holdingRows = useMemo(() => {
     const rows: TableHoldingRow[] = [];
@@ -144,6 +154,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
         symbol: p.symbol,
         assetClass: p.assetClass || 'Stock',
         sector: p.sector || '',
+        region: p.region || '',
         position: quantity,
         holding_period: p.holdingDays || 1,
         net_cash_invested: invested,
@@ -172,6 +183,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
           symbol: s.symbol,
           assetClass: s.assetClass || 'Stock',
           sector: s.sector || '',
+          region: s.region || '',
           position: 0,
           holding_period: s.holdingDays || 1,
           net_cash_invested: invested,
@@ -187,7 +199,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
     }
 
     // Search then sort rows
-    return rows.filter((row) => matchesHoldingsQuery({ symbol: row.symbol, name: row.security_name, sector: row.sector }, query)).sort((a, b) => {
+    return rows.filter((row) => matchesHoldingsFilters(row, filters) && matchesHoldingsQuery({ symbol: row.symbol, name: row.security_name, sector: row.sector }, query)).sort((a, b) => {
       let valA = a[sortKey];
       let valB = b[sortKey];
 
@@ -199,7 +211,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
       const numB = Number(valB) || 0;
       return sortDirection === 'asc' ? numA - numB : numB - numA;
     });
-  }, [positions, soldAssets, netWorth, showClosed, sortKey, sortDirection, isRealInflationMode, query]);
+  }, [positions, soldAssets, netWorth, showClosed, sortKey, sortDirection, isRealInflationMode, query, filters]);
 
   // Logo fallback badge helper
   const renderSecurityLogo = (name: string, symbol: string, assetClass: string) => {
@@ -242,7 +254,10 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
         {/* Header */}
         <div className="dashboard-panel-header">
           <h2 className="dashboard-panel-title">Holdings</h2>
+        </div>
 
+        {/* One toolbar row: search on the left, filter and columns on the right */}
+        <div className="holdings-toolbar">
           <label className="holdings-search">
             <Search size={14} aria-hidden="true" />
             <input
@@ -255,16 +270,20 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
             />
           </label>
 
-          <div className="dashboard-table-column-menu" ref={columnMenuRef}>
-            <button
-              type="button"
-              className="dashboard-icon-button"
-              onClick={() => setIsColumnMenuOpen(!isColumnMenuOpen)}
-              aria-label="Toggle table columns"
-              aria-expanded={isColumnMenuOpen}
-            >
-              <Columns3 size={18} />
-            </button>
+          <div className="holdings-toolbar__actions">
+            <HoldingsFilterMenu rows={filterableRows} filters={filters} onChange={setFilters} />
+
+            <div className="dashboard-table-column-menu" ref={columnMenuRef}>
+              <button
+                type="button"
+                className="dashboard-icon-button"
+                onClick={() => setIsColumnMenuOpen(!isColumnMenuOpen)}
+                aria-label="Customize columns"
+                title="Customize columns"
+                aria-expanded={isColumnMenuOpen}
+              >
+                <Columns3 size={18} />
+              </button>
 
             {isColumnMenuOpen && (
               <div className="dashboard-table-column-menu__menu">
@@ -320,6 +339,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 </ul>
               </div>
             )}
+            </div>
           </div>
         </div>
 

@@ -3,7 +3,7 @@ import type { z } from 'zod';
 import { DocumentRejectedError, ResourceNotFoundError } from '../application/errors';
 import { DUPLICATE_BILLING_RECORD, INTERNAL_ERROR_MESSAGE, INVALID_REQUEST_MESSAGE } from '../contracts';
 import type { ApiErrorResponse, DuplicateBillingRecordErrorResponse, PhaseOverlapErrorResponse, ValidationErrorResponse } from '../contracts';
-import { DuplicateBillingRecordError, InvalidBillingRecordError, InvalidLivingPhaseError, InvalidProfileError, PhaseOverlapError } from '../domain/errors';
+import { DuplicateBillingRecordError, InsufficientHoldingsError, InvalidBillingRecordError, InvalidLivingPhaseError, InvalidProfileError, PhaseOverlapError } from '../domain/errors';
 import { verifyToken, type AuthenticatedRequest } from '../lib/auth';
 
 /** A request body, query or parameter that does not match its contract. Carries paths and rules, never values. */
@@ -83,6 +83,8 @@ export function respondWithError(error: unknown, res: Response): void {
   } else if (error instanceof DocumentRejectedError) {
     if (error.retryAfterSeconds !== undefined) res.set('Retry-After', String(error.retryAfterSeconds));
     res.status(DOCUMENT_STATUS[error.code]).json({ error: error.message, code: error.code } satisfies ApiErrorResponse);
+  } else if (error instanceof InsufficientHoldingsError) {
+    res.status(400).json({ error: error.message, code: error.code, availableUnits: error.availableUnits } satisfies ApiErrorResponse & { availableUnits: number });
   } else if (error instanceof DuplicateBillingRecordError) {
     res
       .status(409)

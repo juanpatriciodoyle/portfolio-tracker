@@ -65,6 +65,8 @@
   --color-loss-bg: rgba(244, 63, 94, 0.12);
   --color-loss-glow: rgba(244, 63, 94, 0.25);
   --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --z-header: 500;
   --color-danger: #F43F5E;
   --color-warning: #F59E0B;
   --color-deposit: #854D0E;
@@ -310,6 +312,11 @@ select:disabled {
 
 .dashboard-return-icon {
   margin-right: -2px;
+}
+
+.value-overview__return-period {
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 
 .return-sub-amount {
@@ -1564,85 +1571,47 @@ select:disabled {
   .kpi-row { grid-template-columns: 1fr; }
 }
 
-/* Second salary: what the capital could pay each month */
-.second-salary {
+/* The top bar stays above everything that scrolls under it (popovers use 100 and 1000 only while open, below it is the page). */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px 20px;
-  background-color: var(--bg-tile);
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 40px;
+  border-bottom: 1px solid var(--border-card-color);
+  background-color: color-mix(in srgb, var(--bg-card) 95%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+/* Hero: every headline figure in one panel, above the chart */
+.hero-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1px;
+  background-color: var(--border-subtle-color);
   border: 1px solid var(--border-subtle-color);
   border-radius: 12px;
+  overflow: hidden;
 }
-.second-salary__badge {
-  margin: 0;
-  font-size: 24px;
+.hero-metrics .metric-tile {
+  gap: 6px;
+  min-height: 0;
+}
+.hero-metrics__value {
+  font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.5px;
   color: var(--text-heading);
 }
-.second-salary__subtext {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-.second-salary__track {
-  position: relative;
-  height: 8px;
-  border-radius: 999px;
-  background-color: var(--bg-badge);
-  overflow: visible;
-}
-.second-salary__target {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--color-profit-bg);
-  border-radius: 0 999px 999px 0;
-}
-.second-salary__fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  background-color: var(--color-profit);
-  border-radius: 999px;
-  transition: width 0.3s ease;
-}
-.second-salary__tick {
-  position: absolute;
-  top: -3px;
-  width: 2px;
-  height: 14px;
-  margin-left: -1px;
-  background-color: var(--text-muted);
-}
-.second-salary__tick.is-reached {
-  background-color: var(--text-heading);
-}
-.second-salary__legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.hero-metrics__note {
   font-size: 12px;
-  color: var(--text-muted);
-}
-.second-salary__legend li.is-reached {
-  color: var(--color-profit);
-}
-.second-salary__legend-target {
-  margin-left: auto;
   color: var(--text-secondary);
 }
-.second-salary__note {
-  color: var(--text-muted);
-}
-@media (max-width: 720px) {
-  .second-salary__legend-target { margin-left: 0; }
+.hero-metrics__note--warning {
+  color: var(--color-warning);
 }
 
 /* Capital horizon: goals saved toward */
@@ -1755,11 +1724,70 @@ select:disabled {
 .cash-pill__converted { font-size: 12px; color: var(--text-secondary); }
 
 /* Holdings search & history pager */
+.holdings-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.holdings-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.holdings-toolbar__filter {
+  position: relative;
+}
+.holdings-toolbar__badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background-color: var(--accent-primary);
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+.holdings-filter-menu {
+  width: 240px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.holdings-filter-menu__group {
+  border: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.holdings-filter-menu__group legend {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.holdings-filter-menu__clear {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--text-accent);
+  cursor: pointer;
+}
 .holdings-search {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
+  width: min(320px, 100%);
   padding: 6px 12px;
   border: 1px solid var(--border-subtle-color);
   border-radius: 8px;
@@ -1767,7 +1795,9 @@ select:disabled {
   color: var(--text-secondary);
 }
 .holdings-search__input {
-  width: 220px;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
   border: none;
   outline: none;
   background: transparent;

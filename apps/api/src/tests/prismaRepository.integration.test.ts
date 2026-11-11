@@ -73,6 +73,8 @@ if (!url) {
   describe('country statistics and the job lock', () => {
     const statistics = {
       countryCode: 'ZZ',
+      regionCode: 'LCN',
+      referenceDistribution: null,
       incomeDistribution: { source: 'EUROSTAT' as const, period: '2025', currency: 'EUR', distribution: { period: 'YEAR' as const, basis: 'EQUIVALISED' as const, points: [{ percentile: 10, value: 909100 }] } },
       housingCostShare: { source: 'EUROSTAT' as const, period: '2025', percent: 16 },
       purchasing: null,

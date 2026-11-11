@@ -5,9 +5,6 @@ import {
   type CreateFixedCostRequest,
   type FixedCostCategory,
   type FixedCostDto,
-  type VendorHistoryEntry,
-  COST_CADENCES,
-  suggestForVendor,
 } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import { clampDateYear, keepDecimal } from '../../lib/inputFilters';
@@ -21,12 +18,6 @@ interface FixedCostEditorProps {
   currency: string;
   /** Present when editing an existing cost. */
   initial?: FixedCostDto;
-  /** Offer only these categories; all of them when absent. */
-  categories?: readonly FixedCostCategory[];
-  /** Where the home is and what the person already has: the label they type then suggests a category and cadence. */
-  suggestion?: { countryCode: string | null; history: readonly VendorHistoryEntry[] };
-  /** Wording of the save button. */
-  submitLabel?: string;
   onSubmit: (input: CreateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onCancel: () => void;
 }
@@ -39,7 +30,7 @@ interface Errors {
 }
 
 /** Add or change one bill: what it is, what each payment costs, and how often it is paid. */
-export default function FixedCostEditor({ currency, initial, categories, suggestion, submitLabel, onSubmit, onCancel }: FixedCostEditorProps) {
+export default function FixedCostEditor({ currency, initial, onSubmit, onCancel }: FixedCostEditorProps) {
   const id = useId();
   const [category, setCategory] = useState<FixedCostCategory | null>(initial?.category ?? null);
   const [cadence, setCadence] = useState<CostCadence>(initial?.cadence ?? 'MONTHLY');
@@ -48,18 +39,6 @@ export default function FixedCostEditor({ currency, initial, categories, suggest
   const [endDate, setEndDate] = useState(initial?.endDate ?? '');
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
-  /** What the person chose themselves: a label typed later never overrides it. */
-  const [picked, setPicked] = useState({ category: initial !== undefined, cadence: initial !== undefined });
-
-  const changeLabel = (value: string) => {
-    setLabel(value);
-    if (!suggestion) return;
-    const found = suggestForVendor({ name: value, countryCode: suggestion.countryCode, history: suggestion.history });
-    const usable = found && (!categories || categories.includes(found.category)) ? found : null;
-    if (!picked.category) setCategory(usable?.category ?? null);
-    const cadence = usable?.cadence ?? null;
-    if (!picked.cadence && cadence !== null && (COST_CADENCES as readonly string[]).includes(cadence)) setCadence(cadence as CostCadence);
-  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -108,9 +87,7 @@ export default function FixedCostEditor({ currency, initial, categories, suggest
         value={category}
         onChange={(chosen) => {
           setCategory(chosen);
-          setPicked((previous) => ({ ...previous, category: true }));
         }}
-        only={categories}
         invalid={errors.category !== undefined}
         errorId={errors.category ? `${id}-category-error` : undefined}
       />
@@ -152,7 +129,7 @@ export default function FixedCostEditor({ currency, initial, categories, suggest
             autoComplete="off"
             placeholder="Company / Provider"
             value={label}
-            onChange={(event) => changeLabel(event.target.value)}
+            onChange={(event) => setLabel(event.target.value)}
             aria-invalid={errors.label !== undefined || undefined}
             aria-describedby={errors.label ? `${id}-label-error` : undefined}
           />
@@ -171,7 +148,6 @@ export default function FixedCostEditor({ currency, initial, categories, suggest
         value={cadence}
         onChange={(chosen) => {
           setCadence(chosen);
-          setPicked((previous) => ({ ...previous, cadence: true }));
         }}
       />
 
@@ -196,7 +172,7 @@ export default function FixedCostEditor({ currency, initial, categories, suggest
 
       <div className="cost-editor__actions">
         <button type="submit" className="btn-primary-apply" disabled={saving}>
-          {saving ? 'Saving…' : initial ? 'Save changes' : (submitLabel ?? 'Add cost')}
+          {saving ? 'Saving…' : initial ? 'Save changes' : 'Add cost'}
         </button>
         <button type="button" className="btn-secondary-cancel" onClick={onCancel}>
           Cancel

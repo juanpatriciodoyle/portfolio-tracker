@@ -14,7 +14,11 @@ function renderForm(profile = makeProfile(), onSave = vi.fn<() => Promise<Mutati
 }
 
 const show = () => fireEvent.click(screen.getByRole('button', { name: 'Demographics & Household Settings' }));
-const edit = () => fireEvent.click(screen.getByRole('button', { name: /Edit|Add details/ }));
+const edit = () => {
+  // The button belongs to the open card: open it first.
+  if (screen.queryByRole('button', { name: /^(Edit|Add details)$/ }) === null) show();
+  fireEvent.click(screen.getByRole('button', { name: /^(Edit|Add details)$/ }));
+};
 
 describe('ProfileForm summary', () => {
   it('keeps the raw answers out of sight until asked', () => {
@@ -22,9 +26,10 @@ describe('ProfileForm summary', () => {
 
     expect(screen.getByRole('button', { name: 'Demographics & Household Settings' })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByText('Juan Doyle')).not.toBeVisible();
-    expect(screen.getByRole('button', { name: 'Edit' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
 
     show();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeVisible();
 
     expect(screen.getByRole('button', { name: 'Demographics & Household Settings' })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('Juan Doyle')).toBeVisible();
@@ -60,6 +65,7 @@ describe('ProfileForm summary', () => {
       makeProfile({ fullName: null, birthYear: null, nationalities: [], taxResidence: null, employmentStatus: null })
     );
 
+    expect(screen.queryByRole('button', { name: 'Add details' })).not.toBeInTheDocument();
     show();
 
     expect(screen.getByText(/Tell us a little about yourself/)).toBeVisible();

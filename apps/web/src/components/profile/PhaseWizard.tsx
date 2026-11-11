@@ -3,6 +3,8 @@ import type { CreateFixedCostRequest, LivingPhaseDto } from '../../contracts';
 import { useStepDraft } from '../../hooks/useStepDraft';
 import type { MutationResult } from '../../lib/apiErrors';
 import WizardModal from '../wizard/WizardModal';
+import { parseMajorToMinor } from '../../lib/money';
+import { carriedStreams, carryCandidates } from './carryOver';
 import { initialPhaseForm, phaseDraftSchema, validatePhaseForm, type PhaseFormState, type PhasePayload } from './phaseForm';
 import { phaseFailureFeedback } from './phaseFailure';
 import PhaseStepFields from './PhaseStepFields';
@@ -33,10 +35,12 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
   const { values, setValues, step, setStep, resumedAtStep, discard } = useStepDraft(
     `phase:${phase?.id ?? 'new'}`,
     phaseDraftSchema,
-    () => ({ form: initialPhaseForm(phase, { currency: defaultCurrency, stillLivingHere: !hasCurrentPhase }), costs: [] }),
+    () => ({ form: initialPhaseForm(phase, { currency: defaultCurrency, stillLivingHere: !hasCurrentPhase }), costs: [], carry: { unticked: [], amounts: {} } }),
     stepIds.length
   );
-  const { form, costs } = values;
+  const { form, costs, carry } = values;
+  // A new home can keep the jobs the previous one had; changing a home never touches its income.
+  const candidates = useMemo(() => (phase === null ? carryCandidates(phases, form.startDate, form.currency) : []), [phase, phases, form.startDate, form.currency]);
   const feedback = usePhaseFormFeedback(form, today);
   const [saving, setSaving] = useState(false);
   const [addingBill, setAddingBill] = useState(false);
@@ -53,7 +57,13 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
   const changeCosts = (next: CreateFixedCostRequest[]) => setValues((previous) => ({ ...previous, costs: next }));
 
   const submit = async () => {
-    const result = validatePhaseForm(form, today, costs);
+    const carried = carriedStreams(candidates, carry, form.startDate, (text) => parseMajorToMinor(text, form.currency));
+    if (!carried.ok) {
+      feedback.showServerErrors({ monthlyIncome: carried.message });
+      setStep(stepIds.indexOf('money'));
+      return;
+    }
+    const result = validatePhaseForm(form, today, costs, carried.streams);
     if (!result.ok) {
       feedback.tryEverything();
       const failing = firstStepWithError(result.errors);
@@ -110,6 +120,7 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
         costs={costs}
         onCostsChange={changeCosts}
         includeIncome={phase === null}
+        carry={phase === null ? { candidates, choice: carry, onChange: (choice) => setValues((previous) => ({ ...previous, carry: choice })) } : undefined}
       />
     </WizardModal>
   );

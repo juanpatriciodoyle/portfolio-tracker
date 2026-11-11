@@ -115,6 +115,14 @@ describe('fixed baseline items', () => {
     expect(effectiveMonthlyCosts({ declared: declaredPlan, bills: [...old, internet(5000, '04'), internet(5000, '05'), internet(5000, '06')] }).byCategory.INTERNET.monthlyMinor).toBe(5000);
   });
 
+  it('averages a rent bill at a new price with the previous ones of the same phase', () => {
+    const result = effectiveMonthlyCosts({
+      declared: [declared('RENT', 90000)],
+      bills: [bill('RENT', 90000, '2026-01-01', '2026-01-31'), bill('RENT', 90000, '2026-02-01', '2026-02-28'), bill('RENT', 100000, '2026-03-01', '2026-03-31')],
+    });
+    expect(result.byCategory.RENT).toEqual({ monthlyMinor: 93333, basis: 'BILLS', billCount: 3 });
+  });
+
   it('are not changed by the order the bills were logged in', () => {
     const bills = [internet(3000, '01'), internet(3000, '02'), internet(3000, '03'), internet(5000, '04')];
     expect(effectiveMonthlyCosts({ declared: [], bills: [...bills].reverse() }).byCategory.INTERNET.monthlyMinor).toBe(3667);

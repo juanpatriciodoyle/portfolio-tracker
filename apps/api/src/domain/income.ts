@@ -13,6 +13,10 @@ export interface IncomeStream {
   readonly startDate: CalendarDate;
   /** null means the stream is still paying. */
   readonly endDate: CalendarDate | null;
+  /** A one-time deposit (a benefit) is paid on `startDate` only; absent means it pays every month. */
+  readonly kind?: 'MONTHLY' | 'ONE_TIME';
+  /** Why the job ended: a label for the person, never used in a calculation. */
+  readonly endReason?: 'LAID_OFF' | 'QUIT' | 'CONTRACT_FINISHED' | 'OTHER';
 }
 
 /** The days a phase was lived, which is where income is counted. */
@@ -24,9 +28,10 @@ export interface IncomeSpan {
 
 const NEVER = '9999-12-31';
 
-const isActiveOn = ({ startDate, endDate }: IncomeStream, day: CalendarDate) => startDate <= day && day <= (endDate ?? NEVER);
+const isOneTime = (stream: IncomeStream) => stream.kind === 'ONE_TIME';
+const isActiveOn = (stream: IncomeStream, day: CalendarDate) => !isOneTime(stream) && stream.startDate <= day && day <= (stream.endDate ?? NEVER);
 
-/** The monthly income on a day: every stream paying that day, added up. */
+/** The monthly income on a day: every monthly stream paying that day, added up. A one-time deposit is not a monthly figure. */
 export function monthlyIncomeOn(streams: readonly IncomeStream[], day: CalendarDate): number {
   return streams.filter((stream) => isActiveOn(stream, day)).reduce((total, { amountMinor }) => total + amountMinor, 0);
 }
@@ -36,14 +41,19 @@ const lastDayCounted = (span: IncomeSpan, asOf: CalendarDate) => (span.endDate !
 
 /**
  * What was earned from the first day of the phase up to the as-of day (or the day it ended): each stretch of
- * constant income counts for the days it lasted, a day being 1/30.44 of a month. Rounded once, at the end.
+ * constant income counts for the days it lasted, a day being 1/30.44 of a month (rounded once), plus every one-time
+ * deposit paid inside the stay, once.
  */
 export function earnedIncomeMinor(span: IncomeSpan & { readonly streams: readonly IncomeStream[] }, asOf: CalendarDate): number {
   const lastDay = lastDayCounted(span, asOf);
   if (lastDay < span.startDate) return 0;
 
+  const monthly = span.streams.filter((stream) => !isOneTime(stream));
+  const oneTime = span.streams.filter(isOneTime).filter(({ startDate }) => startDate >= span.startDate && startDate <= lastDay);
+  const deposited = oneTime.reduce((total, { amountMinor }) => total + amountMinor, 0);
+
   const breaks = new Set<CalendarDate>([span.startDate]);
-  for (const { startDate, endDate } of span.streams) {
+  for (const { startDate, endDate } of monthly) {
     if (startDate > span.startDate && startDate <= lastDay) breaks.add(startDate);
     if (endDate !== null && addDays(endDate, 1) > span.startDate && addDays(endDate, 1) <= lastDay) breaks.add(addDays(endDate, 1));
   }
@@ -51,9 +61,9 @@ export function earnedIncomeMinor(span: IncomeSpan & { readonly streams: readonl
 
   const monthFractions = starts.reduce((total, start, index) => {
     const end = index + 1 < starts.length ? addDays(starts[index + 1], -1) : lastDay;
-    return total + monthlyIncomeOn(span.streams, start) * daysInclusive(start, end);
+    return total + monthlyIncomeOn(monthly, start) * daysInclusive(start, end);
   }, 0);
-  return roundHalfAwayFromZero(monthFractions / AVERAGE_DAYS_PER_MONTH);
+  return roundHalfAwayFromZero(monthFractions / AVERAGE_DAYS_PER_MONTH) + deposited;
 }
 
 /** What was earned in an average month of the stay: the total over the months lived, gaps included. 0 before the phase starts. */

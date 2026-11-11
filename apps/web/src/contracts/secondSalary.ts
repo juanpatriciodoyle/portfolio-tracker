@@ -1,6 +1,6 @@
 // GENERATED FILE: do not edit. Source of truth: apps/api/src/contracts. Run `npm run contracts:sync` at the repo root.
 import { z } from 'zod';
-import { calendarDateSchema, currencyCodeSchema } from './primitives';
+import { calendarDateSchema, currencyCodeSchema, MAX_AMOUNT_MINOR } from './primitives';
 
 export const MILESTONE_KIND_VALUES = ['UTILITIES_AND_SUBSCRIPTIONS', 'RENT', 'LIVING_COST'] as const;
 
@@ -12,19 +12,22 @@ export const milestoneDto = z.object({
   reached: z.boolean(),
   /** How much of the cost the second salary covers, from 0 to 1. */
   progress: z.number().min(0).max(1),
-  /** Where the cost sits on the bar that ends at the top of the target range, from 0 to 1. */
-  position: z.number().min(0).max(1),
 });
 export type MilestoneDto = z.infer<typeof milestoneDto>;
 
+/** The monthly second salary a person chooses to aim at, in the currency of their portfolio. Stored encrypted with the profile. */
+export const secondSalaryTargetMonthlyMinorSchema = z.number().int().positive().max(MAX_AMOUNT_MINOR);
+
+/** `null` clears the target. */
+export const saveSecondSalaryTargetRequest = z.object({ monthlyMinor: secondSalaryTargetMonthlyMinorSchema.nullable() }).strict();
+export type SaveSecondSalaryTargetRequest = z.infer<typeof saveSecondSalaryTargetRequest>;
+
 export const secondSalaryTargetDto = z.object({
-  minMonthlyMinor: z.number().int(),
-  maxMonthlyMinor: z.number().int(),
+  monthlyMinor: secondSalaryTargetMonthlyMinorSchema,
+  /** How far the second salary is toward the target, from 0 to 1. */
   progress: z.number().min(0).max(1),
-  minMarker: z.number().min(0).max(1),
-  reachedMin: z.boolean(),
-  minCapitalNeededMinor: z.number().int().nonnegative(),
-  maxCapitalNeededMinor: z.number().int().nonnegative(),
+  reached: z.boolean(),
+  capitalNeededMinor: z.number().int().nonnegative(),
 });
 export type SecondSalaryTargetDto = z.infer<typeof secondSalaryTargetDto>;
 
@@ -45,6 +48,7 @@ export const secondSalaryResponse = z.object({
   reachedMilestone: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable(),
   /** Set whenever `milestones` is empty. */
   gap: z.enum(SECOND_SALARY_GAPS).nullable(),
-  target: secondSalaryTargetDto,
+  /** The person's own target; null until one is set. */
+  target: secondSalaryTargetDto.nullable(),
 });
 export type SecondSalaryResponse = z.infer<typeof secondSalaryResponse>;

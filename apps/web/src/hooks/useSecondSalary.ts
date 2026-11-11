@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { secondSalaryResponse, type SecondSalaryResponse } from '../contracts';
-import { apiRequest } from '../lib/apiClient';
-import { attempt, statusFromFailure, type LoadStatus } from '../lib/apiErrors';
+import { apiCommand, apiRequest } from '../lib/apiClient';
+import { attempt, statusFromFailure, type LoadStatus, type MutationResult } from '../lib/apiErrors';
 
 interface SecondSalaryState {
   status: LoadStatus;
@@ -17,6 +17,7 @@ const INITIAL_STATE: SecondSalaryState = { status: 'loading', secondSalary: null
  */
 export function useSecondSalary(enabled: boolean, version: unknown) {
   const [state, setState] = useState<SecondSalaryState>(INITIAL_STATE);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!enabled) return;
@@ -29,7 +30,14 @@ export function useSecondSalary(enabled: boolean, version: unknown) {
     return () => {
       cancelled = true;
     };
-  }, [enabled, version]);
+  }, [enabled, version, reloadKey]);
 
-  return state;
+  /** Sets the monthly second salary to aim at (null clears it), then loads the new progress. */
+  const saveTarget = useCallback(async (monthlyMinor: number | null): Promise<MutationResult> => {
+    const result = await attempt(() => apiCommand('/api/profile/second-salary-target', { method: 'PUT', body: { monthlyMinor } }));
+    if (result.ok) setReloadKey((key) => key + 1);
+    return result;
+  }, []);
+
+  return { ...state, saveTarget };
 }

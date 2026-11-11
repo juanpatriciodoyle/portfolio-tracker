@@ -270,13 +270,21 @@
 
 /* ---------- Buttons ---------- */
 
+.profile-section__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+/* The secondary action beside "Add expense": outlined, so only one button on the page is solid. */
 .profile-add-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background-color: var(--accent-primary);
+  background-color: transparent;
   color: var(--text-primary);
-  border: none;
+  border: 1px solid var(--border-hover);
   border-radius: 8px;
   padding: 8px 14px;
   font-size: 13px;
@@ -286,7 +294,7 @@
 }
 
 .profile-add-button:hover {
-  background-color: var(--accent-hover);
+  background-color: var(--border-subtle-color);
 }
 
 .profile-text-button {
@@ -1529,9 +1537,25 @@
 /* ---------- Benchmarks ---------- */
 
 .benchmarks {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-divider-color);
+  /* The card stands alone in its own panel: no rule or spacing above its heading. */
+  margin: 0;
+  padding: 0;
+}
+
+.benchmarks__insights {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.benchmarks__sources {
+  margin: 10px 0 0;
+  padding-left: 18px;
 }
 
 .benchmarks__notes {
@@ -1737,4 +1761,342 @@
 .cost-row.is-ended .cost-row__name,
 .cost-row.is-ended .cost-row__amount {
   color: var(--text-muted);
+}
+
+/* ---------- Tabs ---------- */
+
+.profile-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-subtle-color);
+  overflow-x: auto;
+}
+
+.profile-tabs__tab {
+  flex: none;
+  margin-bottom: -1px;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.profile-tabs__tab:hover {
+  color: var(--text-primary);
+}
+
+.profile-tabs__tab.is-active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
+.profile-tabs__tab:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+.profile-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 20px;
+}
+
+/* ---------- Income & career on a phase card ---------- */
+
+.phase-card__career {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.phase-card__career-summary {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.phase-card__career-add {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.phase-card__income {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-divider-color);
+}
+
+/* ---------- Second salary ---------- */
+
+.second-salary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+  background-color: var(--bg-tile);
+  border: 1px solid var(--border-subtle-color);
+  border-radius: 12px;
+}
+
+.second-salary-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.second-salary-card__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.second-salary-card__explanation,
+.second-salary-card__note,
+.second-salary-card__covers {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.second-salary-card__covers {
+  color: var(--text-heading);
+}
+
+.second-salary-card__income {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--text-heading);
+}
+
+.second-salary-card__of {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.second-salary-card__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.second-salary-card__empty .second-salary-card__income {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.second-salary-card__track {
+  height: 10px;
+  border-radius: 999px;
+  background-color: var(--border-subtle-color);
+  overflow: hidden;
+}
+
+.second-salary-card__fill {
+  height: 100%;
+  border-radius: 999px;
+  background-color: var(--accent-primary);
+  transition: width 0.3s ease;
+}
+
+.second-salary-card__fill.is-reached {
+  background-color: var(--color-profit);
+}
+
+.second-salary-card__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 320px;
+}
+
+.second-salary-card__actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* ---------- Milestone dialog: room to breathe ---------- */
+
+.milestone-editor {
+  gap: 20px;
+  margin-top: 20px;
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+.milestone-editor__remove {
+  align-self: flex-start;
+}
+
+.milestone-editor__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-divider-color);
+}
+
+.milestone-editor__footer .btn-primary-apply,
+.milestone-editor__footer .btn-secondary-cancel {
+  min-width: 120px;
+}
+
+/* Stage 1: one footprint for the two actions above the living phases; only the colours differ. */
+.profile-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  flex: none;
+  min-height: 38px;
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.profile-action-button--primary {
+  background-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.profile-action-button--outline {
+  background-color: transparent;
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
+.profile-action-button--outline:hover {
+  background-color: var(--border-subtle-color);
+}
+
+/* Stage 1: jobs that ended, gaps between them and the jobs a new home can keep. */
+.income-group + .income-group {
+  margin-top: 12px;
+}
+
+.income-group__title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.income-row.is-ended .cost-row__name,
+.income-row.is-ended .cost-row__amount {
+  color: var(--text-muted);
+}
+
+.income-row__end {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.income-row__ending {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.income-gap {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.carry-jobs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.carry-jobs__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-heading);
+}
+
+.carry-jobs__amount {
+  max-width: 140px;
+}
+
+/* ---------- Add an expense wizard (drop zone, PDF beside the questions) ---------- */
+
+.pdf-picker--large {
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  min-height: 160px;
+  padding: 24px;
+  font-size: 15px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.expense-wizard__manual {
+  align-self: center;
+}
+
+.expense-wizard__skip {
+  align-self: flex-start;
+}
+
+.expense-wizard__with-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+}
+
+.expense-wizard__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.expense-wizard__preview .document-review__preview {
+  min-height: 420px;
+}
+
+@media (max-width: 760px) {
+  .expense-wizard__with-preview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .expense-wizard__preview .document-review__preview {
+    min-height: 240px;
+  }
 }

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { amountMinorSchema, calendarDateSchema, capitalMilestoneList, incomeStreamSchema, profileDataSchema } from '../contracts';
+import { amountMinorSchema, calendarDateSchema, capitalMilestoneList, incomeStreamSchema, profileDataSchema, secondSalaryTargetMonthlyMinorSchema } from '../contracts';
 
 /** How income was saved before income streams: a base amount that changes replaced for a while. Only read, never written. */
 const legacyIncomeChangeSchema = z.object({
@@ -53,6 +53,9 @@ export const billingPayloadSchema = z
   .strict();
 export type BillingPayload = z.infer<typeof billingPayloadSchema>;
 
-/** What is sealed inside the profile row: the profile itself and the goals saved toward. Profiles saved before goals existed have none. */
-export const storedProfileSchema = profileDataSchema.extend({ capitalMilestones: capitalMilestoneList.default([]) });
+/** What is sealed inside the profile row: the profile itself, the goals saved toward and the second salary aimed at. Profiles saved before these existed have none. */
+export const storedProfileSchema = profileDataSchema.extend({
+  capitalMilestones: capitalMilestoneList.default([]),
+  secondSalaryTargetMinor: secondSalaryTargetMonthlyMinorSchema.nullable().default(null),
+});
 export type StoredProfile = z.infer<typeof storedProfileSchema>;

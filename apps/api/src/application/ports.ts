@@ -1,6 +1,6 @@
 import type { BillingCadence, CalendarDate, CostCadence, FixedCostCategory, FxRateSource, HousingTenure } from '../contracts/vocabulary';
 import type { BenchmarkSource } from '../contracts/benchmark';
-import type { IncomeDistribution } from '../domain/benchmarks';
+import type { DistributionPoint, IncomeDistribution } from '../domain/benchmarks';
 import type { FxRates } from '../domain/phaseComparison';
 
 /** Where a stored value lives. Bound into every ciphertext so a value cannot be moved to another row or person. */
@@ -127,9 +127,27 @@ export interface StatisticOrigin {
   readonly period: string;
 }
 
-/** What is known about a country from public statistics. Each part is null when no provider published it. */
+/**
+ * How much people have per person per day across an area (the world, a World Bank region), as a distribution of
+ * international dollars at 2021 prices (the 2021 PPP round). Each point is the share of people below a given amount.
+ */
+export interface ReferenceDistribution extends StatisticOrigin {
+  readonly areaName: string;
+  readonly points: readonly DistributionPoint[];
+  /** How much dollar prices rose from 2021 to each year (the US consumer price index of the year over that of 2021). */
+  readonly priceIndex: Readonly<Record<string, number>>;
+}
+
+/**
+ * What is known about a country (or an area such as 'EU', 'WLD' or 'LCN') from public statistics. Each part is null
+ * when no provider published it.
+ */
 export interface CountryStatistics {
   readonly countryCode: string;
+  /** The World Bank region of a country (such as 'LCN'); null for areas and when unknown. */
+  readonly regionCode: string | null;
+  /** How people in a whole area are spread: only kept for the world and the World Bank regions. */
+  readonly referenceDistribution: ReferenceDistribution | null;
   readonly incomeDistribution: (StatisticOrigin & { readonly currency: string; readonly distribution: IncomeDistribution }) | null;
   /** Typical share of disposable income that households spend on housing, in percent. */
   readonly housingCostShare: (StatisticOrigin & { readonly percent: number }) | null;
@@ -166,4 +184,10 @@ export interface JobLock {
 /** Port: what a person's portfolio is worth now, in one currency. Read-only. */
 export interface PortfolioValueReader {
   netWorth(userId: string): Promise<{ readonly amountMinor: number; readonly currency: string }>;
+}
+
+/** Port: today's market prices. A symbol the market does not know is simply absent from the answer. */
+export interface PriceProvider {
+  /** Price per unit of each symbol, in `currency`. */
+  pricesFor(symbols: readonly string[], currency: string): Promise<ReadonlyMap<string, number>>;
 }

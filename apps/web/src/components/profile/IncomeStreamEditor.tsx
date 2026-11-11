@@ -3,13 +3,21 @@ import type { IncomeStreamDto, LivingPhaseDto } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import { clampDateYear, keepDecimal } from '../../lib/inputFilters';
 import { describeFailure } from './failureMessage';
+import SegmentedChoice from './SegmentedChoice';
 import {
+  END_REASON_OPTIONS,
   emptyIncomeStreamForm,
   incomeStreamFormFrom,
   validateIncomeStream,
   type IncomeStreamErrors,
+  type IncomeKind,
   type IncomeStreamForm,
 } from './incomeForm';
+
+const KIND_OPTIONS: readonly { value: IncomeKind; label: string }[] = [
+  { value: 'MONTHLY', label: 'Pays every month' },
+  { value: 'ONE_TIME', label: 'Paid once' },
+];
 
 interface IncomeStreamEditorProps {
   phase: Pick<LivingPhaseDto, 'startDate' | 'endDate' | 'currency'>;
@@ -52,8 +60,12 @@ export default function IncomeStreamEditor({ phase, initial, onSubmit, onCancel 
     setForm((current) => ({ ...current, [field]: filter(event.target.value) }));
   const set = (field: keyof IncomeStreamForm) => (event: { target: { value: string } }) => setForm((current) => ({ ...current, [field]: event.target.value }));
 
+  const once = form.kind === 'ONE_TIME';
+
   return (
-    <form className="cost-editor" onSubmit={handleSubmit} noValidate aria-label={initial ? 'Edit income' : 'Add income'}>
+    <form className="cost-editor" onSubmit={handleSubmit} noValidate aria-label={initial ? 'Edit income' : 'Add job or income'}>
+      <SegmentedChoice name={`${id}-kind`} legend="How is it paid?" options={KIND_OPTIONS} value={form.kind} onChange={(kind) => setForm((current) => ({ ...current, kind }))} />
+
       <div className="cost-editor__row">
         <div className="form-group">
           <label className="form-label" htmlFor={`${id}-label`}>
@@ -74,7 +86,7 @@ export default function IncomeStreamEditor({ phase, initial, onSubmit, onCancel 
         </div>
         <div className="form-group">
           <label className="form-label" htmlFor={`${id}-amount`}>
-            Net per month
+            {once ? 'Amount received' : 'Net per month'}
           </label>
           <input
             id={`${id}-amount`}
@@ -94,7 +106,7 @@ export default function IncomeStreamEditor({ phase, initial, onSubmit, onCancel 
       <div className="cost-editor__row">
         <div className="form-group">
           <label className="form-label" htmlFor={`${id}-start`}>
-            From
+            {once ? 'Date received' : 'From'}
           </label>
           <input
             id={`${id}-start`}
@@ -107,22 +119,34 @@ export default function IncomeStreamEditor({ phase, initial, onSubmit, onCancel 
           />
           {fieldError('startDate')}
         </div>
-        <div className="form-group">
-          <label className="form-label" htmlFor={`${id}-end`}>
-            Until (optional)
-          </label>
-          <input
-            id={`${id}-end`}
-            type="date"
-            className="form-input"
-            value={form.endDate}
-            onChange={setFiltered('endDate', clampDateYear)}
-            aria-invalid={errors.endDate !== undefined || undefined}
-            aria-describedby={describedBy('endDate')}
-          />
-          {fieldError('endDate')}
-        </div>
+        {!once && (
+          <div className="form-group">
+            <label className="form-label" htmlFor={`${id}-end`}>
+              Last day paid (optional)
+            </label>
+            <input
+              id={`${id}-end`}
+              type="date"
+              className="form-input"
+              value={form.endDate}
+              onChange={setFiltered('endDate', clampDateYear)}
+              aria-invalid={errors.endDate !== undefined || undefined}
+              aria-describedby={describedBy('endDate')}
+            />
+            {fieldError('endDate')}
+          </div>
+        )}
       </div>
+
+      {!once && form.endDate !== '' && (
+        <SegmentedChoice
+          name={`${id}-reason`}
+          legend="What happened? (optional)"
+          options={END_REASON_OPTIONS}
+          value={form.endReason === '' ? null : form.endReason}
+          onChange={(endReason) => setForm((current) => ({ ...current, endReason }))}
+        />
+      )}
 
       {errors.form && (
         <p className="form-error-text" role="alert">
@@ -132,7 +156,7 @@ export default function IncomeStreamEditor({ phase, initial, onSubmit, onCancel 
 
       <div className="cost-editor__actions">
         <button type="submit" className="btn-primary-apply" disabled={saving}>
-          {saving ? 'Saving…' : initial ? 'Save changes' : 'Add income'}
+          {saving ? 'Saving…' : initial ? 'Save changes' : once ? 'Add deposit' : 'Add income'}
         </button>
         <button type="button" className="btn-secondary-cancel" onClick={onCancel}>
           Cancel

@@ -214,3 +214,56 @@ describe('createLivingPhase income streams', () => {
     expect(bad({ label: '  ' })).toThrow(InvalidLivingPhaseError);
   });
 });
+
+describe('job lifecycle: every job is its own stream', () => {
+  const jobA = stream('Job A', 300000, '2026-01-01', '2026-03-31');
+  const jobB = stream('Job B', 200000, '2026-01-01');
+
+  it('stops counting the ended job after its last day while the other keeps counting', () => {
+    expect(monthlyIncomeOn([jobA, jobB], '2026-03-31')).toBe(500000);
+    expect(monthlyIncomeOn([jobA, jobB], '2026-04-01')).toBe(200000);
+  });
+
+  it('is zero once every job has ended', () => {
+    const both = [jobA, stream('Job B', 200000, '2026-01-01', '2026-05-15')];
+    expect(monthlyIncomeOn(both, '2026-05-16')).toBe(0);
+  });
+
+  it('earns for the days each job ran: nothing after the last job ended', () => {
+    const jobs = [stream('A', 300000, '2026-01-01', '2026-01-31'), stream('B', 300000, '2026-01-01', '2026-02-28')];
+    // January: 2 jobs, February: 1 job, then nothing.
+    const earned = earnedIncomeMinor({ streams: jobs, startDate: '2026-01-01', endDate: null }, '2026-06-30');
+    expect(earned).toBeGreaterThan(900000 - 20000);
+    expect(earned).toBeLessThan(900000 + 20000);
+  });
+});
+
+describe('one-time income (a benefit deposit)', () => {
+  const once = (amountMinor: number, day: string): IncomeStream => ({ label: 'Unemployment benefit', amountMinor, startDate: day, endDate: null, kind: 'ONE_TIME' });
+  const span = { startDate: '2026-01-01', endDate: null };
+
+  it('is not a monthly figure: it never shows in the current monthly income', () => {
+    expect(monthlyIncomeOn([once(120000, '2026-03-10')], '2026-03-10')).toBe(0);
+    expect(monthlyIncomeOn([stream('Job', 300000, '2026-01-01'), once(120000, '2026-03-10')], '2026-03-10')).toBe(300000);
+  });
+
+  it('counts once in what was earned, on the day it was paid', () => {
+    expect(earnedIncomeMinor({ ...span, streams: [once(120000, '2026-03-10')] }, '2026-06-30')).toBe(120000);
+  });
+
+  it('does not count before it is paid', () => {
+    expect(earnedIncomeMinor({ ...span, streams: [once(120000, '2026-03-10')] }, '2026-03-09')).toBe(0);
+  });
+
+  it('does not count when paid outside the phase', () => {
+    expect(earnedIncomeMinor({ startDate: '2026-01-01', endDate: '2026-02-28', streams: [once(120000, '2026-03-10')] }, '2026-06-30')).toBe(0);
+    expect(earnedIncomeMinor({ ...span, streams: [once(120000, '2025-12-31')] }, '2026-06-30')).toBe(0);
+  });
+
+  it('adds to the average month of the stay', () => {
+    // 6 months lived (Jan 1 - Jun 30 is 181 days = 5.95 months): 120000 / 5.95
+    const average = averageMonthlyIncomeMinor({ ...span, streams: [once(120000, '2026-03-10')] }, '2026-06-30');
+    expect(average).toBeGreaterThan(19000);
+    expect(average).toBeLessThan(21000);
+  });
+});

@@ -6,6 +6,7 @@ import {
   updateLivingPhaseRequest,
   type CreateFixedCostRequest,
   type CreateLivingPhaseRequest,
+  type IncomeStreamDto,
   type LivingPhaseDto,
   type UpdateLivingPhaseRequest,
 } from '../../contracts';
@@ -28,7 +29,12 @@ export const phaseFormSchema = z.object({
 export type PhaseFormState = z.infer<typeof phaseFormSchema>;
 
 /** A new phase as it is kept between visits: the answers and the bills added so far. */
-export const phaseDraftSchema = z.object({ form: phaseFormSchema, costs: z.array(createFixedCostRequest) });
+export const phaseDraftSchema = z.object({
+  form: phaseFormSchema,
+  costs: z.array(createFixedCostRequest),
+  /** The jobs of the previous home the person unticked, and the amounts they re-typed. Drafts from before this existed read as nothing chosen. */
+  carry: z.object({ unticked: z.array(z.string()), amounts: z.record(z.string(), z.string()) }).default({ unticked: [], amounts: {} }),
+});
 
 export type PhaseFieldErrors = Partial<Record<keyof PhaseFormState, string>>;
 
@@ -109,7 +115,8 @@ const FUTURE_MESSAGES = {
 export function validatePhaseForm(
   form: PhaseFormState,
   today: string,
-  fixedCosts: readonly CreateFixedCostRequest[] = []
+  fixedCosts: readonly CreateFixedCostRequest[] = [],
+  carriedJobs: readonly IncomeStreamDto[] = []
 ): PhaseFormResult {
   const errors: PhaseFieldErrors = {};
 
@@ -136,10 +143,11 @@ export function validatePhaseForm(
     currency: form.currency,
     notes: form.notes.trim() === '' ? null : form.notes,
   };
-  const incomeStreams =
+  const incomeStreams: IncomeStreamDto[] =
     monthlyIncomeMinor !== null && monthlyIncomeMinor > 0 && form.startDate !== ''
       ? [{ label: FIRST_INCOME_LABEL, amountMinor: monthlyIncomeMinor, startDate: form.startDate, endDate: null }]
       : [];
+  incomeStreams.push(...carriedJobs);
 
   const parsed = createLivingPhaseRequest.safeParse({ ...fields, incomeStreams, fixedCosts });
   if (!parsed.success) {

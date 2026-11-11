@@ -123,7 +123,7 @@ describe('HoldingsTable Component', () => {
       />
     );
 
-    const menuBtn = screen.getByLabelText('Toggle table columns');
+    const menuBtn = screen.getByLabelText('Customize columns');
     fireEvent.click(menuBtn);
 
     expect(screen.getByLabelText('Position')).toBeInTheDocument();
@@ -206,5 +206,34 @@ describe('HoldingsTable omnibox search', () => {
     search('');
     expect(screen.getByText('Apple Inc.')).toBeInTheDocument();
     expect(screen.getByText('Banco Santander')).toBeInTheDocument();
+  });
+});
+
+describe('HoldingsTable toolbar', () => {
+  const positions: PositionItem[] = [
+    { id: 'a', symbol: 'AAPL', name: 'Apple Inc.', assetClass: 'Stock', region: 'North America', sector: 'Technology', quantity: 1, investedAmount: 100, currentValue: 120 },
+    { id: 'b', symbol: 'SAN.MC', name: 'Banco Santander', assetClass: 'Stock', region: 'Europe', sector: 'Financials', quantity: 1, investedAmount: 100, currentValue: 110 },
+  ];
+
+  it('puts search, filter and columns on one row, with a tooltip on the columns button', () => {
+    render(<HoldingsTable positions={positions} soldAssets={[]} netWorth={230} />);
+    const toolbar = screen.getByRole('searchbox', { name: /search holdings/i }).closest('.holdings-toolbar') as HTMLElement;
+    expect(toolbar).toContainElement(screen.getByRole('button', { name: 'Filter holdings' }));
+    expect(screen.getByRole('button', { name: 'Customize columns' })).toHaveAttribute('title', 'Customize columns');
+    expect(toolbar).toContainElement(screen.getByRole('button', { name: 'Customize columns' }));
+  });
+
+  it('filters the table by region and offers a way back', () => {
+    render(<HoldingsTable positions={positions} soldAssets={[]} netWorth={230} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter holdings' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Europe' }));
+    expect(screen.getByText('Banco Santander')).toBeInTheDocument();
+    expect(screen.queryByText('Apple Inc.')).not.toBeInTheDocument();
+
+    // The other options stay on offer while a filter is on.
+    expect(screen.getByRole('checkbox', { name: 'North America' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(screen.getByText('Apple Inc.')).toBeInTheDocument();
   });
 });

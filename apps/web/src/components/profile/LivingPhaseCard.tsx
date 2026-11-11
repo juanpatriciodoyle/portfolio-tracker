@@ -2,12 +2,14 @@ import { ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest, UpdateLivingPhaseRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
-import { formatMinor, formatPercent, formatPhaseRange } from '../../lib/money';
+import { formatCalendarDate, formatMinor, formatPercent, formatPhaseRange } from '../../lib/money';
 import { phaseAddress } from '../../lib/phaseName';
 import { barWidthPercent } from '../../lib/scale';
 import type { BillingView } from './billingView';
 import { describeFailure } from './failureMessage';
 import { STATUS_LABELS } from './labels';
+import IncomeSection from './IncomeSection';
+import { summarizeActiveIncome } from './incomeSummary';
 import PhaseDetails from './PhaseDetails';
 import IncomeViewToggle from './IncomeViewToggle';
 import { burnRateMinor, housingBurden, incomeFigures, type IncomeView } from './phaseRatios';
@@ -19,7 +21,8 @@ interface LivingPhaseCardProps {
   expanded: boolean;
   compareSelected: boolean;
   onToggleExpanded: () => void;
-  onToggleCompare: () => void;
+  /** Present only when there is another home to compare with. */
+  onToggleCompare?: () => void;
   onEdit: () => void;
   onDelete: () => Promise<MutationResult<unknown>>;
   onUpdatePhase: (phaseId: string, input: UpdateLivingPhaseRequest) => Promise<MutationResult<unknown>>;
@@ -50,6 +53,7 @@ export default function LivingPhaseCard({
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [incomeView, setIncomeView] = useState<IncomeView>('current');
+  const [incomeOpen, setIncomeOpen] = useState(false);
 
   const status = entry?.status;
   const address = phaseAddress(phase);
@@ -57,6 +61,10 @@ export default function LivingPhaseCard({
   const housing = entry && figures ? housingBurden({ monthlyIncomeMinor: figures.incomeMinor, fixedCostsByCategoryMinor: entry.fixedCostsByCategoryMinor }) : null;
   const savingsRate = figures?.savingsRate ?? null;
   const burn = figures ? burnRateMinor(figures) : null;
+  // The income that counts is the one paying on today; a past home shows its last day, one still ahead its first.
+  const today = billing?.asOf ?? phase.endDate ?? phase.startDate;
+  const incomeDay = phase.endDate !== null && phase.endDate < today ? phase.endDate : today < phase.startDate ? phase.startDate : today;
+  const incomeSummary = summarizeActiveIncome(phase.incomeStreams, incomeDay, (amountMinor) => formatMinor(amountMinor, phase.currency), (day) => formatCalendarDate(day));
 
   const confirmDelete = async () => {
     setDeleting(true);
@@ -84,14 +92,16 @@ export default function LivingPhaseCard({
           </button>
         </h3>
         {status && <span className={`phase-status phase-status--${status}`}>{STATUS_LABELS[status]}</span>}
-        <button
-          type="button"
-          className={`profile-toggle-button${compareSelected ? ' is-on' : ''}`}
-          aria-pressed={compareSelected}
-          onClick={onToggleCompare}
-        >
-          Compare
-        </button>
+        {onToggleCompare && (
+          <button
+            type="button"
+            className={`profile-toggle-button${compareSelected ? ' is-on' : ''}`}
+            aria-pressed={compareSelected}
+            onClick={onToggleCompare}
+          >
+            Compare
+          </button>
+        )}
       </header>
 
       {address && <p className="phase-card__address">{address}</p>}
@@ -141,12 +151,31 @@ export default function LivingPhaseCard({
         </div>
       )}
 
+      <div className="phase-card__career">
+        <p className="phase-card__career-summary" data-summary="income">
+          {incomeSummary}
+        </p>
+        <button
+          type="button"
+          className="profile-text-button phase-card__career-trigger"
+          aria-expanded={incomeOpen}
+          aria-controls={`${id}-income`}
+          onClick={() => setIncomeOpen((open) => !open)}
+        >
+          Income &amp; Career <span className="phase-card__career-add">· + Add job or income</span>
+        </button>
+      </div>
+      {incomeOpen && (
+        <div id={`${id}-income`} className="phase-card__income">
+          <IncomeSection phase={phase} asOf={billing?.asOf ?? undefined} onUpdatePhase={onUpdatePhase} announce={announce} />
+        </div>
+      )}
+
       <div id={`${id}-details`} className="phase-card__details" aria-hidden={!expanded} inert={!expanded}>
         <div className="phase-card__details-inner">
           <PhaseDetails
             phase={phase}
             entry={entry}
-            onUpdatePhase={onUpdatePhase}
             onUpdateCost={onUpdateCost}
             onDeleteCost={onDeleteCost}
             billing={billing}

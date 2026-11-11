@@ -8,6 +8,7 @@ import { useProfile } from '../../hooks/useProfile';
 import { useBenchmarks } from '../../hooks/useBenchmarks';
 import { useCapitalHorizon } from '../../hooks/useCapitalHorizon';
 import { useSecondSalary } from '../../hooks/useSecondSalary';
+import BenchmarksCard from './BenchmarksCard';
 import CapitalHorizonCard from '../CapitalHorizonCard';
 import SecondSalaryCard from '../SecondSalaryCard';
 import { combineStatuses, type MutationResult } from '../../lib/apiErrors';
@@ -16,8 +17,7 @@ import { vendorHistory } from './vendorHistory';
 import type { BillFormContext } from './billForm';
 import type { BillingView } from './billingView';
 import { findRenewedCost } from './costRenewal';
-import DocumentReviewModal from './DocumentReviewModal';
-import ExpenseModal from './ExpenseModal';
+import ExpenseWizard from './ExpenseWizard';
 import { MAX_COMPARED_PHASES, MIN_COMPARED_PHASES } from './comparisonTable';
 import PhaseComparison from './PhaseComparison';
 import PhaseComparisonTable from './PhaseComparisonTable';
@@ -27,6 +27,8 @@ import type { PhasePayload } from './phaseForm';
 import { isProfileEmpty } from './profileDraft';
 import PhaseTimeline from './PhaseTimeline';
 import ProfileForm from './ProfileForm';
+import ProfileTabs from './ProfileTabs';
+import { panelId, readProfileTab, storeProfileTab, tabId, type ProfileTabId } from '../../lib/profileTab';
 import './profile.css';
 
 interface ProfilePageProps {
@@ -51,14 +53,18 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
   const [editor, setEditor] = useState<EditorState>(null);
   const [announcement, setAnnouncement] = useState('');
   const [expenseOpen, setExpenseOpen] = useState(false);
-  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
+  const [tab, setTab] = useState<ProfileTabId>(() => readProfileTab());
+  const openTab = (next: ProfileTabId) => {
+    setTab(next);
+    storeProfileTab(next);
+  };
 
   const { phases, entries } = phasesApi;
   // Bills and benchmarks depend on the phases: they load once those are ready and again whenever they change.
   const dataReady = phasesApi.status === 'ready';
   const benchmarksApi = useBenchmarks(dataReady, entries);
   // The goals read the portfolio and the costs of the home lived in today, so they follow the phases.
-  const { secondSalary } = useSecondSalary(dataReady, entries);
+  const { secondSalary, saveTarget: saveSecondSalaryTarget } = useSecondSalary(dataReady, entries);
   const { capitalHorizon, save: saveCapitalMilestones } = useCapitalHorizon(dataReady, entries);
   // A bill moves the monthly costs of its phase, so the timeline reloads after it.
   const afterBillChange = phasesApi.reload;
@@ -83,7 +89,8 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
   const status = combineStatuses(phasesApi.status, profileApi.status);
   const announce = useCallback((message: string) => setAnnouncement(message), []);
 
-  const picked = compareIds
+  // Comparing needs two homes; with one, nothing is ever picked.
+  const picked = (phases.length > 1 ? compareIds : [])
     .map((id) => entries.find((entry) => entry.phaseId === id))
     .filter((entry): entry is TimelineEntryDto => entry !== undefined);
   // Two homes in different currencies need the server's exchange rates; every other choice reads straight from the timeline.
@@ -97,15 +104,16 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
   const today = phasesApi.asOf ?? '';
   const hasCurrentPhase = entries.some((entry) => entry.status === 'current');
   const profileEmpty = profileApi.status === 'ready' && profileApi.profile !== null && isProfileEmpty(profileApi.profile);
+  // Until the profile is filled in, one button leads the way into the first home: there is nothing to put in tabs yet.
+  const showTabs = dataReady && !(profileEmpty && phases.length === 0);
 
-  // An expense is added from one place: a bill lands in the home its dates fall in, a recurring rate in the home lived in today.
+  // An expense is added from one place: a bill lands in the home its days fall in, what something costs every so often in the home lived in today.
   const expensePhase = defaultExpensePhase(phases, today);
   const expenseContext: BillFormContext = { today: phasesApi.asOf, countryCode: expensePhase?.countryCode ?? null, history };
 
   const addBill = async (input: CreateBillingRecordRequest) => {
     const result = await billsApi.createBill(input);
     if (result.ok) {
-      setExpenseOpen(false);
       announce(`Expense added to ${phases.find((phase) => phase.id === input.phaseId)?.name ?? 'your home'}`);
     }
     return result;
@@ -116,15 +124,8 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
     const renewed = findRenewedCost(phase, input);
     const result = renewed ? await phasesApi.updateFixedCost(phase.id, renewed.id, input) : await phasesApi.addFixedCost(phase.id, input);
     if (result.ok) {
-      setExpenseOpen(false);
       announce(`${renewed ? 'Cost updated' : 'Cost added'} in ${phase.name}`);
     }
-    return result;
-  };
-
-  const saveFromDocument = async (input: CreateBillingRecordRequest) => {
-    const result = await billsApi.createBill(input);
-    if (result.ok) announce('Bill logged');
     return result;
   };
 
@@ -214,13 +215,89 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
             </p>
           )}
 
-          {dataReady && !(profileEmpty && phases.length === 0) && (secondSalary || capitalHorizon) && (
-            <div className="profile-aspirations">
-              {secondSalary && <SecondSalaryCard secondSalary={secondSalary} />}
-              {capitalHorizon && <CapitalHorizonCard capitalHorizon={capitalHorizon} onSave={saveCapitalMilestones} />}
-            </div>
-          )}
+          {showTabs ? (
+            <>
+              <ProfileTabs active={tab} onChange={openTab} />
 
+              {tab === 'living' && (
+                <div role="tabpanel" id={panelId('living')} aria-labelledby={tabId('living')} className="profile-panel">
+                <section aria-labelledby="living-phases-heading" className="profile-phases">
+                  <div className="profile-section__header">
+                    <h2 className="profile-section__title" id="living-phases-heading">
+                      Living phases
+                    </h2>
+                    {phases.length > 0 && !profileEmpty && (
+                      <div className="profile-section__actions">
+                        <button type="button" className="profile-action-button profile-action-button--primary" onClick={() => setExpenseOpen(true)}>
+                          <Plus size={16} aria-hidden="true" /> Add expense
+                        </button>
+                        <button type="button" className="profile-action-button profile-action-button--outline" onClick={() => setEditor({ mode: 'create' })}>
+                          <Plus size={16} aria-hidden="true" /> Add living phase
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {from && to && (
+                    <PhaseComparison fromName={from.name} toName={to.name} state={comparison} onClose={() => setCompareIds([])} />
+                  )}
+                  {!needsConversion && picked.length >= MIN_COMPARED_PHASES && (
+                    <PhaseComparisonTable entries={picked} onClose={() => setCompareIds([])} />
+                  )}
+
+                  {phases.length === 0 ? (
+                    <div className="profile-card profile-empty">
+                      <h3 className="profile-empty__title">Where have you lived?</h3>
+                      <button type="button" className="btn-primary-apply profile-empty__action" onClick={() => setEditor({ mode: 'create' })}>
+                        Add your first living phase
+                      </button>
+                    </div>
+                  ) : (
+                    <PhaseTimeline
+                      phases={phases}
+                      entries={entries}
+                      expandedId={expandedId}
+                      compareIds={compareIds}
+                      onToggleExpanded={(phaseId) => setExpandedId((current) => (current === phaseId ? null : phaseId))}
+                      onToggleCompare={toggleCompare}
+                      onEdit={(phaseId) => setEditor({ mode: 'edit', phaseId })}
+                      onDelete={removePhase}
+                      onUpdatePhase={phasesApi.updatePhase}
+                      onUpdateCost={phasesApi.updateFixedCost}
+                      onDeleteCost={phasesApi.deleteFixedCost}
+                      billing={billing}
+                      announce={announce}
+                    />
+                  )}
+                </section>
+              {profileApi.status === 'ready' && profileApi.profile && profileEmpty && (
+                <section className="profile-card profile-empty" aria-label="About you">
+                  <h2 className="profile-empty__title">About you</h2>
+                  <button type="button" className="btn-primary-apply profile-empty__action" onClick={() => setEditor({ mode: 'onboarding' })}>
+                    Tell us about yourself
+                  </button>
+                </section>
+              )}
+              {profileApi.status === 'ready' && profileApi.profile && !profileEmpty && (
+                <ProfileForm profile={profileApi.profile} onSave={profileApi.save} announce={announce} />
+              )}
+                </div>
+              )}
+
+              {tab === 'milestones' && (
+                <div role="tabpanel" id={panelId('milestones')} aria-labelledby={tabId('milestones')} className="profile-panel">
+                  {secondSalary && <SecondSalaryCard secondSalary={secondSalary} onSaveTarget={saveSecondSalaryTarget} />}
+                  {capitalHorizon && <CapitalHorizonCard capitalHorizon={capitalHorizon} onSave={saveCapitalMilestones} />}
+                  {expensePhase && billing.benchmarks && (
+                    <div className="profile-card">
+                      <BenchmarksCard phaseId={expensePhase.id} view={billing.benchmarks} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
           {profileApi.status === 'ready' && profileApi.profile && profileEmpty && (
             <section className="profile-card profile-empty" aria-label="About you">
               <h2 className="profile-empty__title">About you</h2>
@@ -232,58 +309,7 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
           {profileApi.status === 'ready' && profileApi.profile && !profileEmpty && (
             <ProfileForm profile={profileApi.profile} onSave={profileApi.save} announce={announce} />
           )}
-
-          {/* Until the profile is filled in, the one button above leads the way into the first home too. */}
-          {phasesApi.status === 'ready' && !(profileEmpty && phases.length === 0) && (
-            <section aria-labelledby="living-phases-heading" className="profile-phases">
-              <div className="profile-section__header">
-                <h2 className="profile-section__title" id="living-phases-heading">
-                  Living phases
-                </h2>
-                {phases.length > 0 && !profileEmpty && (
-                  <div className="profile-section__actions">
-                    <button type="button" className="btn-primary-apply profile-expense-button" onClick={() => setExpenseOpen(true)}>
-                      <Plus size={16} aria-hidden="true" /> Add expense
-                    </button>
-                    <button type="button" className="profile-add-button" onClick={() => setEditor({ mode: 'create' })}>
-                      <Plus size={16} aria-hidden="true" /> Add living phase
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {from && to && (
-                <PhaseComparison fromName={from.name} toName={to.name} state={comparison} onClose={() => setCompareIds([])} />
-              )}
-              {!needsConversion && picked.length >= MIN_COMPARED_PHASES && (
-                <PhaseComparisonTable entries={picked} onClose={() => setCompareIds([])} />
-              )}
-
-              {phases.length === 0 ? (
-                <div className="profile-card profile-empty">
-                  <h3 className="profile-empty__title">Where have you lived?</h3>
-                  <button type="button" className="btn-primary-apply profile-empty__action" onClick={() => setEditor({ mode: 'create' })}>
-                    Add your first living phase
-                  </button>
-                </div>
-              ) : (
-                <PhaseTimeline
-                  phases={phases}
-                  entries={entries}
-                  expandedId={expandedId}
-                  compareIds={compareIds}
-                  onToggleExpanded={(phaseId) => setExpandedId((current) => (current === phaseId ? null : phaseId))}
-                  onToggleCompare={toggleCompare}
-                  onEdit={(phaseId) => setEditor({ mode: 'edit', phaseId })}
-                  onDelete={removePhase}
-                  onUpdatePhase={phasesApi.updatePhase}
-                  onUpdateCost={phasesApi.updateFixedCost}
-                  onDeleteCost={phasesApi.deleteFixedCost}
-                  billing={billing}
-                  announce={announce}
-                />
-              )}
-            </section>
+            </>
           )}
         </div>
       </main>
@@ -319,28 +345,13 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
       )}
 
       {expenseOpen && expensePhase && (
-        <ExpenseModal
+        <ExpenseWizard
           phases={phases}
-          ratePhase={expensePhase}
           context={expenseContext}
-          onSubmit={addBill}
-          onSubmitRate={addRate}
-          onPickPdfs={(files) => {
-            setExpenseOpen(false);
-            setPdfFiles(files);
-          }}
-          onClose={() => setExpenseOpen(false)}
-        />
-      )}
-      {pdfFiles.length > 0 && expensePhase && (
-        <DocumentReviewModal
-          files={pdfFiles}
-          phases={phases}
-          today={phasesApi.asOf}
-          history={history}
           openedFromPhaseId={expensePhase.id}
-          onSave={saveFromDocument}
-          onClose={() => setPdfFiles([])}
+          onSubmitReceipt={addBill}
+          onSubmitRate={addRate}
+          onClose={() => setExpenseOpen(false)}
         />
       )}
 

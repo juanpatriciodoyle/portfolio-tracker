@@ -87,4 +87,9 @@ describe('PhaseTimeline', () => {
     expect(props.onToggleExpanded).toHaveBeenCalledWith('lisbon');
     expect(props.onToggleCompare).toHaveBeenCalledWith('lisbon');
   });
+
+  it('offers Compare only when there is another home to compare with', () => {
+    renderTimeline({ phases: [madrid], entries: [entries[0]] });
+    expect(screen.queryByRole('button', { name: 'Compare' })).not.toBeInTheDocument();
+  });
 });

@@ -53,6 +53,9 @@ export function createLivingPhase(input: LivingPhase): LivingPhase {
     if (stream.endDate !== null && stream.endDate < stream.startDate) {
       throw new InvalidLivingPhaseError('An income stream cannot end before it starts');
     }
+    if (stream.kind === 'ONE_TIME' && stream.endDate !== null) {
+      throw new InvalidLivingPhaseError('A one-time deposit has a single day');
+    }
   }
   return { ...input, fixedCosts: input.fixedCosts.map(createFixedCost) };
 }

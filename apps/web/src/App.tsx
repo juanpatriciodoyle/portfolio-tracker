@@ -8,8 +8,7 @@ import InflationSettingsModal from './components/InflationSettingsModal';
 import TransactionHistoryTable from './components/TransactionHistoryTable';
 import ReportingPeriodBar from './components/ReportingPeriodBar';
 import PortfolioChart from './components/PortfolioChart';
-import KpiRow from './components/KpiRow';
-import PerformanceAnalysisGrid from './components/PerformanceAnalysisGrid';
+import HeroMetrics from './components/HeroMetrics';
 import HoldingsTable, { type PositionItem, type SoldAssetItem } from './components/HoldingsTable';
 import CashBalancesTable, { type CashBalanceItem } from './components/CashBalancesTable';
 import PerformanceBreakdown from './components/PerformanceBreakdown';
@@ -20,6 +19,7 @@ import { type ChartDataPoint, type ReportingPeriod, type DateRange } from './dat
 import { authorizedFetch, readAuthToken } from './lib/authorizedFetch';
 import { endGuestSession } from './lib/guestSession';
 import { clearAllDrafts } from './lib/stepDraft';
+import { returnForPeriod } from './lib/returnForPeriod';
 
 interface User {
   id: string;
@@ -38,7 +38,11 @@ interface StatsData {
   cashBalance: number;
   totalInvested: number;
   openInvestedValue: number;
+  openMarketValue: number;
   soldProfit: number;
+  openProfit: number;
+  dividends: number;
+  pricesAvailable: boolean;
   totalProfit: number;
   totalFees?: number;
   totalIncome?: number;
@@ -80,6 +84,10 @@ function App() {
     cashBalance: 0,
     totalInvested: 0,
     openInvestedValue: 0,
+    openMarketValue: 0,
+    openProfit: 0,
+    dividends: 0,
+    pricesAvailable: true,
     soldProfit: 0,
     totalProfit: 0,
     allTimeRoiPercent: 0,
@@ -192,6 +200,8 @@ function App() {
     return <ProfilePage onBack={() => navigate('/')} onSignedOut={handleLogout} />;
   }
 
+  const periodChange = returnForPeriod(chartData, period, customRange);
+
   // Active ROI and Profit Euros based on toggle state
   const activeProfitEuros = isRealInflationMode ? stats.realProfitEuros : stats.totalProfit;
   const activeRoiPercent = isRealInflationMode ? stats.realRoiPercent : stats.allTimeRoiPercent;
@@ -199,19 +209,7 @@ function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: 'var(--bg-canvas)' }}>
       {/* Header Navigation */}
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '16px 40px',
-          borderBottom: '1px solid var(--border-card-color)',
-          backgroundColor: 'var(--bg-card)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
-        }}
-      >
+      <header className="app-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.5px', color: 'var(--text-heading)' }}>Portfolio Tracker</span>
         </div>
@@ -320,16 +318,27 @@ function App() {
             />
           </div>
 
-          {/* Primary KPI row */}
-          <KpiRow
-            netWorth={stats.netWorth}
-            cashBalance={stats.cashBalance}
-            soldProfit={stats.soldProfit}
-            returnEuros={activeProfitEuros}
-            returnPercent={activeRoiPercent}
+          {/* Every headline figure in one panel */}
+          <HeroMetrics
+            figures={{
+              netWorth: stats.netWorth,
+              cashBalance: stats.cashBalance,
+              openMarketValue: stats.openMarketValue,
+              openProfit: stats.openProfit,
+              soldProfit: stats.soldProfit,
+              dividends: stats.dividends,
+              totalFees: stats.totalFees ?? 0,
+              totalInvested: stats.totalInvested,
+              totalGain: activeProfitEuros,
+              totalGainPercent: activeRoiPercent,
+              pricesAvailable: stats.pricesAvailable,
+            }}
+            period={period}
+            periodGain={periodChange.gain}
+            periodPercent={periodChange.percent}
+            currency={stats.baseCurrency || 'EUR'}
             isRealInflationMode={isRealInflationMode}
             country={stats.country}
-            currency={stats.baseCurrency || 'EUR'}
           />
 
           {/* Interactive Multi-Mode Portfolio Chart */}
@@ -340,8 +349,6 @@ function App() {
             currency={stats.baseCurrency || 'EUR'}
             userCashBalance={stats.cashBalance}
           />
-
-          <PerformanceAnalysisGrid stats={stats} isRealInflationMode={isRealInflationMode} />
 
           {/* Holdings Breakdown Table */}
           <HoldingsTable
@@ -382,7 +389,7 @@ function App() {
       {/* Centered dialog for logging a transaction */}
       {isLogOpen && (
         <Modal label="Log Transaction" onClose={() => setIsLogOpen(false)}>
-          <TransactionForm onSuccess={handleTransactionSuccess} />
+          <TransactionForm onSuccess={handleTransactionSuccess} positions={stats.positions} />
         </Modal>
       )}
 

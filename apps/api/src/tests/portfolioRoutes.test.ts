@@ -1,12 +1,13 @@
 import express from 'express';
 import request from 'supertest';
 import { generateToken } from '../lib/auth';
+import { InsufficientHoldingsError } from '../domain/errors';
 import { createPortfolioRouter, type PortfolioRouterDeps } from '../routes/portfolio';
 
 const ALICE = 'user-alice';
 const BOB = 'user-bob';
 
-function build() {
+function build(overrides: Partial<PortfolioRouterDeps> = {}) {
   const calls: Array<{ action: string; userId: string; input?: unknown }> = [];
   const record = (action: string, result: unknown) => async (userId: string, input?: unknown) => {
     calls.push({ action, userId, input });
@@ -33,6 +34,7 @@ function build() {
       calls.push({ action: 'sync', userId: '', input: country });
       return 2.8;
     },
+    ...overrides,
   };
   const app = express();
   app.use(express.json());
@@ -164,5 +166,23 @@ describe('user settings', () => {
     expect((await request(app).post('/api/user/sync-inflation').send({ country: 'Spain' })).status).toBe(401);
     expect(calls).toEqual([]);
     expect((await request(app).post('/api/user/sync-inflation').set('Authorization', bearer(ALICE)).send({ country: 'Spain' })).status).toBe(200);
+  });
+});
+
+describe('POST /api/transactions: selling what is not held', () => {
+  it('answers 400 with the units available when the sale is refused', async () => {
+    const { app } = build({
+      recordTransaction: async () => {
+        throw new InsufficientHoldingsError('AAPL', 20, 11);
+      },
+    });
+
+    const response = await request(app)
+      .post('/api/transactions')
+      .set('Authorization', bearer(ALICE))
+      .send({ type: 'SOLD', symbol: 'aapl', quantity: 20, amount: 100 });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({ code: 'INSUFFICIENT_HOLDINGS', availableUnits: 11 });
   });
 });

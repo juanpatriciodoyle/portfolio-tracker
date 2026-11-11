@@ -53,3 +53,20 @@ export class DuplicateBillingRecordError extends DomainError {
     super('This bill is already recorded');
   }
 }
+
+/** A sale asks for more units than the person held on that date (or for an instrument never held). */
+export class InsufficientHoldingsError extends DomainError {
+  readonly code = 'INSUFFICIENT_HOLDINGS';
+
+  constructor(
+    readonly symbol: string,
+    readonly requestedUnits: number,
+    readonly availableUnits: number
+  ) {
+    super(
+      availableUnits > 0
+        ? `You can sell at most ${availableUnits} units of ${symbol}; you asked for ${requestedUnits}.`
+        : `You do not hold ${symbol} on that date, so it cannot be sold.`
+    );
+  }
+}

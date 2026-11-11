@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import type { StatisticsFragment, StatisticsProvider } from '../../application/ports';
+import { WORLD_BANK_REGION_CODES } from '../../domain/standing';
 
 const BASE_URL = 'https://api.worldbank.org/v2/country';
 
+const countrySchema = z.tuple([z.unknown(), z.array(z.object({ region: z.object({ id: z.string() }) }))]);
 const rowsSchema = z.tuple([z.unknown(), z.array(z.object({ country: z.object({ id: z.string() }), date: z.string(), value: z.number().nullable() }))]);
 
 /**
@@ -18,15 +20,22 @@ export class WorldBankStatisticsProvider implements StatisticsProvider {
   ) {}
 
   supports(countryCode: string): boolean {
-    return /^[A-Z]{2}$/.test(countryCode);
+    // 'EU' looks like a country code but is the European Union, published by Eurostat.
+    return /^[A-Z]{2}$/.test(countryCode) && countryCode !== 'EU';
   }
 
   async fetch(countryCode: string): Promise<StatisticsFragment> {
-    const [ppp, gni] = await Promise.allSettled([this.latest(countryCode, 'PA.NUS.PPP'), this.latest(countryCode, 'NY.GNP.PCAP.PP.CD')]);
+    const [ppp, gni, region] = await Promise.allSettled([
+      this.latest(countryCode, 'PA.NUS.PPP'),
+      this.latest(countryCode, 'NY.GNP.PCAP.PP.CD'),
+      this.region(countryCode),
+    ]);
     if (ppp.status === 'rejected') throw ppp.reason;
-    if (!ppp.value) return {};
+    const regionPart = region.status === 'fulfilled' && region.value ? { regionCode: region.value } : {};
+    if (!ppp.value) return regionPart;
 
     return {
+      ...regionPart,
       purchasing: {
         source: 'WORLD_BANK',
         period: ppp.value.period,
@@ -48,5 +57,14 @@ export class WorldBankStatisticsProvider implements StatisticsProvider {
     if (!parsed.success) return null;
     const row = parsed.data[1].find(({ country, value }) => country.id === countryCode && value !== null && value > 0);
     return row ? { value: row.value as number, period: row.date } : null;
+  }
+
+  /** The World Bank region of the country (such as 'LCN'); null for anything that is not one of the regions compared with. */
+  private async region(countryCode: string): Promise<string | null> {
+    const response = await this.fetchFn(`${BASE_URL}/${countryCode}?format=json`, { signal: AbortSignal.timeout(this.timeoutMs), headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error(`World Bank answered HTTP ${response.status} for the region of ${countryCode}`);
+    const parsed = countrySchema.safeParse(await response.json());
+    const id = parsed.success ? parsed.data[1][0]?.region.id : undefined;
+    return id !== undefined && WORLD_BANK_REGION_CODES.includes(id) ? id : null;
   }
 }

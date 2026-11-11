@@ -23,8 +23,10 @@ import { LiveFxRateProvider } from '../infrastructure/fx/liveFxRateProvider';
 import { ReferenceFxRateProvider } from '../infrastructure/fx/referenceFxRates';
 import { EurostatStatisticsProvider } from '../infrastructure/benchmarks/eurostatStatistics';
 import { IndecStatisticsProvider } from '../infrastructure/benchmarks/indecStatistics';
+import { WorldBankPipStatisticsProvider } from '../infrastructure/benchmarks/worldBankPipStatistics';
 import { WorldBankStatisticsProvider } from '../infrastructure/benchmarks/worldBankStatistics';
 import { PnlPortfolioValueReader } from '../infrastructure/pnlPortfolioValueReader';
+import { marketPrices } from '../infrastructure/market/marketPrices';
 import { PrismaBillingRecordRepository } from '../infrastructure/prismaBillingRecordRepository';
 import { PrismaCountryStatisticsRepository } from '../infrastructure/prismaCountryStatisticsRepository';
 import { PrismaJobLock } from '../infrastructure/prismaJobLock';
@@ -82,11 +84,11 @@ export function buildProfileFeature(deps: ProfileFeatureDeps): Router[] {
       ]
     : [];
   const benchmarks = deps.statistics
-    ? [createBenchmarksRouter({ service: new BenchmarkService({ phases, profiles: new ProfileService({ repository: deps.profileRepository, cipher: deps.cipher }), statistics: deps.statistics }), today })]
+    ? [createBenchmarksRouter({ service: new BenchmarkService({ phases, profiles: new ProfileService({ repository: deps.profileRepository, cipher: deps.cipher }), statistics: deps.statistics, fx: deps.fx }), today })]
     : [];
   const profiles = new ProfileService({ repository: deps.profileRepository, cipher: deps.cipher });
   const capitalHorizon = deps.portfolio ? [createCapitalHorizonRouter({ service: new CapitalHorizonService({ phases, profiles, portfolio: deps.portfolio }), today })] : [];
-  const secondSalary = deps.portfolio ? [createSecondSalaryRouter({ service: new SecondSalaryService({ phases, portfolio: deps.portfolio }), today })] : [];
+  const secondSalary = deps.portfolio ? [createSecondSalaryRouter({ service: new SecondSalaryService({ phases, profiles, portfolio: deps.portfolio }), today })] : [];
   return [
     ...documents,
     ...benchmarks,
@@ -127,7 +129,7 @@ export function mountProfileFeature(
     const statistics = new CountryStatisticsService({
       repository: new PrismaCountryStatisticsRepository(prisma),
       // Specific sources first, so the World Bank only fills in what they do not publish.
-      providers: [new EurostatStatisticsProvider(), new IndecStatisticsProvider(), new WorldBankStatisticsProvider()],
+      providers: [new EurostatStatisticsProvider(), new IndecStatisticsProvider(), new WorldBankStatisticsProvider(), new WorldBankPipStatisticsProvider()],
       now: Date.now,
     });
     app.use(
@@ -137,7 +139,7 @@ export function mountProfileFeature(
         fingerprinter: new HmacBillFingerprinter(key),
         pdfTextExtractor: new WorkerPdfTextExtractor(),
         statistics,
-        portfolio: new PnlPortfolioValueReader(),
+        portfolio: new PnlPortfolioValueReader(marketPrices),
         livingPhaseRepository: new PrismaLivingPhaseRepository(prisma),
         profileRepository: new PrismaProfileRepository(prisma),
         billingRecordRepository: new PrismaBillingRecordRepository(prisma),

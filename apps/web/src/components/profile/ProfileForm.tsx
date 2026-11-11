@@ -54,9 +54,11 @@ function Summary({ profile, onEdit }: { profile: ProfileData; onEdit: () => void
             <ChevronDown className="profile-disclosure__chevron" size={16} aria-hidden="true" />
           </button>
         </h2>
-        <button type="button" className="profile-text-button" onClick={onEdit}>
-          <Pencil size={14} aria-hidden="true" /> {empty ? 'Add details' : 'Edit'}
-        </button>
+        {open && (
+          <button type="button" className="profile-text-button" onClick={onEdit}>
+            <Pencil size={14} aria-hidden="true" /> {empty ? 'Add details' : 'Edit'}
+          </button>
+        )}
       </div>
       <div id={`${id}-facts`} hidden={!open}>
         {empty ? (

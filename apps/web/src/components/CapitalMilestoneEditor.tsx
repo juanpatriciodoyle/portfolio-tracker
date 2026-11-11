@@ -59,7 +59,7 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
     <Modal label={onDelete ? 'Edit milestone' : 'Set a milestone target'} onClose={onClose}>
       <h2 className="dialog__title">{onDelete ? 'Edit milestone' : 'Set a milestone target'}</h2>
 
-      <form className="cost-editor" onSubmit={handleSubmit} noValidate aria-label="Milestone">
+      <form className="cost-editor milestone-editor" onSubmit={handleSubmit} noValidate aria-label="Milestone">
         <fieldset className="profile-segmented">
           <legend className="form-label">Kind of goal</legend>
           <div className="income-reasons">
@@ -135,19 +135,11 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
           </p>
         )}
 
-        <div className="cost-editor__actions">
-          <button type="submit" className="btn-primary-apply" disabled={busy}>
-            {busy ? 'Saving…' : 'Save milestone'}
+        {onDelete && !confirmingDelete && (
+          <button type="button" className="profile-text-button profile-text-button--danger milestone-editor__remove" onClick={() => setConfirmingDelete(true)}>
+            Delete milestone
           </button>
-          <button type="button" className="btn-secondary-cancel" onClick={onClose}>
-            Cancel
-          </button>
-          {onDelete && !confirmingDelete && (
-            <button type="button" className="profile-text-button profile-text-button--danger" onClick={() => setConfirmingDelete(true)}>
-              Delete milestone
-            </button>
-          )}
-        </div>
+        )}
 
         {onDelete && confirmingDelete && (
           <div className="capital-horizon__confirm" role="group" aria-label="Confirm delete">
@@ -160,6 +152,15 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
             </button>
           </div>
         )}
+
+        <div className="milestone-editor__footer">
+          <button type="button" className="btn-secondary-cancel" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn-primary-apply" disabled={busy}>
+            {busy ? 'Saving…' : 'Save milestone'}
+          </button>
+        </div>
       </form>
     </Modal>
   );

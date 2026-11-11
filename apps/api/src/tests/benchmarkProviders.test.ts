@@ -55,6 +55,18 @@ describe('EurostatStatisticsProvider', () => {
     expect(calls.find((url) => url.includes('ilc_di01'))).toContain('unit=NAC');
   });
 
+  it('also publishes the EU as a whole, in euros', async () => {
+    const { fetchFn, calls } = fakeFetch(routes());
+    const provider = new EurostatStatisticsProvider(fetchFn);
+
+    expect(provider.supports('EU')).toBe(true);
+    const fragment = await provider.fetch('EU');
+
+    expect(fragment.incomeDistribution).toMatchObject({ source: 'EUROSTAT', currency: 'EUR', distribution: { period: 'YEAR', basis: 'EQUIVALISED' } });
+    expect(calls.every((url) => url.includes('geo=EU27_2020'))).toBe(true);
+    expect(calls.find((url) => url.includes('ilc_di01'))).toContain('unit=EUR');
+  });
+
   it('asks Eurostat for Greece as EL', async () => {
     const { fetchFn, calls } = fakeFetch(routes());
 
@@ -160,6 +172,25 @@ describe('WorldBankStatisticsProvider', () => {
     });
     expect((await new WorldBankStatisticsProvider(fetchFn).fetch('ES')).purchasing).toMatchObject({ lcuPerInternationalDollar: 0.570991, gniPerPersonDollars: 59830 });
     expect(calls[0]).toContain('country/AR/');
+  });
+
+  it('reads the World Bank region of the country, so it can be compared with its continent', async () => {
+    const region = JSON.stringify([{ page: 1 }, [{ id: 'ARG', iso2Code: 'AR', region: { id: 'LCN', value: 'Latin America & Caribbean ' } }]]);
+    const { fetchFn, calls } = fakeFetch({ ...routes(), 'country/AR?format=json': () => reply(region) });
+
+    expect((await new WorldBankStatisticsProvider(fetchFn).fetch('AR')).regionCode).toBe('LCN');
+    expect(calls.some((url) => url.endsWith('country/AR?format=json'))).toBe(true);
+  });
+
+  it('leaves the region out when it is not a known region, or when that request fails', async () => {
+    const aggregate = JSON.stringify([{ page: 1 }, [{ id: 'XYZ', iso2Code: 'XY', region: { id: 'NA', value: 'Aggregates' } }]]);
+
+    expect((await new WorldBankStatisticsProvider(fakeFetch({ ...routes(), 'country/AR?format=json': () => reply(aggregate) }).fetchFn).fetch('AR')).regionCode).toBeUndefined();
+    expect((await new WorldBankStatisticsProvider(fakeFetch({ ...routes(), 'country/AR?format=json': () => reply('x', 500) }).fetchFn).fetch('AR')).purchasing).toBeDefined();
+  });
+
+  it('does not take the EU for a country', () => {
+    expect(new WorldBankStatisticsProvider(fakeFetch({}).fetchFn).supports('EU')).toBe(false);
   });
 
   it('still gives the PPP factor when GNI is missing', async () => {

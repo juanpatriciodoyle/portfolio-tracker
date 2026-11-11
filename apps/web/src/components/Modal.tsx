@@ -7,6 +7,8 @@ interface ModalProps {
   /** What the dialog is for, announced when it opens. */
   label: string;
   onClose: () => void;
+  /** Room for two columns, such as a form beside a document preview. */
+  wide?: boolean;
   children: ReactNode;
 }
 
@@ -14,7 +16,7 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /** A dialog in the middle of the screen: Escape or the backdrop closes it, and Tab stays inside it. */
-export default function Modal({ label, onClose, children }: ModalProps) {
+export default function Modal({ label, onClose, wide = false, children }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -57,7 +59,7 @@ export default function Modal({ label, onClose, children }: ModalProps) {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div ref={panel} className="dialog" role="dialog" aria-modal="true" aria-label={label} onKeyDown={handleKeyDown}>
+      <div ref={panel} className={`dialog${wide ? ' dialog--wide' : ''}`} role="dialog" aria-modal="true" aria-label={label} onKeyDown={handleKeyDown}>
         <button type="button" className="dialog__close" aria-label="Close" onClick={onClose}>
           <X size={18} aria-hidden="true" />
         </button>

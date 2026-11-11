@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { ProfileService } from '../application/profileService';
-import { saveCapitalMilestonesRequest, saveProfileRequest, type CalendarDate } from '../contracts';
+import { saveCapitalMilestonesRequest, saveProfileRequest, saveSecondSalaryTargetRequest, type CalendarDate } from '../contracts';
 import { handle, noStore, parseRequest, requireUser, userIdOf } from './http';
 
 export interface ProfileRouterDeps {
@@ -32,6 +32,14 @@ export function createProfileRouter({ service, today }: ProfileRouterDeps): Rout
     '/profile/capital-milestones',
     handle(async (req, res) => {
       await service.saveCapitalMilestones(userIdOf(req), parseRequest(saveCapitalMilestonesRequest, req.body).milestones);
+      res.status(204).end();
+    })
+  );
+
+  router.put(
+    '/profile/second-salary-target',
+    handle(async (req, res) => {
+      await service.saveSecondSalaryTarget(userIdOf(req), parseRequest(saveSecondSalaryTargetRequest, req.body).monthlyMinor);
       res.status(204).end();
     })
   );

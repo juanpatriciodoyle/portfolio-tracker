@@ -15,6 +15,7 @@ const emptyProfile = (): StoredProfile => ({
   dependentChildren: 0,
   employmentStatus: null,
   capitalMilestones: [],
+  secondSalaryTargetMinor: null,
 });
 
 export interface ProfileServiceDeps {
@@ -33,7 +34,7 @@ export class ProfileService {
   }
 
   async getProfile(userId: string): Promise<ProfileData> {
-    const { capitalMilestones: _goals, ...profile } = await this.load(userId);
+    const { capitalMilestones: _goals, secondSalaryTargetMinor: _target, ...profile } = await this.load(userId);
     return profile;
   }
 
@@ -41,18 +42,28 @@ export class ProfileService {
     return (await this.load(userId)).capitalMilestones;
   }
 
+  /** The monthly second salary the person aims at; null when none is set. */
+  async getSecondSalaryTarget(userId: string): Promise<number | null> {
+    return (await this.load(userId)).secondSalaryTargetMinor;
+  }
+
   /** `asOf` is today's date, supplied by the caller so the rule below stays deterministic. */
   async saveProfile(userId: string, profile: ProfileData, asOf: CalendarDate): Promise<void> {
     if (profile.birthYear !== null && profile.birthYear > Number(asOf.slice(0, 4))) {
       throw new InvalidProfileError('The birth year cannot be in the future');
     }
-    const { capitalMilestones } = await this.load(userId);
-    await this.store(userId, { ...profile, capitalMilestones });
+    const { capitalMilestones, secondSalaryTargetMinor } = await this.load(userId);
+    await this.store(userId, { ...profile, capitalMilestones, secondSalaryTargetMinor });
   }
 
   /** Replaces the list of goals; the rest of the profile stays as it is. */
   async saveCapitalMilestones(userId: string, capitalMilestones: readonly CapitalMilestone[]): Promise<void> {
     await this.store(userId, { ...(await this.load(userId)), capitalMilestones: [...capitalMilestones] });
+  }
+
+  /** Sets the second salary aimed at, or clears it with null; the rest of the profile stays as it is. */
+  async saveSecondSalaryTarget(userId: string, secondSalaryTargetMinor: number | null): Promise<void> {
+    await this.store(userId, { ...(await this.load(userId)), secondSalaryTargetMinor });
   }
 
   private async load(userId: string): Promise<StoredProfile> {

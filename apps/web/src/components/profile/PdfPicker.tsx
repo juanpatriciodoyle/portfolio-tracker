@@ -4,12 +4,14 @@ import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 interface PdfPickerProps {
   /** The PDFs chosen or dropped, at least one. */
   onFiles: (files: File[]) => void;
+  /** A big, inviting drop zone for the first step of adding an expense. */
+  large?: boolean;
 }
 
 const isPdf = (file: File) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
 /** Choose, or drop, any number of bill PDFs at once. Nothing is uploaded until each one is reviewed. */
-export default function PdfPicker({ onFiles }: PdfPickerProps) {
+export default function PdfPicker({ onFiles, large = false }: PdfPickerProps) {
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -28,7 +30,7 @@ export default function PdfPicker({ onFiles }: PdfPickerProps) {
 
   return (
     <div
-      className={`pdf-picker${dragging ? ' is-dragging' : ''}`}
+      className={`pdf-picker${large ? ' pdf-picker--large' : ''}${dragging ? ' is-dragging' : ''}`}
       onDragOver={(event) => {
         event.preventDefault();
         setDragging(true);
@@ -36,13 +38,19 @@ export default function PdfPicker({ onFiles }: PdfPickerProps) {
       onDragLeave={() => setDragging(false)}
       onDrop={drop}
     >
-      <FileUp size={16} aria-hidden="true" />
+      <FileUp size={large ? 32 : 16} aria-hidden="true" />
       <span className="pdf-picker__text">
-        Have the PDFs? Drop them here, or{' '}
+        {large ? 'Drop your bills here' : 'Have the PDFs? Drop them here, or '}
+        {large ? (
+          <>
+            <br />
+            or{' '}
+          </>
+        ) : null}
         <button type="button" className="pdf-picker__button" onClick={() => input.current?.click()}>
-          add from PDFs
+          {large ? 'choose PDFs' : 'add from PDFs'}
         </button>
-        .
+        {large ? ' from your computer. You can add several at once.' : '.'}
       </span>
       <input
         ref={input}

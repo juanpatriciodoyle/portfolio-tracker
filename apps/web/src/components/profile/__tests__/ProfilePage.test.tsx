@@ -375,6 +375,7 @@ describe('ProfilePage changes', () => {
     renderPage();
     await screen.findByRole('heading', { name: 'Living phases' });
 
+    fireEvent.click(screen.getByRole('button', { name: 'Demographics & Household Settings' }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
     fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Juan P. Doyle' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -416,11 +417,16 @@ describe('ProfilePage bills', () => {
     fireEvent.click(screen.getByRole('button', { name: /Add expense/ }));
 
     const dialog = within(screen.getByRole('dialog', { name: 'Add an expense' }));
-    fireEvent.change(dialog.getByLabelText('Who sent it?'), { target: { value: 'Iberdrola' } });
-    fireEvent.click(dialog.getByRole('radio', { name: 'Electricity' }));
-    fireEvent.change(dialog.getByLabelText('Total on the bill'), { target: { value: '96' } });
-    fireEvent.click(dialog.getByRole('radio', { name: 'Every 2 months' }));
-    fireEvent.click(dialog.getByRole('button', { name: 'Add expense' }));
+    fireEvent.click(dialog.getByRole('button', { name: 'Enter it manually' }));
+    // The wizard is a new dialog after the first step: ask for it again.
+    const wizard = within(screen.getByRole('dialog', { name: 'Add an expense' }));
+    fireEvent.change(wizard.getByLabelText('Who sent it?'), { target: { value: 'Iberdrola' } });
+    fireEvent.click(wizard.getByRole('radio', { name: 'Electricity' }));
+    fireEvent.click(wizard.getByRole('button', { name: 'Continue' }));
+    fireEvent.change(wizard.getByLabelText('Total on the bill'), { target: { value: '96' } });
+    fireEvent.click(wizard.getByRole('radio', { name: 'Every 2 months' }));
+    fireEvent.click(wizard.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(wizard.getByRole('button', { name: 'Add expense' }));
 
     await waitFor(() =>
       expect(apiRequest).toHaveBeenCalledWith(
@@ -469,13 +475,18 @@ describe('ProfilePage bills', () => {
     fireEvent.click(screen.getByRole('button', { name: /Add expense/ }));
 
     const dialog = within(screen.getByRole('dialog', { name: 'Add an expense' }));
-    fireEvent.change(dialog.getByLabelText('Who sent it?'), { target: { value: 'Iberdrola' } });
-    fireEvent.click(dialog.getByRole('radio', { name: 'Electricity' }));
-    fireEvent.change(dialog.getByLabelText('Total on the bill'), { target: { value: '70' } });
-    fireEvent.click(dialog.getByRole('radio', { name: 'Monthly' }));
-    fireEvent.change(dialog.getByLabelText('Covers from'), { target: { value: '2021-03-01' } });
-    fireEvent.change(dialog.getByLabelText('Until'), { target: { value: '2021-03-31' } });
-    fireEvent.click(dialog.getByRole('button', { name: 'Add expense' }));
+    fireEvent.click(dialog.getByRole('button', { name: 'Enter it manually' }));
+    // The wizard is a new dialog after the first step: ask for it again.
+    const wizard = within(screen.getByRole('dialog', { name: 'Add an expense' }));
+    fireEvent.change(wizard.getByLabelText('Who sent it?'), { target: { value: 'Iberdrola' } });
+    fireEvent.click(wizard.getByRole('radio', { name: 'Electricity' }));
+    fireEvent.click(wizard.getByRole('button', { name: 'Continue' }));
+    fireEvent.change(wizard.getByLabelText('Total on the bill'), { target: { value: '70' } });
+    fireEvent.click(wizard.getByRole('radio', { name: 'Every month' }));
+    fireEvent.click(wizard.getByRole('button', { name: 'Continue' }));
+    fireEvent.change(wizard.getByLabelText('Covers from'), { target: { value: '2021-03-01' } });
+    fireEvent.change(wizard.getByLabelText('Until'), { target: { value: '2021-03-31' } });
+    fireEvent.click(wizard.getByRole('button', { name: 'Add expense' }));
 
     await waitFor(() =>
       expect(apiRequest).toHaveBeenCalledWith('/api/billing-records', expect.anything(), expect.objectContaining({ method: 'POST', body: expect.objectContaining({ phaseId: 'p2', periodStart: '2021-03-01' }) }))
@@ -498,26 +509,70 @@ describe('ProfilePage bills', () => {
   });
 });
 
-describe('ProfilePage goals', () => {
-  it('leads the page with the second salary and the capital horizon, above the living phases', async () => {
+describe('ProfilePage tabs', () => {
+  const openMilestones = () => fireEvent.click(screen.getByRole('tab', { name: 'Milestones & Positioning' }));
+
+  it('opens on living costs & career: the phases, with Add expense as the one solid button, and the demographics at the bottom', async () => {
     serve();
     renderPage();
 
-    const badge = await screen.findByRole('heading', { name: /^Second Salary:/ });
-    const horizon = await screen.findByRole('region', { name: 'Capital horizon' });
-    const phases = screen.getByRole('heading', { name: 'Living phases' });
+    const phases = await screen.findByRole('heading', { name: 'Living phases' });
+    expect(screen.getByRole('tab', { name: 'Living Costs & Career' })).toHaveAttribute('aria-selected', 'true');
+    // One footprint for both actions: the same base class, and only the first is solid.
+    expect(screen.getByRole('button', { name: 'Add expense' })).toHaveClass('profile-action-button', 'profile-action-button--primary');
+    expect(screen.getByRole('button', { name: 'Add living phase' })).toHaveClass('profile-action-button', 'profile-action-button--outline');
+    expect(screen.getByRole('button', { name: 'Add living phase' })).not.toHaveClass('profile-action-button--primary');
+    expect(screen.queryByRole('heading', { name: 'Second Salary' })).not.toBeInTheDocument();
 
-    expect(badge.compareDocumentPosition(phases) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(horizon.compareDocumentPosition(phases) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const demographics = screen.getByText('Juan Doyle');
+    expect(phases.compareDocumentPosition(demographics) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('shows no goals before the first home and profile exist', async () => {
+  it('puts the second salary, the capital horizon and where you stand on the other tab', async () => {
+    serve();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Living phases' });
+
+    openMilestones();
+
+    expect(await screen.findByRole('heading', { name: 'Second Salary' })).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Capital horizon' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Where you stand' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Living phases' })).not.toBeInTheDocument();
+  });
+
+  it('remembers the open tab for the rest of the session', async () => {
+    serve();
+    const first = render(<ProfilePage onBack={vi.fn()} onSignedOut={vi.fn()} />);
+    await screen.findByRole('heading', { name: 'Living phases' });
+    openMilestones();
+    first.unmount();
+
+    render(<ProfilePage onBack={vi.fn()} onSignedOut={vi.fn()} />);
+    expect(await screen.findByRole('heading', { name: 'Second Salary' })).toBeInTheDocument();
+  });
+
+  it('sets the second salary target through the profile', async () => {
+    serve();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Living phases' });
+    openMilestones();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit target' }));
+    fireEvent.change(screen.getByLabelText('Monthly target (EUR)'), { target: { value: '4000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save target' }));
+
+    await waitFor(() => expect(apiCommand).toHaveBeenCalledWith('/api/profile/second-salary-target', { method: 'PUT', body: { monthlyMinor: 400_000 } }));
+  });
+
+  it('shows no tabs before the first home and profile exist', async () => {
     serve({ profile: makeProfile({ fullName: null, birthYear: null, nationalities: [], taxResidence: null, employmentStatus: null }), phases: [], entries: [] });
     renderPage();
 
     await screen.findByRole('button', { name: 'Tell us about yourself' });
 
-    expect(screen.queryByRole('heading', { name: /^Second Salary:/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Second Salary' })).not.toBeInTheDocument();
   });
 });
 

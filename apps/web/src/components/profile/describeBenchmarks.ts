@@ -1,4 +1,4 @@
-import type { BenchmarkGap, BenchmarkSource, NationalityEquivalenceDto, PhaseBenchmarkDto } from '../../contracts';
+import type { BenchmarkGap, BenchmarkSource, NationalityEquivalenceDto, PhaseBenchmarkDto, StandingDto, StandingScope } from '../../contracts';
 import { countryName } from '../../lib/countries';
 import { displayLocale } from '../../lib/money';
 import { formatMinor } from '../../lib/money';
@@ -16,6 +16,8 @@ export const GAP_REASONS: Readonly<Record<BenchmarkGap, string>> = {
   NO_HOUSING_BASELINE: 'No typical housing cost figure is published for this country.',
   NO_PURCHASING_POWER: 'No price level figure is published for this country.',
   CURRENCY_MISMATCH: 'This living phase’s income is not in the currency of the country, so it cannot be compared with national figures directly.',
+  NO_CONTINENT_REFERENCE: 'No comparison with your continent is available for this country yet.',
+  NO_WORLD_REFERENCE: 'The world comparison is being prepared or is not available right now. It is refreshed about every six months.',
 };
 
 /** One glanceable figure. `note` holds the methodology and shows only on hover or focus. */
@@ -37,9 +39,26 @@ export interface NationalityEquivalenceView {
   tier: string | null;
 }
 
+/** "Top 11% in Spain": one rung of where the person stands. */
+export interface StandingBadge {
+  scope: StandingScope;
+  text: string;
+}
+
+/** Where the numbers come from, for the data sources. */
+export interface SourceView {
+  name: string;
+  url: string;
+  /** "20 Oct 2026". */
+  retrieved: string | null;
+}
+
 /** The clean, rewarding summary: only what the data supports. `unavailable` is the rankings that have no source yet. */
 export interface PositioningView {
-  badge: string | null;
+  /** Country, continent and world, in that order; a rung the data cannot place is left out. */
+  badges: StandingBadge[];
+  /** Up to three one-line comparisons, worded for what they say about the person. */
+  insights: string[];
   equivalences: NationalityEquivalenceView[];
   unavailable: string[];
 }
@@ -48,6 +67,9 @@ export interface PhaseBenchmarkView {
   country: string;
   positioning: PositioningView;
   income: Kpi | null;
+  /** The continent and world rungs, with what was compared and where it comes from. */
+  areaFigures: Kpi[];
+  sources: SourceView[];
   housing: HousingKpi | null;
   purchasingPower: Kpi | null;
   gaps: string[];
@@ -85,13 +107,10 @@ function describeIncome(dto: NonNullable<PhaseBenchmarkDto['incomePercentile']>,
   };
 }
 
-const UNAVAILABLE_RANKINGS = [
-  'A global ranking needs a worldwide income distribution, which is not connected yet.',
-  'City rankings need city-level income statistics, which are not connected yet.',
-];
+const UNAVAILABLE_RANKINGS = ['City rankings need city-level income statistics, which are not connected yet.'];
 
 /** "Top 11% in Spain": the share of people the income is above, from the top. */
-function tierBadge(dto: NonNullable<PhaseBenchmarkDto['incomePercentile']>, country: string, locale: string): string {
+function tierBadge(dto: { percentile: number; bound: 'EXACT' | 'AT_MOST' | 'AT_LEAST' }, country: string, locale: string): string {
   const n = Math.round(dto.percentile);
   const top = Math.max(1, 100 - n);
   if (dto.bound === 'AT_LEAST') return `Top ${top}% or better in ${country}`;
@@ -136,6 +155,29 @@ function describePower(
   };
 }
 
+const VERDICT_WORDS = { LOWER: 'below', SIMILAR: 'in line with', HIGHER: 'above' } as const;
+
+/** "Housing takes 24% of your income — below the 31% average in Spain": the share, and how it sits against the typical one. */
+function housingInsight(dto: NonNullable<PhaseBenchmarkDto['housingBurden']>, where: string, locale: string): string {
+  return `Housing takes ${percent(dto.yourSharePercent, locale)} of your income — ${VERDICT_WORDS[dto.verdict]} the ${percent(dto.typicalSharePercent, locale)} average in ${where}`;
+}
+
+const areaOf = (entry: StandingDto, country: string) => (entry.scope === 'COUNTRY' ? country : (entry.areaName ?? entry.areaCode));
+
+/** What was compared for a continent or world rung, in words and with its figure. */
+function describeAreaFigure(entry: StandingDto, area: string, locale: string): Kpi {
+  const n = Math.round(entry.percentile);
+  const bound = entry.bound === 'AT_LEAST' ? 'At least ' : entry.bound === 'AT_MOST' ? 'At most ' : '';
+  const origin = `${entry.period} · ${SOURCE_LABELS[entry.source]}`;
+  const yours =
+    entry.yourValue === null ? '' : entry.measuredAs === 'EURO_INCOME' ? formatMinor(Math.round(entry.yourValue * 100), 'EUR', locale) : `$${trimmed(entry.yourValue, locale, 0)}`;
+  const note =
+    entry.measuredAs === 'EURO_INCOME'
+      ? `Your income of about ${yours} a year per person (adjusted for household size, converted to euros) compared with people in ${area}. ${origin}`
+      : `Your income of about ${yours} a day per person, in international dollars at 2021 prices, compared with people in ${area}. ${origin}`;
+  return { label: `In ${area}`, value: `${bound}${ordinal(n, locale)} percentile`, sub: n >= 50 ? `Top ${Math.max(1, 100 - n)}%` : `Bottom ${Math.max(1, n)}%`, note };
+}
+
 /** Wording for one phase's comparisons. The server did the maths; this only decides how it reads. */
 export function describePhaseBenchmark(
   dto: PhaseBenchmarkDto,
@@ -146,18 +188,36 @@ export function describePhaseBenchmark(
   const income = dto.incomePercentile ? describeIncome(dto.incomePercentile, country, locale) : null;
   const housing = dto.housingBurden ? describeHousing(dto.housingBurden, dto.currency, country, locale) : null;
   const purchasingPower = dto.purchasingPower ? describePower(dto.purchasingPower, country, nameOf, locale) : null;
+  const areaFigures = dto.standing.filter((entry) => entry.scope !== 'COUNTRY').map((entry) => describeAreaFigure(entry, areaOf(entry, country), locale));
+  const insights = [
+    dto.housingBurden ? housingInsight(dto.housingBurden, country, locale) : null,
+    dto.continentHousing ? housingInsight(dto.continentHousing, dto.continentHousing.areaName, locale) : null,
+    dto.purchasingPower?.versusNationalAverage != null
+      ? `Your income buys ${times(dto.purchasingPower.versusNationalAverage, locale)} what the average person in ${country} has`
+      : null,
+  ]
+    .filter((line): line is string => line !== null)
+    .slice(0, 3);
+  const sources = [...new Map(dto.standing.map((entry) => [entry.citation.url, entry.citation] as const)).values()].map((citation) => ({
+    name: citation.name,
+    url: citation.url,
+    retrieved: describeRefreshedAt(citation.retrievedAt, locale),
+  }));
   return {
     country,
     positioning: {
-      badge: dto.incomePercentile ? tierBadge(dto.incomePercentile, country, locale) : null,
+      badges: dto.standing.map((entry) => ({ scope: entry.scope, text: tierBadge(entry, areaOf(entry, country), locale) })),
+      insights,
       equivalences: dto.nationalityEquivalences.map((equivalence) => describeEquivalence(equivalence, locale)),
       unavailable: UNAVAILABLE_RANKINGS,
     },
     income,
+    areaFigures,
+    sources,
     housing,
     purchasingPower,
     gaps: dto.gaps.map((gap) => GAP_REASONS[gap]),
-    hasComparison: income !== null || housing !== null || purchasingPower !== null || dto.nationalityEquivalences.length > 0,
+    hasComparison: income !== null || dto.standing.length > 0 || housing !== null || purchasingPower !== null || dto.nationalityEquivalences.length > 0,
   };
 }
 

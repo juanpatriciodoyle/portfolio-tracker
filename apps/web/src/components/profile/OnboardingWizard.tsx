@@ -80,7 +80,7 @@ export default function OnboardingWizard({
     draftSchema,
     () => ({
       profile: toProfileDraft(profile),
-      phase: { form: initialPhaseForm(null, { currency: defaultCurrency, stillLivingHere: !hasCurrentPhase }), costs: [] },
+      phase: { form: initialPhaseForm(null, { currency: defaultCurrency, stillLivingHere: !hasCurrentPhase }), costs: [], carry: { unticked: [], amounts: {} } },
     }),
     stepIds.length
   );

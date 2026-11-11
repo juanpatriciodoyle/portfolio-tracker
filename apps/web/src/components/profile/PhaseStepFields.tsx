@@ -5,6 +5,8 @@ import { currencyOptions } from "../../lib/currencies";
 import { clampDateYear, keepDecimal, keepNameCharacters } from "../../lib/inputFilters";
 import { formatMinor } from "../../lib/money";
 import WizardField from "../wizard/WizardField";
+import CarryJobs from "./CarryJobs";
+import type { CarryCandidate, CarryChoice } from "./carryOver";
 import CountrySelect from "./CountrySelect";
 import FixedCostEditor from "./FixedCostEditor";
 import { CADENCE_PHRASES, CATEGORY_LABELS, TENURE_LABELS } from "./labels";
@@ -28,6 +30,8 @@ interface PhaseStepFieldsProps {
   onCostsChange: (costs: CreateFixedCostRequest[]) => void;
   /** Asks for a first income. Left out when changing an existing home, whose income is listed on its own. */
   includeIncome?: boolean;
+  /** The previous home's jobs that could carry on here, when there are any. */
+  carry?: { candidates: readonly CarryCandidate[]; choice: CarryChoice; onChange: (choice: CarryChoice) => void };
   /** Told whenever the form to add a bill opens or closes: the flow hides its own main button while it is open. */
   onAddingBillChange?: (adding: boolean) => void;
 }
@@ -43,6 +47,7 @@ export default function PhaseStepFields({
   costs,
   onCostsChange,
   includeIncome = true,
+  carry,
   onAddingBillChange,
 }: PhaseStepFieldsProps) {
   const currencies = useMemo(() => currencyOptions(), []);
@@ -217,6 +222,14 @@ export default function PhaseStepFields({
                 aria-describedby={describedBy("monthlyIncome")}
               />
             </WizardField>
+          )}
+          {carry && (
+            <CarryJobs
+              candidates={carry.candidates}
+              choice={carry.choice}
+              currency={form.currency}
+              onChange={carry.onChange}
+            />
           )}
         </div>
         <WizardField id={id("tenure")} label="Housing">

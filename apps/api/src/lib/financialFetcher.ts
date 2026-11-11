@@ -135,6 +135,19 @@ export async function searchMarketTickers(query: string): Promise<MarketSearchRe
   return localMatches;
 }
 
+/** The last traded price of one instrument and the currency it is quoted in; null when the market does not answer. */
+export async function fetchLiveQuote(ticker: string): Promise<{ price: number; currency: string } | null> {
+  try {
+    const quote: any = await getYf().quote(ticker.toUpperCase());
+    if (quote && typeof quote.regularMarketPrice === 'number' && quote.regularMarketPrice > 0 && typeof quote.currency === 'string') {
+      return { price: quote.regularMarketPrice, currency: quote.currency };
+    }
+  } catch {
+    // An unreachable market is "no price", never an error for the person.
+  }
+  return null;
+}
+
 /**
  * Fetch real-time market price & percentage returns
  */

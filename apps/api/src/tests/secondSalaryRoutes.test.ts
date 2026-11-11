@@ -72,7 +72,7 @@ describe('GET /api/insights/second-salary', () => {
       { id: 2, monthlyCostMinor: 90_000, reached: true },
       { id: 3, monthlyCostMinor: 150_000, reached: false },
     ]);
-    expect(parsed.target).toMatchObject({ minMonthlyMinor: 300_000, maxMonthlyMinor: 500_000, reachedMin: false });
+    expect(parsed.target).toBeNull();
   });
 
   it('still shows the salary, with the reason, when no cost can be compared', async () => {
@@ -94,5 +94,51 @@ describe('GET /api/insights/second-salary', () => {
 
   it('rejects a malformed date', async () => {
     expect((await request(build(worth(0))).get('/api/insights/second-salary?asOf=tomorrow').set(ALICE)).status).toBe(400);
+  });
+});
+
+describe('the target second salary of a person', () => {
+  const putTarget = (app: express.Express, body: unknown, headers = ALICE) => request(app).put('/api/profile/second-salary-target').set(headers).send(body as object);
+
+  it('is saved, and then measured against the portfolio', async () => {
+    const app = build(worth(200_000_00)); // €1,000 / month
+
+    expect((await putTarget(app, { monthlyMinor: 250_000 })).status).toBe(204);
+
+    const body = secondSalaryResponse.parse((await request(app).get('/api/insights/second-salary').set(ALICE)).body);
+    expect(body.target).toMatchObject({ monthlyMinor: 250_000, progress: 0.4, reached: false });
+  });
+
+  it('is cleared with null', async () => {
+    const app = build(worth(0));
+    await putTarget(app, { monthlyMinor: 250_000 });
+    expect((await putTarget(app, { monthlyMinor: null })).status).toBe(204);
+    expect((await request(app).get('/api/insights/second-salary').set(ALICE)).body.target).toBeNull();
+  });
+
+  it('survives saving the profile', async () => {
+    const app = build(worth(0));
+    await putTarget(app, { monthlyMinor: 250_000 });
+    const profile = (await request(app).get('/api/profile').set(ALICE)).body;
+    expect((await request(app).put('/api/profile').set(ALICE).send(profile)).status).toBe(204);
+    expect((await request(app).get('/api/insights/second-salary').set(ALICE)).body.target?.monthlyMinor).toBe(250_000);
+  });
+
+  it('never appears in the profile itself', async () => {
+    const app = build(worth(0));
+    await putTarget(app, { monthlyMinor: 250_000 });
+    expect((await request(app).get('/api/profile').set(ALICE)).body).not.toHaveProperty('secondSalaryTargetMinor');
+  });
+
+  it.each([[{ monthlyMinor: 0 }], [{ monthlyMinor: -5 }], [{ monthlyMinor: 1.5 }], [{ monthlyMinor: 'a lot' }], [{}], [{ monthlyMinor: 100, extra: true }]])('rejects %j', async (body) => {
+    expect((await putTarget(build(worth(0)), body)).status).toBe(400);
+  });
+
+  it('keeps each person’s own target and needs a token', async () => {
+    const app = build(worth(0));
+    await putTarget(app, { monthlyMinor: 250_000 });
+    const bob = { Authorization: `Bearer ${generateToken('bob')}` };
+    expect((await request(app).get('/api/insights/second-salary').set(bob)).body.target).toBeNull();
+    expect((await request(app).put('/api/profile/second-salary-target').send({ monthlyMinor: 1 })).status).toBe(401);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { makePhaseBenchmark } from '../../../test/benchmarkFixtures';
+import { DEFAULT_STANDING, makePhaseBenchmark } from '../../../test/benchmarkFixtures';
+import type { StandingDto } from '../../../contracts';
 import { BENCHMARK_GAPS } from '../../../contracts';
 import { describePhaseBenchmark, describeRefreshedAt, GAP_REASONS } from '../describeBenchmarks';
 
@@ -99,20 +100,73 @@ describe('positioning', () => {
   };
   const italy = { countryCode: 'IT', currency: 'EUR', equivalentMonthlyIncomeMinor: 580_000, incomePercentile: null };
 
-  it('has a badge for where the income sits in the country of the phase', () => {
-    expect(describeIt().positioning.badge).toBe('Top 11% in Spain');
+  const rung = (overrides: Partial<StandingDto>): StandingDto => ({ ...DEFAULT_STANDING[0], ...overrides });
+
+  it('has one badge each for the country, the continent and the world, in that order', () => {
+    const { badges } = describeIt().positioning;
+
+    expect(badges).toEqual([
+      { scope: 'COUNTRY', text: 'Top 11% in Spain' },
+      { scope: 'CONTINENT', text: 'Top 15% in the EU' },
+      { scope: 'WORLD', text: 'Top 2% in the world' },
+    ]);
+  });
+
+  it('names a World Bank region the way the data names it', () => {
+    const lac = rung({ scope: 'CONTINENT', areaCode: 'LCN', areaName: 'Latin America & the Caribbean', percentile: 91.5 });
+
+    expect(describeIt({ standing: [lac] }).positioning.badges[0].text).toBe('Top 8% in Latin America & the Caribbean');
   });
 
   it('does not claim more than the published range allows', () => {
-    const base = { period: '2025', source: 'EUROSTAT' as const, basis: 'EQUIVALISED' as const };
-
-    expect(describeIt({ incomePercentile: { ...base, percentile: 90, bound: 'AT_LEAST' } }).positioning.badge).toBe('Top 10% or better in Spain');
-    expect(describeIt({ incomePercentile: { ...base, percentile: 10, bound: 'AT_MOST' } }).positioning.badge).toBe('Below the 10th percentile in Spain');
-    expect(describeIt({ incomePercentile: { ...base, percentile: 99.8, bound: 'EXACT' } }).positioning.badge).toBe('Top 1% in Spain');
+    expect(describeIt({ standing: [rung({ percentile: 90, bound: 'AT_LEAST' })] }).positioning.badges[0].text).toBe('Top 10% or better in Spain');
+    expect(describeIt({ standing: [rung({ percentile: 10, bound: 'AT_MOST' })] }).positioning.badges[0].text).toBe('Below the 10th percentile in Spain');
+    expect(describeIt({ standing: [rung({ percentile: 99.8, bound: 'EXACT' })] }).positioning.badges[0].text).toBe('Top 1% in Spain');
   });
 
-  it('has no badge without a percentile', () => {
-    expect(describeIt({ incomePercentile: null }).positioning.badge).toBeNull();
+  it('shows only the rungs the data can place', () => {
+    expect(describeIt({ standing: [] }).positioning.badges).toEqual([]);
+    expect(describeIt({ standing: [DEFAULT_STANDING[0], DEFAULT_STANDING[2]] }).positioning.badges.map((badge) => badge.scope)).toEqual(['COUNTRY', 'WORLD']);
+  });
+
+  it('words housing against the typical share, framed by what it says about the person', () => {
+    const base = { housingMonthlyMinor: 30000, typicalSharePercent: 31, period: '2025', source: 'EUROSTAT' as const };
+    const eu = (dto: object) => ({ ...makePhaseBenchmark().continentHousing!, ...dto });
+
+    expect(describeIt({ housingBurden: { ...base, yourSharePercent: 24, differencePoints: -7, verdict: 'LOWER' } }).positioning.insights[0]).toBe(
+      'Housing takes 24% of your income — below the 31% average in Spain'
+    );
+    expect(describeIt({ housingBurden: { ...base, yourSharePercent: 38, differencePoints: 7, verdict: 'HIGHER' } }).positioning.insights[0]).toBe(
+      'Housing takes 38% of your income — above the 31% average in Spain'
+    );
+    expect(describeIt({ housingBurden: { ...base, yourSharePercent: 31.5, differencePoints: 0.5, verdict: 'SIMILAR' } }).positioning.insights[0]).toContain('in line with the 31% average');
+    expect(describeIt({ continentHousing: eu({ yourSharePercent: 12, typicalSharePercent: 18.9, verdict: 'LOWER' }) }).positioning.insights[1]).toBe(
+      'Housing takes 12% of your income — below the 18.9% average in the EU'
+    );
+  });
+
+  it('keeps to three one-line insights and leaves out what is not known', () => {
+    expect(describeIt().positioning.insights).toHaveLength(3);
+    expect(describeIt().positioning.insights[2]).toBe('Your income buys 1.4x what the average person in Spain has');
+    expect(describeIt({ housingBurden: null, continentHousing: null, purchasingPower: null }).positioning.insights).toEqual([]);
+  });
+
+  it('keeps what was compared, with the figure and its source, for the data sources', () => {
+    const { areaFigures } = describeIt();
+
+    expect(areaFigures.map((kpi) => kpi.label)).toEqual(['In the EU', 'In the world']);
+    expect(areaFigures[0].note).toBe('Your income of about €38,400 a year per person (adjusted for household size, converted to euros) compared with people in the EU. 2025 · Eurostat');
+    expect(areaFigures[1].value).toBe('98th percentile');
+    expect(areaFigures[1].note).toBe('Your income of about $147 a day per person, in international dollars at 2021 prices, compared with people in the world. 2024 · World Bank');
+  });
+
+  it('lists each source once, with where to check it and when it was retrieved', () => {
+    const { sources } = describeIt();
+
+    expect(sources).toEqual([
+      { name: 'Eurostat, EU-SILC', url: 'https://ec.europa.eu/eurostat', retrieved: '20 Oct 2026' },
+      { name: 'World Bank, Poverty and Inequality Platform (2021 PPP round)', url: 'https://pip.worldbank.org', retrieved: '1 Jun 2026' },
+    ]);
   });
 
   it('says what the income holds in each other nationality, with the tier when there is one', () => {
@@ -124,11 +178,8 @@ describe('positioning', () => {
     ]);
   });
 
-  it('lists the global and city rankings as not available, since no source publishes them here', () => {
-    expect(describeIt().positioning.unavailable).toEqual([
-      'A global ranking needs a worldwide income distribution, which is not connected yet.',
-      'City rankings need city-level income statistics, which are not connected yet.',
-    ]);
+  it('still lists city rankings as not available, since no free source publishes them', () => {
+    expect(describeIt().positioning.unavailable).toEqual(['City rankings need city-level income statistics, which are not connected yet.']);
   });
 });
 
@@ -138,7 +189,7 @@ describe('gaps', () => {
   });
 
   it('reports a phase with nothing to compare, and why', () => {
-    const view = describeIt({ incomePercentile: null, housingBurden: null, purchasingPower: null, gaps: ['NO_INCOME'] });
+    const view = describeIt({ incomePercentile: null, standing: [], housingBurden: null, continentHousing: null, purchasingPower: null, gaps: ['NO_INCOME'] });
 
     expect(view.hasComparison).toBe(false);
     expect(view.income).toBeNull();

@@ -105,7 +105,7 @@ describe('CountryStatisticsService', () => {
     const first = await statistics.get('JP');
     await statistics.get('JP');
 
-    expect(first?.statistics).toEqual({ countryCode: 'JP', incomeDistribution: null, housingCostShare: null, purchasing: null });
+    expect(first?.statistics).toEqual({ countryCode: 'JP', incomeDistribution: null, housingCostShare: null, purchasing: null, regionCode: null, referenceDistribution: null });
     expect(providers[2].fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -274,14 +274,15 @@ describe('BenchmarkService', () => {
       // rent 1 200 + electricity 48 a month = 1 248 of 3 200
       housingBurden: { housingMonthlyMinor: 124800, yourSharePercent: 39, typicalSharePercent: 16, differencePoints: 23, verdict: 'HIGHER' },
       purchasingPower: { internationalDollarsPerMonth: 5604.29, versusPreviousPhase: null, versusNationalAverage: 1.12 },
-      gaps: [],
+      // This world publishes no EU or world reference (see benchmarkStanding.test.ts for the full ladder).
+      gaps: ['NO_CONTINENT_REFERENCE', 'NO_WORLD_REFERENCE'],
     });
     expect(result.phases[1]).toMatchObject({
       countryCode: 'AR',
       incomePercentile: { percentile: 91.4, bound: 'EXACT', source: 'INDEC', period: '2026-Q1', basis: 'PER_CAPITA' },
       housingBurden: null,
       purchasingPower: { internationalDollarsPerMonth: 3525.49, versusPreviousPhase: { phaseId: result.phases[0].phaseId, ratio: 0.63 } },
-      gaps: ['NO_HOUSING_BASELINE'],
+      gaps: ['NO_HOUSING_BASELINE', 'NO_CONTINENT_REFERENCE', 'NO_WORLD_REFERENCE'],
     });
   });
 
@@ -333,7 +334,7 @@ describe('BenchmarkService', () => {
     const [noIncome, japan] = (await service.benchmarks(USER, '2026-10-31')).phases;
 
     expect(noIncome).toMatchObject({ incomePercentile: null, housingBurden: null, gaps: ['NO_INCOME'] });
-    expect(japan).toMatchObject({ incomePercentile: null, housingBurden: null, purchasingPower: null, gaps: ['NO_DISTRIBUTION', 'NO_HOUSING_BASELINE', 'NO_PURCHASING_POWER'] });
+    expect(japan).toMatchObject({ incomePercentile: null, housingBurden: null, purchasingPower: null, gaps: ['NO_DISTRIBUTION', 'NO_HOUSING_BASELINE', 'NO_PURCHASING_POWER', 'NO_CONTINENT_REFERENCE', 'NO_WORLD_REFERENCE'] });
   });
 
   it('survives a country whose statistics are unavailable', async () => {
@@ -347,7 +348,7 @@ describe('BenchmarkService', () => {
     const result = await service.benchmarks(USER, '2026-10-31');
 
     expect(result.refreshedAt).toBeNull();
-    expect(result.phases[0].gaps).toEqual(['NO_DISTRIBUTION', 'NO_HOUSING_BASELINE', 'NO_PURCHASING_POWER']);
+    expect(result.phases[0].gaps).toEqual(['NO_DISTRIBUTION', 'NO_HOUSING_BASELINE', 'NO_PURCHASING_POWER', 'NO_CONTINENT_REFERENCE', 'NO_WORLD_REFERENCE']);
   });
 
   it('is empty for someone without living phases, and never shows another person’s phases', async () => {

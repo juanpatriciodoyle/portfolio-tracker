@@ -5,10 +5,6 @@ import { roundHalfAwayFromZero } from './money';
 /** What invested capital can sustainably pay out each year, after inflation. Deliberately cautious. */
 export const CONSERVATIVE_REAL_YIELD = 0.06;
 
-/** A full second salary: the range the progress bar aims at, in minor units per month. */
-export const SECOND_SALARY_TARGET_MIN_MINOR = 300_000;
-export const SECOND_SALARY_TARGET_MAX_MINOR = 500_000;
-
 const MONTHS_PER_YEAR = 12;
 /** Float noise such as 6.000000000000001 must not push a whole amount up to the next unit. */
 const NOISE_GRID = 1e6;
@@ -29,18 +25,15 @@ export interface Milestone {
   readonly reached: boolean;
   /** How much of the cost the second salary covers, from 0 to 1. */
   readonly progress: number;
-  /** Where the cost sits on the bar that ends at the top of the target range, from 0 to 1. */
-  readonly position: number;
 }
 
+/** The monthly second salary the person chose to aim at, and how far the portfolio is from it. */
 export interface SecondSalaryTarget {
-  /** How far the second salary is along the way to the top of the range, from 0 to 1. */
+  readonly monthlyMinor: number;
+  /** How far the second salary is toward the target, from 0 to 1. */
   readonly progress: number;
-  /** Where the range starts on that same bar, from 0 to 1. */
-  readonly minMarker: number;
-  readonly reachedMin: boolean;
-  readonly minCapitalNeededMinor: number;
-  readonly maxCapitalNeededMinor: number;
+  readonly reached: boolean;
+  readonly capitalNeededMinor: number;
 }
 
 export interface WealthMilestones {
@@ -49,7 +42,8 @@ export interface WealthMilestones {
   readonly milestones: readonly Milestone[];
   /** The highest milestone reached; null when none is (or when no cost is known). */
   readonly reachedMilestone: MilestoneId | null;
-  readonly target: SecondSalaryTarget;
+  /** Null when the person has not set a target. */
+  readonly target: SecondSalaryTarget | null;
 }
 
 const clampUnit = (value: number) => Math.min(1, Math.max(0, value));
@@ -83,12 +77,14 @@ function milestoneCosts(byCategory: Readonly<Record<FixedCostCategory, number>>)
  * life costs: the utilities and subscriptions, the rent, and the whole of the monthly costs. Pure: the same capital
  * and costs always give the same answer.
  *
+ * `targetMonthlyMinor` is the second salary the person aims at; null (or nothing) when none is set.
  * `costsByCategoryMinor` is the monthly cost per category, in the same currency as the capital; null when no
  * cost is known, in which case there are no milestones to show.
  */
 export function wealthMilestones(input: {
   readonly capitalMinor: number;
   readonly costsByCategoryMinor: Readonly<Record<FixedCostCategory, number>> | null;
+  readonly targetMonthlyMinor: number | null;
   readonly annualYield?: number;
 }): WealthMilestones {
   const annualYield = input.annualYield ?? CONSERVATIVE_REAL_YIELD;
@@ -104,7 +100,6 @@ export function wealthMilestones(input: {
         capitalNeededMinor: capitalNeededMinor(cost, annualYield),
         reached: salary >= cost,
         progress: clampUnit(salary / cost),
-        position: clampUnit(cost / SECOND_SALARY_TARGET_MAX_MINOR),
       })
     );
 
@@ -112,13 +107,15 @@ export function wealthMilestones(input: {
     secondSalaryMinor: salary,
     milestones,
     reachedMilestone: milestones.filter(({ reached }) => reached).reduce<MilestoneId | null>((highest, { id }) => (highest === null || id > highest ? id : highest), null),
-    target: {
-      progress: clampUnit(salary / SECOND_SALARY_TARGET_MAX_MINOR),
-      minMarker: SECOND_SALARY_TARGET_MIN_MINOR / SECOND_SALARY_TARGET_MAX_MINOR,
-      reachedMin: salary >= SECOND_SALARY_TARGET_MIN_MINOR,
-      minCapitalNeededMinor: capitalNeededMinor(SECOND_SALARY_TARGET_MIN_MINOR, annualYield),
-      maxCapitalNeededMinor: capitalNeededMinor(SECOND_SALARY_TARGET_MAX_MINOR, annualYield),
-    },
+    target:
+      input.targetMonthlyMinor !== null && input.targetMonthlyMinor > 0
+        ? {
+            monthlyMinor: input.targetMonthlyMinor,
+            progress: clampUnit(salary / input.targetMonthlyMinor),
+            reached: salary >= input.targetMonthlyMinor,
+            capitalNeededMinor: capitalNeededMinor(input.targetMonthlyMinor, annualYield),
+          }
+        : null,
   };
 }
 

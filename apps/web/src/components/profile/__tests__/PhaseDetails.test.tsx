@@ -25,7 +25,6 @@ function renderDetails(overrides: Partial<React.ComponentProps<typeof PhaseDetai
   const props: React.ComponentProps<typeof PhaseDetails> = {
     phase: makePhase({ fixedCosts: [makeCost({ id: 'c1', label: 'Landlord' })] }),
     entry: makeEntry(),
-    onUpdatePhase: vi.fn().mockResolvedValue(ok),
     onUpdateCost: vi.fn().mockResolvedValue(ok),
     onDeleteCost: vi.fn().mockResolvedValue(ok),
     billing: makeBilling(),

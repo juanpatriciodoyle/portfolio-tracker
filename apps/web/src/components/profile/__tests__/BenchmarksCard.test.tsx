@@ -1,9 +1,14 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs';
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { makeBenchmarks, makePhaseBenchmark } from '../../../test/benchmarkFixtures';
+import { DEFAULT_STANDING, makeBenchmarks, makePhaseBenchmark } from '../../../test/benchmarkFixtures';
 import BenchmarksCard from '../BenchmarksCard';
 import type { BenchmarksView } from '../billingView';
+
+/** The stylesheet's source text (Vite hands tests an empty stylesheet, so it is read from disk). */
+const css = readFileSync(`${process.cwd()}/src/components/profile/profile.css`, 'utf8');
 
 const view = (overrides: Partial<BenchmarksView> = {}): BenchmarksView => ({
   status: 'ready',
@@ -23,6 +28,12 @@ describe('BenchmarksCard', () => {
 
     expect(screen.getByRole('heading', { name: 'Where you stand' })).toBeInTheDocument();
     expect(screen.getByText('Top 11% in Spain')).toBeVisible();
+    expect(screen.getByText('Top 15% in the EU')).toBeVisible();
+    expect(screen.getByText('Top 2% in the world')).toBeVisible();
+    expect(screen.getByRole('list', { name: 'How you compare' })).toBeVisible();
+    expect(screen.getByText('Housing takes 42.8% of your income — above the 18.9% average in the EU')).toBeVisible();
+    // The raw figures stay out of sight until the sources are opened.
+    expect(screen.getByText('42.8% housing burden')).not.toBeVisible();
     expect(screen.getByText('Holds the purchasing power of €5,800 a month in Italy')).toBeVisible();
     expect(screen.getByText('Data sources').closest('details')).not.toHaveAttribute('open');
   });
@@ -35,7 +46,9 @@ describe('BenchmarksCard', () => {
     expect(screen.getByText('42.8% housing burden')).toBeInTheDocument();
     expect(screen.getByText(/Rent, utilities and property taxes come to/)).toBeInTheDocument();
     expect(screen.getByText('1.4x purchasing power')).toBeInTheDocument();
-    expect(screen.getByText(/A global ranking needs a worldwide income distribution/)).toBeInTheDocument();
+    expect(screen.getByText(/compared with people in the world/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /World Bank, Poverty and Inequality Platform/ })).toHaveAttribute('href', 'https://pip.worldbank.org');
+    expect(screen.getByText(/2021 PPP round/, { selector: 'li' })).toBeInTheDocument();
     expect(screen.getByText(/national averages, not figures for your city/)).toBeInTheDocument();
     expect(screen.getByText(/Argentine figures are in current pesos/)).toBeInTheDocument();
     expect(screen.getByText(/Last refreshed .*2026/)).toBeInTheDocument();
@@ -43,7 +56,7 @@ describe('BenchmarksCard', () => {
 
   it('puts what it lacks inside the data sources and shows what it has', () => {
     const partial = makeBenchmarks({
-      phases: [makePhaseBenchmark({ incomePercentile: null, housingBurden: null, gaps: ['NO_DISTRIBUTION', 'NO_HOUSING_BASELINE'] })],
+      phases: [makePhaseBenchmark({ incomePercentile: null, standing: [], housingBurden: null, continentHousing: null, gaps: ['NO_DISTRIBUTION', 'NO_HOUSING_BASELINE'] })],
     });
 
     render(<BenchmarksCard phaseId="p1" view={view({ benchmarks: partial })} />);
@@ -56,13 +69,34 @@ describe('BenchmarksCard', () => {
 
   it('asks for an income when the phase has none', () => {
     const empty = makeBenchmarks({
-      phases: [makePhaseBenchmark({ monthlyIncomeMinor: 0, incomePercentile: null, housingBurden: null, purchasingPower: null, gaps: ['NO_INCOME'] })],
+      phases: [makePhaseBenchmark({ monthlyIncomeMinor: 0, incomePercentile: null, standing: [], housingBurden: null, continentHousing: null, purchasingPower: null, gaps: ['NO_INCOME'] })],
     });
 
     render(<BenchmarksCard phaseId="p1" view={view({ benchmarks: empty })} />);
 
     expect(screen.getByText(/Add a monthly income to this living phase/)).toBeInTheDocument();
     expect(screen.queryByText(/housing burden/)).not.toBeInTheDocument();
+  });
+
+  it('shows only the rungs it has, and why the others are missing, inside the data sources', () => {
+    const partial = makeBenchmarks({ phases: [makePhaseBenchmark({ standing: [DEFAULT_STANDING[0]], gaps: ['NO_CONTINENT_REFERENCE', 'NO_WORLD_REFERENCE'] })] });
+
+    render(<BenchmarksCard phaseId="p1" view={view({ benchmarks: partial })} />);
+
+    expect(screen.getByText('Top 11% in Spain')).toBeVisible();
+    expect(screen.queryByText(/in the world/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Data sources'));
+    expect(screen.getByText(/No comparison with your continent is available/)).toBeInTheDocument();
+    expect(screen.getByText(/world comparison is being prepared/)).toBeInTheDocument();
+  });
+
+  it('has no rule above its heading', () => {
+    const { container } = render(<BenchmarksCard phaseId="p1" view={view()} />);
+    const rule = /(^|\n)\.benchmarks \{([^}]*)\}/.exec(css);
+
+    expect(rule).not.toBeNull();
+    expect(rule![2]).not.toMatch(/border-top|padding-top|margin-top/);
+    expect(container.querySelector('hr')).toBeNull();
   });
 
   it('shows a loading placeholder before the first answer', () => {

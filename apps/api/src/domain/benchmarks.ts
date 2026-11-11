@@ -42,20 +42,11 @@ export interface IncomePercentile {
 const round1 = (value: number) => Math.round(value * 10) / 10;
 
 /**
- * Where a household's monthly income sits in the country's distribution, by linear interpolation between the
- * published points. Beyond the first or last point it only says "at most" / "at least": it does not extrapolate.
+ * Where a value sits among published points (ascending in percentile and in value), by linear interpolation. Outside
+ * the published range it only says "at most" / "at least": it does not extrapolate.
  */
-export function incomePercentile(
-  distribution: IncomeDistribution,
-  monthlyHouseholdIncomeMinor: number,
-  household: Household
-): IncomePercentile | null {
-  const { points } = distribution;
+export function percentileAmong(points: readonly DistributionPoint[], value: number): IncomePercentile | null {
   if (points.length === 0) return null;
-
-  const perPerson = incomePerPerson(monthlyHouseholdIncomeMinor, household, distribution.basis);
-  const value = distribution.period === 'YEAR' ? perPerson * 12 : perPerson;
-
   const first = points[0];
   const last = points[points.length - 1];
   if (value < first.value) return { percentile: first.percentile, bound: 'AT_MOST' };
@@ -71,6 +62,12 @@ export function incomePercentile(
     }
   }
   return { percentile: last.percentile, bound: 'EXACT' };
+}
+
+/** Where a household's monthly income sits in the country's distribution (see `percentileAmong`). */
+export function incomePercentile(distribution: IncomeDistribution, monthlyHouseholdIncomeMinor: number, household: Household): IncomePercentile | null {
+  const perPerson = incomePerPerson(monthlyHouseholdIncomeMinor, household, distribution.basis);
+  return percentileAmong(distribution.points, distribution.period === 'YEAR' ? perPerson * 12 : perPerson);
 }
 
 /** What statistics offices count as housing costs: rent, the utilities and property taxes. Not internet, phone or subscriptions. */

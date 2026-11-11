@@ -61,11 +61,13 @@ export default function BenchmarksCard({ phaseId, view }: BenchmarksCardProps) {
       {described && !(noIncome && !described.hasComparison) && (
         <>
           <ul className="benchmarks__badges">
-            {described.positioning.badge && (
-              <li>
-                <span className="benchmarks__badge benchmarks__badge--primary">{described.positioning.badge}</span>
+            {described.positioning.badges.map((badge) => (
+              <li key={badge.scope}>
+                <span className={`benchmarks__badge${badge.scope === 'COUNTRY' ? ' benchmarks__badge--primary' : ''}`} data-scope={badge.scope}>
+                  {badge.text}
+                </span>
               </li>
-            )}
+            ))}
             {described.positioning.equivalences.map((equivalence) => (
               <li key={equivalence.countryCode} className="benchmarks__equivalence">
                 <span>{equivalence.text}</span>
@@ -73,6 +75,13 @@ export default function BenchmarksCard({ phaseId, view }: BenchmarksCardProps) {
               </li>
             ))}
           </ul>
+          {described.positioning.insights.length > 0 && (
+            <ul className="benchmarks__insights" aria-label="How you compare">
+              {described.positioning.insights.map((insight) => (
+                <li key={insight}>{insight}</li>
+              ))}
+            </ul>
+          )}
         </>
       )}
 
@@ -81,9 +90,22 @@ export default function BenchmarksCard({ phaseId, view }: BenchmarksCardProps) {
           <summary>Data sources</summary>
           <ul className="benchmarks__figures">
             {described?.income && <Figure metric="income" kpi={described.income} />}
+            {described?.areaFigures.map((kpi) => <Figure key={kpi.label} metric="area" kpi={kpi} />)}
             {described?.housing && <Figure metric="housing" kpi={described.housing} verdict={described.housing.verdict} />}
             {described?.purchasingPower && <Figure metric="purchasing-power" kpi={described.purchasingPower} />}
           </ul>
+          {described && described.sources.length > 0 && (
+            <ul className="phase-details__hint benchmarks__sources" aria-label="Sources">
+              {described.sources.map((source) => (
+                <li key={source.url}>
+                  <a href={source.url} target="_blank" rel="noreferrer noopener">
+                    {source.name}
+                  </a>
+                  {source.retrieved ? ` · retrieved ${source.retrieved}` : ''}
+                </li>
+              ))}
+            </ul>
+          )}
           <ul className="phase-details__hint benchmarks__notes">
             {described?.gaps.map((gap) => <li key={gap}>{gap}</li>)}
             {described?.positioning.unavailable.map((note) => <li key={note}>{note}</li>)}
@@ -99,7 +121,17 @@ export default function BenchmarksCard({ phaseId, view }: BenchmarksCardProps) {
             </li>
             <li>Argentine figures are in current pesos of the quarter published, so they can be out of date.</li>
             <li>
-              Data is refreshed monthly from Eurostat, INDEC and the World Bank
+              The EU is compared in euros. A region or the world is compared in international dollars per person per day at 2021
+              prices (the World Bank&apos;s 2021 PPP round): your income is converted with the World Bank&apos;s PPP factor of the same
+              round, then adjusted for the rise in dollar prices since 2021.
+            </li>
+            <li>
+              World and region figures come from household surveys, which tend to miss the very richest, so a top place can be
+              slightly generous. Europe outside the EU is compared with the EU.
+            </li>
+            <li>
+              Country figures are refreshed monthly and the EU, regions and world about every six months, from Eurostat, INDEC and the
+              World Bank
               {refreshed ? `. Last refreshed ${refreshed}.` : '.'}
             </li>
           </ul>

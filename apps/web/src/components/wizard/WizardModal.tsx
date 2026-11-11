@@ -17,6 +17,8 @@ interface WizardModalProps {
   /** Hides the main button while the step holds a form with a main button of its own. */
   hideNext?: boolean;
   finishLabel: string;
+  /** Room for two columns, such as a form beside a document preview. */
+  wide?: boolean;
   onBack: () => void;
   onNext: () => void;
   onClose: () => void;
@@ -38,6 +40,7 @@ export default function WizardModal({
   busy = false,
   hideNext = false,
   finishLabel,
+  wide = false,
   onBack,
   onNext,
   onClose,
@@ -64,7 +67,7 @@ export default function WizardModal({
   };
 
   return (
-    <Modal label={title} onClose={onClose}>
+    <Modal label={title} onClose={onClose} wide={wide}>
       <div className="wizard">
         <header className="wizard__header">
           <p className="wizard__title">{title}</p>

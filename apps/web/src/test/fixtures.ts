@@ -106,7 +106,7 @@ export function makeBill(overrides: Partial<BillingRecordDto> = {}): BillingReco
   };
 }
 
-/** €1,000 a month from €200,000: covers utilities & subscriptions (€300) and rent (€900), not the €1,500 of living costs. */
+/** €1,000 a month from €200,000, aiming at €2,500: covers utilities & subscriptions (€300) and rent (€900), not the €1,500 of living costs. */
 export function makeSecondSalary(overrides: Partial<SecondSalaryResponse> = {}): SecondSalaryResponse {
   return {
     asOf: '2026-10-31',
@@ -115,13 +115,13 @@ export function makeSecondSalary(overrides: Partial<SecondSalaryResponse> = {}):
     annualYield: 0.06,
     secondSalaryMinor: 100_000,
     milestones: [
-      { id: 1, kind: 'UTILITIES_AND_SUBSCRIPTIONS', monthlyCostMinor: 30_000, capitalNeededMinor: 6_000_000, reached: true, progress: 1, position: 0.06 },
-      { id: 2, kind: 'RENT', monthlyCostMinor: 90_000, capitalNeededMinor: 18_000_000, reached: true, progress: 1, position: 0.18 },
-      { id: 3, kind: 'LIVING_COST', monthlyCostMinor: 150_000, capitalNeededMinor: 30_000_000, reached: false, progress: 100_000 / 150_000, position: 0.3 },
+      { id: 1, kind: 'UTILITIES_AND_SUBSCRIPTIONS', monthlyCostMinor: 30_000, capitalNeededMinor: 6_000_000, reached: true, progress: 1 },
+      { id: 2, kind: 'RENT', monthlyCostMinor: 90_000, capitalNeededMinor: 18_000_000, reached: true, progress: 1 },
+      { id: 3, kind: 'LIVING_COST', monthlyCostMinor: 150_000, capitalNeededMinor: 30_000_000, reached: false, progress: 100_000 / 150_000 },
     ],
     reachedMilestone: 2,
     gap: null,
-    target: { minMonthlyMinor: 300_000, maxMonthlyMinor: 500_000, progress: 0.2, minMarker: 0.6, reachedMin: false, minCapitalNeededMinor: 60_000_000, maxCapitalNeededMinor: 100_000_000 },
+    target: { monthlyMinor: 250_000, progress: 0.4, reached: false, capitalNeededMinor: 50_000_000 },
     ...overrides,
   };
 }

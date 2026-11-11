@@ -2,13 +2,14 @@ import type { PrismaClient } from '@prisma/client';
 import { syncCountryInflationHistory } from '../lib/inflationService';
 import { getPortfolioHistory, getPortfolioOverview, getPortfolioPerformancePeriods, processTransaction } from '../lib/pnlEngine';
 import type { PortfolioRouterDeps } from '../routes/portfolio';
+import { marketPrices } from './market/marketPrices';
 
 /** Connects the portfolio routes to the engine and the database. */
 export function createPrismaPortfolioDeps(prisma: PrismaClient): PortfolioRouterDeps {
   return {
-    overview: getPortfolioOverview,
-    history: getPortfolioHistory,
-    performancePeriods: getPortfolioPerformancePeriods,
+    overview: (userId) => getPortfolioOverview(userId, marketPrices),
+    history: (userId) => getPortfolioHistory(userId, marketPrices),
+    performancePeriods: (userId) => getPortfolioPerformancePeriods(userId, marketPrices),
     listTransactions: (userId) => prisma.transaction.findMany({ where: { userId }, orderBy: { date: 'desc' } }),
     recordTransaction: processTransaction,
     getSettings: async (userId) => {

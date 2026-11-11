@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { ArrowUpRight, ArrowDownRight, HelpCircle } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { returnForPeriod, periodPhrase } from '../lib/returnForPeriod';
 import {
   type ChartDataPoint,
   type ReportingPeriod,
@@ -26,7 +27,6 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
   currency = 'EUR',
 }) => {
   const [chartMode, setChartMode] = useState<ChartMode>('value');
-  const [showHelpTooltip, setShowHelpTooltip] = useState(false);
 
   // Dataset visibility toggles
   const [visibleDatasets, setVisibleDatasets] = useState({
@@ -40,73 +40,15 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
   };
 
   // Filter data according to selected period
-  const { filteredData, startDate, endDate } = useMemo(() => {
+  const { filteredData } = useMemo(() => {
     return filterDataByPeriod(data, period, customRange);
   }, [data, period, customRange]);
 
-  // Derived metrics for current period
-  const metrics = useMemo(() => {
-    if (!filteredData.length) {
-      return {
-        currentValue: 0,
-        startValue: 0,
-        netChange: 0,
-        percentReturn: 0,
-        isPositive: true,
-        annualizedReturn: 0,
-        totalContributions: 0,
-      };
-    }
-
-    const firstPt = filteredData[0];
-    const lastPt = filteredData[filteredData.length - 1];
-
-    const currentValue = lastPt.portfolio_value_in_reporting_currency;
-    const startValue = firstPt.portfolio_value_in_reporting_currency;
-    const totalContributions = lastPt.cumulative_cost_in_reporting_currency;
-
-    let netChange = 0;
-    let percentReturn = 0;
-
-    if (chartMode === 'value') {
-      netChange = currentValue - totalContributions;
-      percentReturn = totalContributions > 0 ? (netChange / totalContributions) * 100 : 0;
-    } else if (chartMode === 'profit_loss') {
-      const startPnl = startValue - firstPt.cumulative_cost_in_reporting_currency;
-      const endPnl = currentValue - lastPt.cumulative_cost_in_reporting_currency;
-      netChange = endPnl - (period === 'All' ? 0 : startPnl);
-      percentReturn = firstPt.cumulative_cost_in_reporting_currency > 0
-        ? (netChange / firstPt.cumulative_cost_in_reporting_currency) * 100
-        : 0;
-    } else {
-      // Performance / TWR mode
-      const twrEnd = lastPt.cumulative_time_weighted_return_rate;
-      const twrStart = firstPt.cumulative_time_weighted_return_rate;
-      percentReturn = (twrEnd - twrStart) * 100;
-      netChange = currentValue - totalContributions;
-    }
-
-    // Approx Annualized Return (XIRR / CAGR style)
-    const days = Math.max(1, (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    const years = days / 365.25;
-    let annualizedReturn = 0;
-    if (years >= 0.25 && totalContributions > 0 && currentValue > 0) {
-      const rawRatio = currentValue / totalContributions;
-      annualizedReturn = (Math.pow(rawRatio, 1 / Math.max(years, 0.5)) - 1) * 100;
-    } else if (totalContributions > 0 && netChange !== 0) {
-      annualizedReturn = percentReturn;
-    }
-
-    return {
-      currentValue,
-      startValue,
-      netChange,
-      percentReturn,
-      isPositive: netChange >= 0,
-      annualizedReturn: Math.round(annualizedReturn * 100) / 100,
-      totalContributions,
-    };
-  }, [filteredData, chartMode, period, startDate, endDate]);
+  // What the header shows: today's value, and what the selected period gained or lost.
+  const currentValue = filteredData.length ? filteredData[filteredData.length - 1].portfolio_value_in_reporting_currency : 0;
+  const periodChange = useMemo(() => returnForPeriod(data, period, customRange), [data, period, customRange]);
+  const isPositive = periodChange.gain >= 0;
+  const signedMoney = (amount: number) => `${amount > 0 ? '+' : ''}${formatCurrency(amount, currency)}`;
 
   // Canvas & Interaction state
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -469,66 +411,21 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
         <div className="value-overview__top">
           <div className="value-overview__summary">
             <div className="currency value-overview__amount">
-              {formatCurrency(metrics.currentValue, currency)}
+              {formatCurrency(currentValue, currency)}
             </div>
 
             <div className="value-overview__return value-overview__return--portfolio">
-              {metrics.isPositive ? (
-                <ArrowUpRight
-                  size={20}
-                  className="lucide lucide-arrow-up-right dashboard-return-icon value-overview__return--positive"
-                  aria-hidden="true"
-                />
+              {isPositive ? (
+                <ArrowUpRight size={20} className="lucide lucide-arrow-up-right dashboard-return-icon value-overview__return--positive" aria-hidden="true" />
               ) : (
-                <ArrowDownRight
-                  size={20}
-                  className="lucide lucide-arrow-down-right dashboard-return-icon value-overview__return--negative"
-                  aria-hidden="true"
-                />
+                <ArrowDownRight size={20} className="lucide lucide-arrow-down-right dashboard-return-icon value-overview__return--negative" aria-hidden="true" />
               )}
-
-              <span
-                className={
-                  metrics.isPositive
-                    ? 'value-overview__return--positive'
-                    : 'value-overview__return--negative'
-                }
-              >
-                {metrics.annualizedReturn > 0 ? '+' : ''}
-                {metrics.annualizedReturn.toFixed(2)}
-                <span>%/year</span>
-
-                {/* Return Explanation Help Button */}
-                <button
-                  type="button"
-                  className="value-overview__return-help"
-                  onClick={() => setShowHelpTooltip(!showHelpTooltip)}
-                  title="Learn about money-weighted return"
-                  aria-label="Learn about money-weighted return"
-                >
-                  <HelpCircle size={15} />
-                </button>
-
-                <span className="return-sub-amount">
-                  ({formatCurrency(metrics.netChange, currency)})
-                </span>
+              <span className={isPositive ? 'value-overview__return--positive' : 'value-overview__return--negative'}>
+                {signedMoney(periodChange.gain)}
+                <span className="return-sub-amount"> ({periodChange.percent > 0 ? '+' : ''}{periodChange.percent.toFixed(2)}%)</span>
               </span>
+              <span className="value-overview__return-period">{periodPhrase(period)}</span>
             </div>
-
-            {/* Help Tooltip Bubble */}
-            {showHelpTooltip && (
-              <div className="return-help-popover">
-                <p>
-                  <strong>Money-Weighted Return (MWR / XIRR)</strong>: Your total net return, including changes in
-                  investment value, income (dividends & interest), and fees. It accounts for the size and timing of
-                  external deposits and withdrawals.
-                </p>
-                <p style={{ marginTop: '6px' }}>
-                  <strong>Time-Weighted Return (TWR)</strong>: Measures portfolio performance independently of
-                  external cashflow timings.
-                </p>
-              </div>
-            )}
           </div>
 
           {/* Mode Switcher Segmented Control */}

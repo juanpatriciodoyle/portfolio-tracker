@@ -59,9 +59,10 @@ export default function PhaseTimeline({
             phase={phase}
             entry={entryById.get(phase.id)}
             expanded={expandedId === phase.id}
-            compareSelected={compareIds.includes(phase.id)}
+            compareSelected={phases.length > 1 && compareIds.includes(phase.id)}
             onToggleExpanded={() => onToggleExpanded(phase.id)}
-            onToggleCompare={() => onToggleCompare(phase.id)}
+            // Comparing needs another home to compare with.
+            onToggleCompare={phases.length > 1 ? () => onToggleCompare(phase.id) : undefined}
             onEdit={() => onEdit(phase.id)}
             onDelete={() => onDelete(phase.id)}
             onUpdatePhase={onUpdatePhase}

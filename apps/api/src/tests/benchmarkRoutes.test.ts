@@ -64,7 +64,7 @@ describe('GET /api/insights/benchmarks', () => {
     expect(parsed.phases[0]).toMatchObject({
       phaseId: created.id,
       housingBurden: { housingMonthlyMinor: 120000, yourSharePercent: 37.5, typicalSharePercent: 16, verdict: 'HIGHER' },
-      gaps: ['NO_DISTRIBUTION', 'NO_PURCHASING_POWER'],
+      gaps: ['NO_DISTRIBUTION', 'NO_PURCHASING_POWER', 'NO_CONTINENT_REFERENCE', 'NO_WORLD_REFERENCE'],
     });
   });
 

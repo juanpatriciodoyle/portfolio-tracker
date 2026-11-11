@@ -5,8 +5,10 @@ import { jsonStatCells } from './jsonStat';
 const BASE_URL = 'https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data';
 const DECILES = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9'] as const;
 
-/** Countries of the EU-SILC survey: ISO code, the code Eurostat uses for it, and its currency. */
-const COUNTRIES: Readonly<Record<string, { geo: string; currency: string }>> = {
+/** Countries of the EU-SILC survey (and the EU as a whole, 'EU'): the code Eurostat uses for it, and its currency. */
+const COUNTRIES: Readonly<Record<string, { geo: string; currency: string; unit?: string }>> = {
+  // The EU as a whole has no national currency: its cut-offs are published in euros.
+  EU: { geo: 'EU27_2020', currency: 'EUR', unit: 'EUR' },
   AT: { geo: 'AT', currency: 'EUR' }, BE: { geo: 'BE', currency: 'EUR' }, BG: { geo: 'BG', currency: 'BGN' },
   CH: { geo: 'CH', currency: 'CHF' }, CY: { geo: 'CY', currency: 'EUR' }, CZ: { geo: 'CZ', currency: 'CZK' },
   DE: { geo: 'DE', currency: 'EUR' }, DK: { geo: 'DK', currency: 'DKK' }, EE: { geo: 'EE', currency: 'EUR' },
@@ -36,8 +38,8 @@ export class EurostatStatisticsProvider implements StatisticsProvider {
   }
 
   async fetch(countryCode: string): Promise<StatisticsFragment> {
-    const { geo, currency } = COUNTRIES[countryCode];
-    const [income, housing] = await Promise.allSettled([this.incomeDistribution(geo, currency), this.housingShare(geo)]);
+    const { geo, currency, unit = 'NAC' } = COUNTRIES[countryCode];
+    const [income, housing] = await Promise.allSettled([this.incomeDistribution(geo, currency, unit), this.housingShare(geo)]);
     if (income.status === 'rejected' && housing.status === 'rejected') throw income.reason;
 
     return {
@@ -55,9 +57,9 @@ export class EurostatStatisticsProvider implements StatisticsProvider {
     return response.json();
   }
 
-  private async incomeDistribution(geo: string, currency: string): Promise<StatisticsFragment['incomeDistribution'] | null> {
+  private async incomeDistribution(geo: string, currency: string, unit: string): Promise<StatisticsFragment['incomeDistribution'] | null> {
     const quantiles = DECILES.map((decile) => `quant_inc=${decile}`).join('&');
-    const cells = jsonStatCells(await this.get('ilc_di01', `geo=${geo}&statinfo=TC&unit=NAC&${quantiles}`));
+    const cells = jsonStatCells(await this.get('ilc_di01', `geo=${geo}&statinfo=TC&unit=${unit}&${quantiles}`));
     const points = DECILES.flatMap((decile, index) => {
       const cell = cells.find(({ coordinates }) => coordinates.quant_inc === decile);
       return cell ? [{ percentile: (index + 1) * 10, value: Math.round(cell.value * 10 ** currencyExponent(currency)) }] : [];

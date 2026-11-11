@@ -12,9 +12,18 @@ import { HOUSING_TENURES } from './vocabulary';
 
 export const housingTenureSchema = z.enum(HOUSING_TENURES);
 
+/** Why a job ended. Only a label for the person: it changes no calculation. */
+export const INCOME_END_REASONS = ['LAID_OFF', 'QUIT', 'CONTRACT_FINISHED', 'OTHER'] as const;
+export const incomeEndReasonSchema = z.enum(INCOME_END_REASONS);
+export type IncomeEndReason = z.infer<typeof incomeEndReasonSchema>;
+
+/** A source that pays every month, or a deposit that arrived once (a benefit, a bonus). */
+export const INCOME_KINDS = ['MONTHLY', 'ONE_TIME'] as const;
+
 /**
  * One source of income: `amountMinor` a month, net, in the living phase's currency, from `startDate` until
  * `endDate` (null while it still pays). Streams of one phase add up day by day and may overlap.
+ * A `ONE_TIME` deposit is paid on `startDate` only. `kind` and `endReason` are left out of older streams.
  */
 export const incomeStreamSchema = z
   .object({
@@ -22,11 +31,19 @@ export const incomeStreamSchema = z
     amountMinor: amountMinorSchema,
     startDate: calendarDateSchema,
     endDate: calendarDateSchema.nullable().default(null),
+    kind: z.enum(INCOME_KINDS).optional(),
+    endReason: incomeEndReasonSchema.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
     if (value.endDate !== null && value.endDate < value.startDate) {
       ctx.addIssue({ code: 'custom', message: 'An income stream cannot end before it starts', path: ['endDate'] });
+    }
+    if (value.kind === 'ONE_TIME' && value.endDate !== null) {
+      ctx.addIssue({ code: 'custom', message: 'A one-time deposit has a single day', path: ['endDate'] });
+    }
+    if (value.endReason !== undefined && (value.kind === 'ONE_TIME' || value.endDate === null)) {
+      ctx.addIssue({ code: 'custom', message: 'Only a job that ended has a reason', path: ['endReason'] });
     }
   });
 export type IncomeStreamDto = z.infer<typeof incomeStreamSchema>;

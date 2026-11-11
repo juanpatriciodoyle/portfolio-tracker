@@ -1,8 +1,6 @@
 import { DEFAULT_CAPITAL_REQUIRED_PERCENTAGE, FIXED_COST_CATEGORIES, type CapitalMilestone, type FixedCostCategory } from '../contracts';
 import {
   CONSERVATIVE_REAL_YIELD,
-  SECOND_SALARY_TARGET_MAX_MINOR,
-  SECOND_SALARY_TARGET_MIN_MINOR,
   capitalMilestonePacing,
   capitalNeededMinor,
   secondSalaryMinor,
@@ -51,11 +49,11 @@ describe('capitalNeededMinor', () => {
 
 describe('wealthMilestones', () => {
   it('reports the second salary of the capital', () => {
-    expect(wealthMilestones({ capitalMinor: 100_000_00, costsByCategoryMinor: MADRID }).secondSalaryMinor).toBe(50_000);
+    expect(wealthMilestones({ targetMonthlyMinor: null, capitalMinor: 100_000_00, costsByCategoryMinor: MADRID }).secondSalaryMinor).toBe(50_000);
   });
 
   it('works out each milestone from the categories of the monthly costs', () => {
-    const { milestones } = wealthMilestones({ capitalMinor: 0, costsByCategoryMinor: MADRID });
+    const { milestones } = wealthMilestones({ targetMonthlyMinor: null, capitalMinor: 0, costsByCategoryMinor: MADRID });
     expect(milestones.map(({ id, kind, monthlyCostMinor }) => ({ id, kind, monthlyCostMinor }))).toEqual([
       { id: 1, kind: 'UTILITIES_AND_SUBSCRIPTIONS', monthlyCostMinor: 30_000 },
       { id: 2, kind: 'RENT', monthlyCostMinor: 90_000 },
@@ -64,7 +62,7 @@ describe('wealthMilestones', () => {
   });
 
   it('reaches no milestone with no capital, and says how far the first is', () => {
-    const result = wealthMilestones({ capitalMinor: 0, costsByCategoryMinor: MADRID });
+    const result = wealthMilestones({ targetMonthlyMinor: null, capitalMinor: 0, costsByCategoryMinor: MADRID });
     expect(result.reachedMilestone).toBeNull();
     expect(result.milestones.every(({ reached }) => !reached)).toBe(true);
     expect(result.milestones[0].progress).toBe(0);
@@ -72,75 +70,69 @@ describe('wealthMilestones', () => {
 
   it('reaches the first milestone exactly when the second salary equals the cost', () => {
     const exact = capitalNeededMinor(30_000);
-    expect(wealthMilestones({ capitalMinor: exact, costsByCategoryMinor: MADRID }).reachedMilestone).toBe(1);
-    const justShort = wealthMilestones({ capitalMinor: exact - 1_000,costsByCategoryMinor: MADRID });
+    expect(wealthMilestones({ targetMonthlyMinor: null, capitalMinor: exact, costsByCategoryMinor: MADRID }).reachedMilestone).toBe(1);
+    const justShort = wealthMilestones({ targetMonthlyMinor: null, capitalMinor: exact - 1_000,costsByCategoryMinor: MADRID });
     expect(justShort.reachedMilestone).toBeNull();
     expect(justShort.milestones[0].progress).toBeLessThan(1);
   });
 
   it('names the highest milestone reached', () => {
-    expect(wealthMilestones({ capitalMinor: capitalNeededMinor(90_000), costsByCategoryMinor: MADRID }).reachedMilestone).toBe(2);
-    expect(wealthMilestones({ capitalMinor: capitalNeededMinor(150_000), costsByCategoryMinor: MADRID }).reachedMilestone).toBe(3);
+    expect(wealthMilestones({ targetMonthlyMinor: null, capitalMinor: capitalNeededMinor(90_000), costsByCategoryMinor: MADRID }).reachedMilestone).toBe(2);
+    expect(wealthMilestones({ targetMonthlyMinor: null, capitalMinor: capitalNeededMinor(150_000), costsByCategoryMinor: MADRID }).reachedMilestone).toBe(3);
   });
 
   it('records the capital each milestone needs', () => {
-    const { milestones } = wealthMilestones({ capitalMinor: 0, costsByCategoryMinor: MADRID });
+    const { milestones } = wealthMilestones({ targetMonthlyMinor: null, capitalMinor: 0, costsByCategoryMinor: MADRID });
     expect(milestones.map(({ capitalNeededMinor: needed }) => needed)).toEqual([capitalNeededMinor(30_000), capitalNeededMinor(90_000), capitalNeededMinor(150_000)]);
   });
 
   it('leaves out a milestone whose cost is nothing: covering nothing is no achievement', () => {
-    const { milestones, reachedMilestone } = wealthMilestones({ capitalMinor: 1_000_000_00, costsByCategoryMinor: costs({ RENT: 80_000 }) });
+    const { milestones, reachedMilestone } = wealthMilestones({ targetMonthlyMinor: null, capitalMinor: 1_000_000_00, costsByCategoryMinor: costs({ RENT: 80_000 }) });
     expect(milestones.map(({ id }) => id)).toEqual([2, 3]);
     expect(reachedMilestone).toBe(3);
   });
 
   it('has no milestones when no cost is known, and still shows the second salary', () => {
-    const result = wealthMilestones({ capitalMinor: 100_000_00, costsByCategoryMinor: null });
+    const result = wealthMilestones({ targetMonthlyMinor: null, capitalMinor: 100_000_00, costsByCategoryMinor: null });
     expect(result.milestones).toEqual([]);
     expect(result.reachedMilestone).toBeNull();
     expect(result.secondSalaryMinor).toBe(50_000);
   });
 
   it('caps progress at one once a milestone is passed', () => {
-    const { milestones } = wealthMilestones({ capitalMinor: 5_000_000_00, costsByCategoryMinor: MADRID });
+    const { milestones } = wealthMilestones({ targetMonthlyMinor: null, capitalMinor: 5_000_000_00, costsByCategoryMinor: MADRID });
     expect(milestones.map(({ progress }) => progress)).toEqual([1, 1, 1]);
   });
 
   it('counts a negative portfolio as no progress, never negative progress', () => {
-    const result = wealthMilestones({ capitalMinor: -10_000_00, costsByCategoryMinor: MADRID });
+    const result = wealthMilestones({ targetMonthlyMinor: 250_000, capitalMinor: -10_000_00, costsByCategoryMinor: MADRID });
     expect(result.secondSalaryMinor).toBe(0);
-    expect(result.target.progress).toBe(0);
+    expect(result.target?.progress).toBe(0);
   });
 });
 
-describe('the 3,000 to 5,000 euro target', () => {
-  it('is a full second salary of 3,000 to 5,000 euros a month', () => {
-    expect(SECOND_SALARY_TARGET_MIN_MINOR).toBe(300_000);
-    expect(SECOND_SALARY_TARGET_MAX_MINOR).toBe(500_000);
+describe('the second salary the person aims at', () => {
+  it('has no target until one is set', () => {
+    expect(wealthMilestones({ targetMonthlyMinor: null, capitalMinor: 100_000_00, costsByCategoryMinor: MADRID }).target).toBeNull();
   });
 
-  it('measures progress along the way to the top of the range, and marks where the range starts', () => {
-    const { target } = wealthMilestones({ capitalMinor: capitalNeededMinor(250_000), costsByCategoryMinor: MADRID });
-    expect(target.progress).toBeCloseTo(0.5, 2);
-    expect(target.minMarker).toBeCloseTo(0.6, 5);
-    expect(target.minCapitalNeededMinor).toBe(capitalNeededMinor(300_000));
-    expect(target.maxCapitalNeededMinor).toBe(capitalNeededMinor(500_000));
-    expect(target.reachedMin).toBe(false);
+  it('treats a target of nothing as no target', () => {
+    expect(wealthMilestones({ targetMonthlyMinor: 0, capitalMinor: 100_000_00, costsByCategoryMinor: MADRID }).target).toBeNull();
   });
 
-  it('is reached at the bottom of the range, and full at the top', () => {
-    expect(wealthMilestones({ capitalMinor: capitalNeededMinor(300_000), costsByCategoryMinor: null }).target.reachedMin).toBe(true);
-    expect(wealthMilestones({ capitalMinor: capitalNeededMinor(600_000), costsByCategoryMinor: null }).target.progress).toBe(1);
+  it('measures how far the second salary is toward the target, and the capital it needs', () => {
+    const { target } = wealthMilestones({ targetMonthlyMinor: 250_000, capitalMinor: capitalNeededMinor(125_000), costsByCategoryMinor: MADRID });
+    expect(target).toEqual({ monthlyMinor: 250_000, progress: 0.5, reached: false, capitalNeededMinor: capitalNeededMinor(250_000) });
   });
 
-  it('places each milestone on the same scale as the target, so one bar can show them all', () => {
-    const { milestones } = wealthMilestones({ capitalMinor: 0, costsByCategoryMinor: MADRID });
-    expect(milestones.map(({ position }) => position)).toEqual([0.06, 0.18, 0.3]);
+  it('is reached exactly when the second salary equals the target, and stops at full', () => {
+    expect(wealthMilestones({ targetMonthlyMinor: 250_000, capitalMinor: capitalNeededMinor(250_000), costsByCategoryMinor: null }).target).toMatchObject({ reached: true, progress: 1 });
+    expect(wealthMilestones({ targetMonthlyMinor: 250_000, capitalMinor: capitalNeededMinor(250_000) - 1_000, costsByCategoryMinor: null }).target?.reached).toBe(false);
+    expect(wealthMilestones({ targetMonthlyMinor: 250_000, capitalMinor: 9_000_000_00, costsByCategoryMinor: null }).target?.progress).toBe(1);
   });
 
-  it('keeps a milestone above the range at the end of the bar', () => {
-    const { milestones } = wealthMilestones({ capitalMinor: 0, costsByCategoryMinor: costs({ RENT: 900_000 }) });
-    expect(milestones.find(({ id }) => id === 2)?.position).toBe(1);
+  it('does not depend on the costs being known', () => {
+    expect(wealthMilestones({ targetMonthlyMinor: 250_000, capitalMinor: 0, costsByCategoryMinor: null }).target?.progress).toBe(0);
   });
 });
 
@@ -209,22 +201,22 @@ describe('defaultCapitalRequiredPercentage', () => {
 
 describe('wealthMilestones with another yield', () => {
   it('uses the yield for the salary, the capital each milestone needs and the target', () => {
-    const result = wealthMilestones({ capitalMinor: 24_000_000, costsByCategoryMinor: MADRID, annualYield: 0.03 });
+    const result = wealthMilestones({ targetMonthlyMinor: 300_000, capitalMinor: 24_000_000, costsByCategoryMinor: MADRID, annualYield: 0.03 });
 
     expect(result.secondSalaryMinor).toBe(secondSalaryMinor(24_000_000, 0.03));
     expect(result.milestones[1].capitalNeededMinor).toBe(capitalNeededMinor(90_000, 0.03));
-    expect(result.target.maxCapitalNeededMinor).toBe(capitalNeededMinor(SECOND_SALARY_TARGET_MAX_MINOR, 0.03));
+    expect(result.target?.capitalNeededMinor).toBe(capitalNeededMinor(300_000, 0.03));
   });
 
   it('does not change the costs it was given', () => {
     const before = { ...MADRID };
-    wealthMilestones({ capitalMinor: 1, costsByCategoryMinor: MADRID });
+    wealthMilestones({ targetMonthlyMinor: null, capitalMinor: 1, costsByCategoryMinor: MADRID });
 
     expect(MADRID).toEqual(before);
   });
 
   it('gives the same answer for the same input', () => {
-    const input = { capitalMinor: 12_345_678, costsByCategoryMinor: MADRID };
+    const input = { targetMonthlyMinor: 250_000, capitalMinor: 12_345_678, costsByCategoryMinor: MADRID };
 
     expect(wealthMilestones(input)).toEqual(wealthMilestones(input));
   });
