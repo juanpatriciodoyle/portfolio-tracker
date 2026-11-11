@@ -121,3 +121,10 @@ describe('BenchmarksCard', () => {
     expect(screen.getByText(/No comparison is available for this living phase yet/)).toBeInTheDocument();
   });
 });
+
+describe('BenchmarksCard insight text size', () => {
+  it('sets the insight lines at 13px', () => {
+    const rule = /\.benchmarks__insights\s*\{([^}]*)\}/.exec(css);
+    expect(rule![1]).toMatch(/font-size:\s*13px/);
+  });
+});

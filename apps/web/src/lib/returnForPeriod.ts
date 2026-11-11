@@ -22,3 +22,7 @@ const PHRASES: Record<ReportingPeriod, string> = {
 };
 
 export const periodPhrase = (period: ReportingPeriod): string => PHRASES[period];
+
+/** The title of the return card: "Total return" for everything, "<period> return" for a window. */
+export const periodReturnTitle = (period: ReportingPeriod): string =>
+  period === 'All' ? 'Total return' : period === 'Custom' ? 'Period return' : `${period} return`;

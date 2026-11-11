@@ -1,6 +1,6 @@
 import { db } from './db';
 import { calculateHoldingPeriodInflation, syncCountryInflationHistory } from './inflationService';
-import { inflationLossAmount } from '../domain/inflation';
+import { contributionsInflationLoss, inflationLossAmount } from '../domain/inflation';
 import { REFERENCE_EUR_RATES } from '../infrastructure/fx/referenceFxRates';
 import type { PriceProvider } from '../application/ports';
 import { noPrices } from '../infrastructure/market/marketPrices';
@@ -332,6 +332,20 @@ export async function getPortfolioOverview(userId: string, prices: PriceProvider
       })
     : [];
 
+  // Net worth in today's purchasing power: what each deposit lost since the day it went in (withdrawals take theirs away).
+  const movedMoney = userTransactions.filter((tx) => tx.type === 'DEPOSIT' || tx.type === 'WITHDRAWAL');
+  const inflationSince = new Map<number, number>();
+  const now = new Date();
+  for (const tx of movedMoney) {
+    const day = tx.date.getTime();
+    if (!inflationSince.has(day)) inflationSince.set(day, await calculateHoldingPeriodInflation(country, tx.date, now));
+  }
+  const realNetWorth =
+    netWorth -
+    contributionsInflationLoss(
+      movedMoney.map((tx) => ({ amount: tx.type === 'DEPOSIT' ? tx.amount : -tx.amount, inflationPercent: inflationSince.get(tx.date.getTime()) ?? 0 }))
+    );
+
   const cashByCurrency: Record<string, number> = {};
 
   for (const tx of userTransactions) {
@@ -391,6 +405,7 @@ export async function getPortfolioOverview(userId: string, prices: PriceProvider
 
   return {
     netWorth,
+    realNetWorth,
     cashBalance,
     cashBalances,
     totalInvested,
@@ -398,6 +413,9 @@ export async function getPortfolioOverview(userId: string, prices: PriceProvider
     openMarketValue: summary.openValue,
     soldProfit,
     openProfit: summary.unrealizedPnl,
+    // The same two figures after the inflation lost while each asset was held (they add up to realProfitEuros with dividends and buying fees).
+    realSoldProfit: soldProfit - soldAssetsInflationEurosLoss,
+    realOpenProfit: summary.unrealizedPnl - positionInflationEurosLoss,
     dividends: totalIncome,
     pricesAvailable: summary.allPriced,
     totalProfit,

@@ -3,6 +3,7 @@ import {
   defaultAnnualInflationPercent,
   holdingPeriodInflationPercent,
   inflationLossAmount,
+  contributionsInflationLoss,
 } from '../domain/inflation';
 
 // Guard rails: the domain maths must stay offline and clock-free. If it ever reaches for Prisma
@@ -184,5 +185,33 @@ describe('defaultAnnualInflationPercent', () => {
 
   it('falls back to the global default for unknown countries', () => {
     expect(defaultAnnualInflationPercent('Narnia')).toBe(FALLBACK_ANNUAL_INFLATION_PERCENT);
+  });
+});
+
+describe('contributionsInflationLoss', () => {
+  it('is zero without contributions', () => {
+    expect(contributionsInflationLoss([])).toBe(0);
+  });
+
+  it('erodes each deposit by the inflation since the day it went in', () => {
+    expect(
+      contributionsInflationLoss([
+        { amount: 1000, inflationPercent: 10 },
+        { amount: 500, inflationPercent: 2 },
+      ])
+    ).toBeCloseTo(110, 6);
+  });
+
+  it('lets a withdrawal (negative) take its share of the erosion away', () => {
+    expect(
+      contributionsInflationLoss([
+        { amount: 1000, inflationPercent: 10 },
+        { amount: -400, inflationPercent: 5 },
+      ])
+    ).toBeCloseTo(80, 6);
+  });
+
+  it('does not erode money that went in today', () => {
+    expect(contributionsInflationLoss([{ amount: 1000, inflationPercent: 0 }])).toBe(0);
   });
 });

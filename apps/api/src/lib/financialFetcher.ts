@@ -4,7 +4,8 @@ let yfInstance: any = null;
 function getYf() {
   if (!yfInstance) {
     try {
-      yfInstance = new (YahooFinance as any)();
+      // The library's one-off survey notice would otherwise print in the server log on every start.
+      yfInstance = new (YahooFinance as any)({ suppressNotices: ['yahooSurvey'] });
     } catch {
       yfInstance = YahooFinance;
     }

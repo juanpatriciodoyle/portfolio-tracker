@@ -87,3 +87,12 @@ export function holdingPeriodInflationPercent({
 export function inflationLossAmount(investedAmount: number, cumulativeInflationPercent: number): number {
   return investedAmount * (cumulativeInflationPercent / 100);
 }
+
+/**
+ * What the money put in has lost to inflation since each amount went in: deposits are positive, withdrawals negative
+ * (a withdrawal takes its share of the erosion away). `inflationPercent` is the cumulative inflation from the day of
+ * that movement until the as-of day.
+ */
+export function contributionsInflationLoss(contributions: readonly { amount: number; inflationPercent: number }[]): number {
+  return contributions.reduce((total, { amount, inflationPercent }) => total + inflationLossAmount(amount, inflationPercent), 0);
+}

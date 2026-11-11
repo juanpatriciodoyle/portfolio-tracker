@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { returnForPeriod, periodPhrase } from '../returnForPeriod';
+import { returnForPeriod, periodPhrase, periodReturnTitle } from '../returnForPeriod';
 import type { ChartDataPoint } from '../../data/sampleChartData';
 
 const point = (date: string, value: number, cashflow = 0): ChartDataPoint => ({
@@ -35,5 +35,15 @@ describe('periodPhrase', () => {
     expect(periodPhrase('All')).toBe('since you started');
     expect(periodPhrase('Last month')).toBe('last month');
     expect(periodPhrase('Custom')).toBe('in this period');
+  });
+});
+
+describe('periodReturnTitle', () => {
+  it('calls the whole history "Total return" and any window by its name', () => {
+    expect(periodReturnTitle('All')).toBe('Total return');
+    expect(periodReturnTitle('YTD')).toBe('YTD return');
+    expect(periodReturnTitle('1M')).toBe('1M return');
+    expect(periodReturnTitle('Last month')).toBe('Last month return');
+    expect(periodReturnTitle('Custom')).toBe('Period return');
   });
 });

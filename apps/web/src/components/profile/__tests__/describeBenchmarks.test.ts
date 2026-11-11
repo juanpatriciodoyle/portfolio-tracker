@@ -210,4 +210,11 @@ describe('describeRefreshedAt', () => {
     expect(describeRefreshedAt(null)).toBeNull();
     expect(describeRefreshedAt('garbage')).toBeNull();
   });
+
+  it('names countries in English even when the browser speaks Spanish', () => {
+    const view = describePhaseBenchmark(makePhaseBenchmark({ countryCode: 'ES' }), nameOf, 'es-ES');
+    const text = [view.country, ...view.positioning.badges.map((b) => b.text), ...view.positioning.insights].join(' | ');
+    expect(text).toContain('Spain');
+    expect(text).not.toContain('España');
+  });
 });

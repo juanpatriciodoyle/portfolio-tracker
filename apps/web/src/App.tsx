@@ -20,6 +20,8 @@ import { authorizedFetch, readAuthToken } from './lib/authorizedFetch';
 import { endGuestSession } from './lib/guestSession';
 import { clearAllDrafts } from './lib/stepDraft';
 import { returnForPeriod } from './lib/returnForPeriod';
+import { describePeriodWindow } from './lib/periodWindow';
+import { filterDataByPeriod } from './data/sampleChartData';
 
 interface User {
   id: string;
@@ -35,12 +37,15 @@ interface BreakdownItem {
 
 interface StatsData {
   netWorth: number;
+  realNetWorth: number;
   cashBalance: number;
   totalInvested: number;
   openInvestedValue: number;
   openMarketValue: number;
   soldProfit: number;
   openProfit: number;
+  realSoldProfit: number;
+  realOpenProfit: number;
   dividends: number;
   pricesAvailable: boolean;
   totalProfit: number;
@@ -81,11 +86,14 @@ function App() {
 
   const [stats, setStats] = useState<StatsData>({
     netWorth: 0,
+    realNetWorth: 0,
     cashBalance: 0,
     totalInvested: 0,
     openInvestedValue: 0,
     openMarketValue: 0,
     openProfit: 0,
+    realSoldProfit: 0,
+    realOpenProfit: 0,
     dividends: 0,
     pricesAvailable: true,
     soldProfit: 0,
@@ -201,6 +209,7 @@ function App() {
   }
 
   const periodChange = returnForPeriod(chartData, period, customRange);
+  const periodWindow = describePeriodWindow(filterDataByPeriod(chartData, period, customRange));
 
   // Active ROI and Profit Euros based on toggle state
   const activeProfitEuros = isRealInflationMode ? stats.realProfitEuros : stats.totalProfit;
@@ -322,13 +331,16 @@ function App() {
           <HeroMetrics
             figures={{
               netWorth: stats.netWorth,
+              realNetWorth: stats.realNetWorth,
               cashBalance: stats.cashBalance,
               openMarketValue: stats.openMarketValue,
+              openCostBasis: stats.openInvestedValue,
               openProfit: stats.openProfit,
+              realOpenProfit: stats.realOpenProfit,
               soldProfit: stats.soldProfit,
+              realSoldProfit: stats.realSoldProfit,
               dividends: stats.dividends,
               totalFees: stats.totalFees ?? 0,
-              totalInvested: stats.totalInvested,
               totalGain: activeProfitEuros,
               totalGainPercent: activeRoiPercent,
               pricesAvailable: stats.pricesAvailable,
@@ -336,6 +348,7 @@ function App() {
             period={period}
             periodGain={periodChange.gain}
             periodPercent={periodChange.percent}
+            periodWindow={periodWindow}
             currency={stats.baseCurrency || 'EUR'}
             isRealInflationMode={isRealInflationMode}
             country={stats.country}

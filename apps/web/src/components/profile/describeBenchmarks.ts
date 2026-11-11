@@ -82,6 +82,9 @@ const BASIS_CAPTIONS = {
   PER_CAPITA: 'per person',
 } as const;
 
+/** The sentences are English, so are the names of the countries in them, whatever language the browser speaks. */
+const TEXT_LANGUAGE = 'en';
+
 const trimmed = (value: number, locale: string, maximumFractionDigits: number) =>
   new Intl.NumberFormat(locale, { maximumFractionDigits }).format(value);
 
@@ -119,7 +122,7 @@ function tierBadge(dto: { percentile: number; bound: 'EXACT' | 'AT_MOST' | 'AT_L
 }
 
 function describeEquivalence(dto: NationalityEquivalenceDto, locale: string): NationalityEquivalenceView {
-  const country = countryName(dto.countryCode, locale);
+  const country = countryName(dto.countryCode, TEXT_LANGUAGE);
   return {
     countryCode: dto.countryCode,
     text: `Holds the purchasing power of ${formatMinor(dto.equivalentMonthlyIncomeMinor, dto.currency, locale)} a month in ${country}`,
@@ -184,7 +187,7 @@ export function describePhaseBenchmark(
   nameOf: (phaseId: string) => string | undefined = () => undefined,
   locale: string = displayLocale()
 ): PhaseBenchmarkView {
-  const country = countryName(dto.countryCode, locale);
+  const country = countryName(dto.countryCode, TEXT_LANGUAGE);
   const income = dto.incomePercentile ? describeIncome(dto.incomePercentile, country, locale) : null;
   const housing = dto.housingBurden ? describeHousing(dto.housingBurden, dto.currency, country, locale) : null;
   const purchasingPower = dto.purchasingPower ? describePower(dto.purchasingPower, country, nameOf, locale) : null;
