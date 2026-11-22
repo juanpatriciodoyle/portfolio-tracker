@@ -27,3 +27,27 @@ export class DocumentRejectedError extends Error {
     this.name = 'DocumentRejectedError';
   }
 }
+
+const SIGN_IN_MESSAGES = {
+  GOOGLE_TOKEN_UNVERIFIED: 'Google could not confirm your sign-in. Try signing in again.',
+  GOOGLE_NOT_CONFIGURED: 'Google sign-in is not set up on this server. Use a passkey.',
+  PASSKEY_NEEDS_SIGN_IN: 'This account was created with Google. Sign in with Google first.',
+} as const;
+
+export type SignInRejection = keyof typeof SIGN_IN_MESSAGES;
+
+/** A sign-in that was not accepted, and why. */
+export class SignInRejectedError extends Error {
+  constructor(readonly code: SignInRejection) {
+    super(SIGN_IN_MESSAGES[code]);
+    this.name = 'SignInRejectedError';
+  }
+}
+
+/** The server has no Google client to check tokens against. Without one nothing can be verified, so nothing is accepted. */
+export class GoogleNotConfiguredError extends Error {
+  constructor() {
+    super('GOOGLE_CLIENT_ID is not set');
+    this.name = 'GoogleNotConfiguredError';
+  }
+}

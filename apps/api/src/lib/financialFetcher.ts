@@ -1,46 +1,59 @@
 import YahooFinance from 'yahoo-finance2';
+import type { TickerMatch, TickerSearch } from '../application/ports';
 
-let yfInstance: any = null;
-function getYf() {
+/** The two Yahoo calls this module makes, and nothing of the rest: answers are checked before they are trusted. */
+interface YahooClient {
+  search(query: string, options: { newsCount: number; quotesCount: number }): Promise<unknown>;
+  quote(symbol: string): Promise<unknown>;
+}
+type YahooClientConstructor = new (options: { suppressNotices: string[] }) => YahooClient;
+
+let yfInstance: YahooClient | null = null;
+function getYf(): YahooClient {
   if (!yfInstance) {
     try {
       // The library's one-off survey notice would otherwise print in the server log on every start.
-      yfInstance = new (YahooFinance as any)({ suppressNotices: ['yahooSurvey'] });
+      yfInstance = new (YahooFinance as unknown as YahooClientConstructor)({ suppressNotices: ['yahooSurvey'] });
     } catch {
-      yfInstance = YahooFinance;
+      yfInstance = YahooFinance as unknown as YahooClient;
     }
   }
   return yfInstance;
 }
 
-export interface MarketSearchResult {
-  symbol: string;
-  name: string;
-  assetClass: string;
-  sector: string;
-  price?: number;
-  currency?: string;
-}
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+const nonEmptyText = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined);
 
-export interface EnrichedFinancialData {
-  description: string;
-  price?: number;
-  return1d: number;
-  return1w: number;
-  return1m: number;
-  return3m: number;
-  returnYtd: number;
-  return6m: number;
-  return1y: number;
-  return3y: number;
-  return5y: number;
-  roe: number;
-  operatingMargin: number;
-  debtToAsset: number;
+/** The quotes of a Yahoo search answer, whatever shape the answer has. */
+const quotesOf = (answer: unknown): unknown[] => (isRecord(answer) && Array.isArray(answer.quotes) ? answer.quotes : []);
+
+/** Instruments Yahoo knows by name, as the picker shows them. A quote without a symbol or a name is skipped. */
+function liveMatchesFrom(quotes: readonly unknown[]): TickerMatch[] {
+  return quotes.flatMap((quote): TickerMatch[] => {
+    if (!isRecord(quote)) return [];
+    const symbol = nonEmptyText(quote.symbol);
+    const longName = nonEmptyText(quote.longname);
+    const shortName = nonEmptyText(quote.shortname);
+    if (!symbol || !(shortName || longName)) return [];
+
+    const type = (nonEmptyText(quote.quoteType) ?? '').toUpperCase();
+    let assetClass = 'Stock';
+    if (type.includes('ETF') || type.includes('MUTUAL')) assetClass = 'ETF';
+    else if (type.includes('CRYPTOCURRENCY') || symbol.includes('-USD')) assetClass = 'Crypto';
+
+    return [
+      {
+        symbol,
+        name: longName || shortName || symbol,
+        assetClass,
+        sector: nonEmptyText(quote.sector) || (assetClass === 'Crypto' ? 'Cryptocurrency' : 'General'),
+      },
+    ];
+  });
 }
 
 // Extensive market dictionary for instant zero-latency autocomplete
-const POPULAR_TICKERS: MarketSearchResult[] = [
+const POPULAR_TICKERS: TickerMatch[] = [
   // European & Global Popular ETFs
   { symbol: 'VUAA.DE', name: 'Vanguard S&P 500 UCITS ETF (EUR Acc)', assetClass: 'ETF', sector: 'General Market' },
   { symbol: 'VUAA.L', name: 'Vanguard S&P 500 UCITS ETF (USD Acc)', assetClass: 'ETF', sector: 'General Market' },
@@ -87,7 +100,7 @@ const POPULAR_TICKERS: MarketSearchResult[] = [
 /**
  * Autocomplete ticker search triggered after typing 3+ characters
  */
-export async function searchMarketTickers(query: string): Promise<MarketSearchResult[]> {
+export async function searchMarketTickers(query: string): Promise<TickerMatch[]> {
   if (!query || query.trim().length < 3) return [];
   const q = query.trim().toUpperCase();
 
@@ -97,30 +110,13 @@ export async function searchMarketTickers(query: string): Promise<MarketSearchRe
   );
 
   try {
-    const yf = getYf();
-    const searchRes: any = await yf.search(q, { newsCount: 0, quotesCount: 8 });
-    if (searchRes && searchRes.quotes && Array.isArray(searchRes.quotes) && searchRes.quotes.length > 0) {
-      const liveMatches = searchRes.quotes
-        .filter((item: any) => item.symbol && (item.shortname || item.longname))
-        .map((item: any) => {
-          const type = (item.quoteType || '').toUpperCase();
-          let assetClass = 'Stock';
-          if (type.includes('ETF') || type.includes('MUTUAL')) assetClass = 'ETF';
-          else if (type.includes('CRYPTOCURRENCY') || item.symbol.includes('-USD')) assetClass = 'Crypto';
-
-          return {
-            symbol: item.symbol,
-            name: item.longname || item.shortname || item.symbol,
-            assetClass,
-            sector: item.sector || (assetClass === 'Crypto' ? 'Cryptocurrency' : 'General'),
-          };
-        });
-
+    const quotes = quotesOf(await getYf().search(q, { newsCount: 0, quotesCount: 8 }));
+    if (quotes.length > 0) {
       // Merge localMatches and liveMatches without duplicates
       const symbolSet = new Set<string>();
-      const combined: MarketSearchResult[] = [];
+      const combined: TickerMatch[] = [];
 
-      for (const item of [...localMatches, ...liveMatches]) {
+      for (const item of [...localMatches, ...liveMatchesFrom(quotes)]) {
         if (!symbolSet.has(item.symbol)) {
           symbolSet.add(item.symbol);
           combined.push(item);
@@ -136,89 +132,18 @@ export async function searchMarketTickers(query: string): Promise<MarketSearchRe
   return localMatches;
 }
 
+/** The instrument search as a port: the local dictionary first, then Yahoo. */
+export const tickerSearch: TickerSearch = { search: searchMarketTickers };
+
 /** The last traded price of one instrument and the currency it is quoted in; null when the market does not answer. */
 export async function fetchLiveQuote(ticker: string): Promise<{ price: number; currency: string } | null> {
   try {
-    const quote: any = await getYf().quote(ticker.toUpperCase());
-    if (quote && typeof quote.regularMarketPrice === 'number' && quote.regularMarketPrice > 0 && typeof quote.currency === 'string') {
+    const quote = await getYf().quote(ticker.toUpperCase());
+    if (isRecord(quote) && typeof quote.regularMarketPrice === 'number' && quote.regularMarketPrice > 0 && typeof quote.currency === 'string') {
       return { price: quote.regularMarketPrice, currency: quote.currency };
     }
   } catch {
     // An unreachable market is "no price", never an error for the person.
   }
   return null;
-}
-
-/**
- * Fetch real-time market price & percentage returns
- */
-export async function fetchFinancialData(
-  ticker: string,
-  instrumentType: string
-): Promise<EnrichedFinancialData> {
-  const normTicker = ticker.toUpperCase();
-
-  if (instrumentType === 'Cash') {
-    return {
-      description: `Cash and Money Market Reserves for liquid yield generation.`,
-      price: 1.0,
-      return1d: 0.01,
-      return1w: 0.07,
-      return1m: 0.28,
-      return3m: 0.85,
-      returnYtd: 1.45,
-      return6m: 1.72,
-      return1y: 3.42,
-      return3y: 8.92,
-      return5y: 11.24,
-      roe: 0.0,
-      operatingMargin: 1.0,
-      debtToAsset: 0.0,
-    };
-  }
-
-  try {
-    const yf = getYf();
-    const quote: any = await yf.quote(normTicker);
-    if (quote && quote.regularMarketPrice) {
-      const price = quote.regularMarketPrice;
-      const changePercent = quote.regularMarketChangePercent || 0.0;
-
-      return {
-        description: `${quote.longName || quote.shortName || normTicker} live market price quote.`,
-        price,
-        return1d: Math.round(changePercent * 100) / 100,
-        return1w: Math.round(changePercent * 1.8 * 100) / 100,
-        return1m: Math.round(changePercent * 3.5 * 100) / 100,
-        return3m: Math.round(changePercent * 6.2 * 100) / 100,
-        returnYtd: Math.round(changePercent * 8.5 * 100) / 100,
-        return6m: Math.round(changePercent * 7.2 * 100) / 100,
-        return1y: Math.round(changePercent * 12.4 * 100) / 100,
-        return3y: 28.5,
-        return5y: 54.2,
-        roe: 18.5,
-        operatingMargin: 22.4,
-        debtToAsset: 0.35,
-      };
-    }
-  } catch {
-    // Default calculation fallback
-  }
-
-  const isTech = normTicker.includes('QQQ') || normTicker.includes('AAPL') || normTicker.includes('NVDA');
-  return {
-    description: `Market profile for ${normTicker}.`,
-    return1d: isTech ? 0.42 : 0.15,
-    return1w: isTech ? 1.82 : 0.65,
-    return1m: isTech ? 4.92 : 2.15,
-    return3m: isTech ? 8.12 : 4.45,
-    returnYtd: isTech ? 14.85 : 8.12,
-    return6m: isTech ? 11.42 : 6.34,
-    return1y: isTech ? 22.85 : 12.45,
-    return3y: isTech ? 48.92 : 28.54,
-    return5y: isTech ? 92.45 : 54.12,
-    roe: isTech ? 22.5 : 14.2,
-    operatingMargin: isTech ? 28.4 : 18.5,
-    debtToAsset: isTech ? 0.22 : 0.38,
-  };
 }

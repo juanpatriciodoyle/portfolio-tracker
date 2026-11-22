@@ -1,8 +1,6 @@
 import { MAX_AMOUNT_MINOR } from '../../contracts/primitives';
 import { markAfter, markBefore } from './currencies';
 
-const GROUP_SPACES = /[ '  ]/g;
-
 /**
  * Reads a printed number in any common locale ("1.234,56", "1,234.56", "1 234,56", "1'234.56") as a
  * plain decimal string. Answers `null` when the text could mean two things ("1.234" is either one

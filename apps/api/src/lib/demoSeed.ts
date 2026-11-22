@@ -2,7 +2,7 @@ import { db } from './db';
 import { hashUserIdentity } from './privacy';
 import { syncCountryInflationHistory } from './inflationService';
 
-export const DEMO_USER_EMAIL = 'demo@portfolio.local';
+const DEMO_USER_EMAIL = 'demo@portfolio.local';
 
 /**
  * Erases everything the guest account owns and puts Joe's profile settings back, so the next

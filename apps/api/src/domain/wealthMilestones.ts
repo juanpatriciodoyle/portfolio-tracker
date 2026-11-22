@@ -12,7 +12,7 @@ const NOISE_GRID = 1e6;
 /** The costs the first milestone covers: utilities, internet, phone and subscriptions. */
 const UTILITIES_AND_SUBSCRIPTIONS: readonly FixedCostCategory[] = [...UTILITY_CATEGORIES, 'INTERNET', 'PHONE', 'SUBSCRIPTIONS'];
 
-export const MILESTONE_KINDS = ['UTILITIES_AND_SUBSCRIPTIONS', 'RENT', 'LIVING_COST'] as const;
+const MILESTONE_KINDS = ['UTILITIES_AND_SUBSCRIPTIONS', 'RENT', 'LIVING_COST'] as const;
 export type MilestoneKind = (typeof MILESTONE_KINDS)[number];
 export type MilestoneId = 1 | 2 | 3;
 

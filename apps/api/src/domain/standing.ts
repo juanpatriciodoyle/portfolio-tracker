@@ -2,8 +2,6 @@ import { AVERAGE_DAYS_PER_MONTH } from '../contracts/calendarDate';
 import { currencyExponent } from './documentExtraction/currencies';
 import { percentileAmong, type Household } from './benchmarks';
 
-const round1 = (value: number) => Math.round(value * 10) / 10;
-
 export { percentileAmong };
 
 const isPositive = (value: number) => Number.isFinite(value) && value > 0;
@@ -67,7 +65,6 @@ export function continentAreaOf(countryCode: string, regionCode: string | null):
 /** Every area a reference distribution can be kept for, besides the EU. */
 export const WORLD_AREA: ReferenceArea = { code: 'WLD', name: 'the world' };
 export const WORLD_BANK_REGION_CODES: readonly string[] = [WORLD_AREA.code, ...Object.keys(REGION_NAMES)];
-export const regionName = (code: string): string | null => (code === WORLD_AREA.code ? WORLD_AREA.name : (REGION_NAMES[code] ?? null));
 
 /** Areas kept as a whole (the EU, a region, the world) rather than a country: their statistics change slowly. */
 export const isReferenceArea = (code: string): boolean => code === 'EU' || code.length === 3;

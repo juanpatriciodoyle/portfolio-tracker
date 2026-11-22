@@ -2,6 +2,7 @@ import type { BillingCadence, CalendarDate, CostCadence, FixedCostCategory, FxRa
 import type { BenchmarkSource } from '../contracts/benchmark';
 import type { DistributionPoint, IncomeDistribution } from '../domain/benchmarks';
 import type { FxRates } from '../domain/phaseComparison';
+import type { NewUserDefaults } from '../domain/newUser';
 
 /** Where a stored value lives. Bound into every ciphertext so a value cannot be moved to another row or person. */
 export interface CipherContext {
@@ -190,4 +191,70 @@ export interface PortfolioValueReader {
 export interface PriceProvider {
   /** Price per unit of each symbol, in `currency`. */
   pricesFor(symbols: readonly string[], currency: string): Promise<ReadonlyMap<string, number>>;
+}
+
+/** Who a sign-in resolves to: the account id, where they live and whether a passkey is registered. Never their email, which is not stored. */
+export interface AuthUser {
+  readonly id: string;
+  readonly country: string;
+  readonly hasPasskey: boolean;
+}
+
+/** Port: persistence of accounts. Accounts are found by the hash of an identity, never by the identity itself. */
+export interface UserRepository {
+  findByIdentityHash(userHash: string): Promise<AuthUser | null>;
+  create(userHash: string, defaults: NewUserDefaults): Promise<AuthUser>;
+}
+
+/** What Google confirmed about a person. The email is one Google itself has verified. */
+export interface VerifiedGoogleIdentity {
+  readonly email: string;
+  readonly googleId: string;
+  readonly name?: string;
+  readonly avatarUrl?: string;
+}
+
+/**
+ * Port: asks Google who an access token belongs to. Throws when Google does not confirm it (invalid or expired
+ * token, issued to another application, unverified email) and `GoogleNotConfiguredError` when the server cannot ask.
+ */
+export interface IdentityVerifier {
+  verify(accessToken: string): Promise<VerifiedGoogleIdentity>;
+}
+
+/** Port: turns an identity (an email, a Google id) into the irreversible value an account is stored under. */
+export type IdentityHasher = (rawIdentity: string) => string;
+
+/** Port: signs the session a person carries after signing in. */
+export type SessionTokenIssuer = (userId: string) => string;
+
+/** What the browser returns from the passkey prompt. Its structure is checked by the authenticator, not by the core. */
+export type PasskeyCredential = Readonly<Record<string, unknown>>;
+
+/** The question to put to the browser's passkey prompt: register a new passkey, or use the one already saved. */
+export interface PasskeyChallenge {
+  readonly isRegistration: boolean;
+  readonly options: unknown;
+  readonly userHash: string;
+}
+
+/** Port: passkey (WebAuthn) registration and sign-in. Throws, with a message fit for the person, when it cannot verify. */
+export interface PasskeyAuthenticator {
+  challengeFor(email: string): Promise<PasskeyChallenge>;
+  verify(email: string, credential: PasskeyCredential): Promise<AuthUser>;
+}
+
+/** One instrument a person can look for when logging a transaction. */
+export interface TickerMatch {
+  readonly symbol: string;
+  readonly name: string;
+  readonly assetClass: string;
+  readonly sector: string;
+  readonly price?: number;
+  readonly currency?: string;
+}
+
+/** Port: finds instruments by name or symbol. */
+export interface TickerSearch {
+  search(query: string): Promise<readonly TickerMatch[]>;
 }

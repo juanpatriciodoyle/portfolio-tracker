@@ -83,7 +83,7 @@ export function housingShare(housingMinor: number, incomeMinor: number): number 
 }
 
 /** Within this many percentage points of the typical share counts as "similar". */
-export const SIMILAR_SHARE_POINTS = 2;
+const SIMILAR_SHARE_POINTS = 2;
 
 export interface ShareComparison {
   readonly differencePoints: number;

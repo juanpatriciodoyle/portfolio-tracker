@@ -29,7 +29,6 @@ const argentina: StatisticsFragment = {
   purchasing: { source: 'WORLD_BANK', period: '2025', lcuPerInternationalDollar: 567.297421343424, gniPerPersonDollars: 31920 },
 };
 const japan: StatisticsFragment = { regionCode: 'EAS', purchasing: { source: 'WORLD_BANK', period: '2025', lcuPerInternationalDollar: 100, gniPerPersonDollars: null } };
-const nowhere: StatisticsFragment = {};
 const eu: StatisticsFragment = {
   incomeDistribution: {
     source: 'EUROSTAT',

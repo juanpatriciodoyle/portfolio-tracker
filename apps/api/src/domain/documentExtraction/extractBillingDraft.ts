@@ -32,7 +32,7 @@ export const EMPTY_DRAFT: BillingDraft = {
 
 const MONTH_FIRST_COUNTRIES: ReadonlySet<string> = new Set(['US', 'PH']);
 
-export function dateOrderFor(countryCode: string | null | undefined): DateOrder {
+function dateOrderFor(countryCode: string | null | undefined): DateOrder {
   if (!countryCode) return null;
   return MONTH_FIRST_COUNTRIES.has(countryCode) ? 'MDY' : 'DMY';
 }

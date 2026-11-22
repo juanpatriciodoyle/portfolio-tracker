@@ -3,18 +3,23 @@ import {
   verifyRegistrationResponse,
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
+  type AuthenticationResponseJSON,
+  type RegistrationResponseJSON,
 } from '@simplewebauthn/server';
-import { db } from './db';
-import { hashUserIdentity } from './privacy';
+import type { AuthUser, PasskeyAuthenticator, PasskeyChallenge, PasskeyCredential } from '../application/ports';
+import { NEW_USER_DEFAULTS } from '../domain/newUser';
+import { db } from '../lib/db';
+import { hashUserIdentity } from '../lib/privacy';
+import { PasskeyChallenges } from './passkeyChallenges';
 
 const RP_NAME = 'Portfolio Tracker';
 const RP_ID = process.env.RP_ID || 'localhost';
 const ORIGIN = process.env.ORIGIN || 'http://localhost:5173';
 
-// In-memory challenge store for registration/authentication flows
-const challengesStore = new Map<string, string>();
+// Challenges wait here for the prompt's answer: five minutes, once.
+const challenges = new PasskeyChallenges(Date.now);
 
-export async function getPasskeyOptions(email: string) {
+async function getPasskeyOptions(email: string): Promise<PasskeyChallenge> {
   const userHash = hashUserIdentity(email);
   let user = await db.user.findUnique({ where: { userHash } });
 
@@ -32,7 +37,7 @@ export async function getPasskeyOptions(email: string) {
       },
     });
 
-    challengesStore.set(userHash, options.challenge);
+    challenges.remember(userHash, options.challenge);
     return { isRegistration: true, options, userHash };
   } else {
     // Generate Authentication Options
@@ -46,14 +51,19 @@ export async function getPasskeyOptions(email: string) {
       userVerification: 'preferred',
     });
 
-    challengesStore.set(userHash, options.challenge);
+    challenges.remember(userHash, options.challenge);
     return { isRegistration: false, options, userHash };
   }
 }
 
-export async function verifyPasskeyCredential(email: string, credentialResponse: any) {
+/**
+ * The browser's answer arrives as a plain JSON object; the library re-checks its structure and throws when it is
+ * not a real registration or authentication response, so the one cast below only names what it will be checked as.
+ */
+async function verifyPasskeyCredential(email: string, credentialResponse: PasskeyCredential): Promise<AuthUser> {
   const userHash = hashUserIdentity(email);
-  const expectedChallenge = challengesStore.get(userHash);
+  // Taken out at once: a failed attempt cannot be retried against the same challenge.
+  const expectedChallenge = challenges.consume(userHash);
 
   if (!expectedChallenge) {
     throw new Error('Authentication challenge expired or invalid.');
@@ -64,7 +74,7 @@ export async function verifyPasskeyCredential(email: string, credentialResponse:
   if (!user || !user.passkeyCredentialId) {
     // Verify Registration Response
     const verification = await verifyRegistrationResponse({
-      response: credentialResponse,
+      response: credentialResponse as unknown as RegistrationResponseJSON,
       expectedChallenge,
       expectedOrigin: ORIGIN,
       expectedRPID: RP_ID,
@@ -88,20 +98,17 @@ export async function verifyPasskeyCredential(email: string, credentialResponse:
           passkeyCredentialId: credId,
           passkeyPublicKey: credPubKeyBase64,
           passkeyCounter: counter,
-          country: 'Spain',
-          baseCurrency: 'EUR',
-          annualInflationRate: 2.8,
+          ...NEW_USER_DEFAULTS,
         },
       });
 
-      challengesStore.delete(userHash);
-      return user;
+      return { id: user.id, country: user.country, hasPasskey: true };
     }
     throw new Error('Passkey registration verification failed.');
   } else {
     // Verify Authentication Response
     const verification = await verifyAuthenticationResponse({
-      response: credentialResponse,
+      response: credentialResponse as unknown as AuthenticationResponseJSON,
       expectedChallenge,
       expectedOrigin: ORIGIN,
       expectedRPID: RP_ID,
@@ -118,9 +125,14 @@ export async function verifyPasskeyCredential(email: string, credentialResponse:
         data: { passkeyCounter: verification.authenticationInfo.newCounter },
       });
 
-      challengesStore.delete(userHash);
-      return user;
+      return { id: user.id, country: user.country, hasPasskey: true };
     }
     throw new Error('Passkey authentication verification failed.');
   }
 }
+
+/** The passkey adapter the sign-in service uses. */
+export const passkeyAuthenticator: PasskeyAuthenticator = {
+  challengeFor: getPasskeyOptions,
+  verify: verifyPasskeyCredential,
+};

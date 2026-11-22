@@ -16,7 +16,7 @@ export interface InflationRateProvider {
 export const FALLBACK_ANNUAL_INFLATION_PERCENT = 2.8;
 
 /** Annual rates (percent) assumed for years with no published data, e.g. when live data is unreachable. */
-export const DEFAULT_ANNUAL_INFLATION_PERCENT: Readonly<Partial<Record<string, number>>> = {
+const DEFAULT_ANNUAL_INFLATION_PERCENT: Readonly<Partial<Record<string, number>>> = {
   Spain: 2.8,
   Germany: 2.6,
   'United Kingdom': 2.3,

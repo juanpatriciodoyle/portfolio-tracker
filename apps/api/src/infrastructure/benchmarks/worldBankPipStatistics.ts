@@ -6,7 +6,7 @@ const PIP_URL = 'https://api.worldbank.org/pip/v1/pip-grp';
 const CPI_URL = 'https://api.worldbank.org/v2/country/USA/indicator/FP.CPI.TOTL?format=json&date=2021:2035';
 
 /** The PPP round the distributions are asked in. Pinned, so a new default at the World Bank cannot change the unit silently. */
-export const PIP_PPP_ROUND = '2021';
+const PIP_PPP_ROUND = '2021';
 const BASE_YEAR = '2021';
 
 /** International dollars a day, 2021 prices: from the poorest lines to far beyond a high income. */

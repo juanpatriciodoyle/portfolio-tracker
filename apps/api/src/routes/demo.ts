@@ -4,7 +4,7 @@ import type { ApiErrorResponse } from '../contracts';
 import { generateToken } from '../lib/auth';
 import { requireUser, userIdOf } from './http';
 
-export const GUEST_NAME = 'Joe';
+const GUEST_NAME = 'Joe';
 
 export interface GuestAccount {
   readonly id: string;

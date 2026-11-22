@@ -1,5 +1,5 @@
 /** Longest text the engine looks at. A bill is a few pages; anything beyond is noise. */
-export const MAX_TEXT_CHARS = 200_000;
+const MAX_TEXT_CHARS = 200_000;
 const MAX_LINE_CHARS = 400;
 const MIN_READABLE_CHARACTERS = 20;
 
