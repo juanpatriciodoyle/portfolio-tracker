@@ -2,6 +2,7 @@ import { CalendarX, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useId, useState } from 'react';
 import { incomeGaps, type IncomeEndReason, type IncomeStreamDto, type LivingPhaseDto, type UpdateLivingPhaseRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
+import { useSubmitOnce } from '../../hooks/useSubmitOnce';
 import { clampDateYear } from '../../lib/inputFilters';
 import { formatCalendarDate, formatMinor } from '../../lib/money';
 import { describeFailure } from './failureMessage';
@@ -30,6 +31,8 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
   const [ending, setEnding] = useState<Ending>(null);
   const [confirmingIndex, setConfirmingIndex] = useState<number | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  /** Removing, ending or reviving a job: one at a time, however fast the button is tapped. */
+  const { run: runIncomeAction, pending: incomeBusy } = useSubmitOnce();
 
   const streams = [...phase.incomeStreams].sort(byStart);
   const groups = groupIncome(streams, asOf);
@@ -53,13 +56,14 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
   const submit = (stream: IncomeStreamDto) =>
     editing?.mode === 'edit' ? save(replaceAt(editing.index, stream), 'Income updated') : save([...streams, stream], 'Income added');
 
-  const remove = async (index: number) => {
-    const result = await save(
-      streams.filter((_, position) => position !== index),
-      'Income removed'
-    );
-    if (!result.ok) setRemoveError(describeFailure(result.failure));
-  };
+  const remove = (index: number) =>
+    runIncomeAction(async () => {
+      const result = await save(
+        streams.filter((_, position) => position !== index),
+        'Income removed'
+      );
+      if (!result.ok) setRemoveError(describeFailure(result.failure));
+    });
 
   const startEnding = (index: number) => {
     const first = streams[index].startDate;
@@ -78,14 +82,17 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
       setEnding({ ...ending, error: result.error });
       return;
     }
-    const saved = await save(replaceAt(ending.index, result.stream), 'Job ended');
-    if (!saved.ok) setEnding({ ...ending, error: describeFailure(saved.failure) });
+    await runIncomeAction(async () => {
+      const saved = await save(replaceAt(ending.index, result.stream), 'Job ended');
+      if (!saved.ok) setEnding({ ...ending, error: describeFailure(saved.failure) });
+    });
   };
 
-  const bringBack = async (index: number) => {
-    const result = await save(replaceAt(index, reopenJob(streams[index])), 'Job is paying again');
-    if (!result.ok) setRemoveError(describeFailure(result.failure));
-  };
+  const bringBack = (index: number) =>
+    runIncomeAction(async () => {
+      const result = await save(replaceAt(index, reopenJob(streams[index])), 'Job is paying again');
+      if (!result.ok) setRemoveError(describeFailure(result.failure));
+    });
 
   const renderRow = ({ stream, index }: IncomeRow, isEnded: boolean) => {
     const when = describeIncomeStream(stream);
@@ -111,7 +118,7 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
             {confirmingIndex === index ? (
               <div className="confirm-inline" role="group" aria-label={`Confirm removing ${name}`}>
                 <span>Remove this income?</span>
-                <button type="button" className="profile-danger-button" onClick={() => remove(index)}>
+                <button type="button" className="profile-danger-button" disabled={incomeBusy} aria-busy={incomeBusy} onClick={() => remove(index)}>
                   Remove
                 </button>
                 <button type="button" className="profile-text-button" onClick={() => setConfirmingIndex(null)}>
@@ -126,7 +133,7 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
                   </button>
                 )}
                 {isEnded && (
-                  <button type="button" className="profile-icon-button" aria-label={`Bring back ${name}`} title="Bring back" onClick={() => bringBack(index)}>
+                  <button type="button" className="profile-icon-button" aria-label={`Bring back ${name}`} title="Bring back" disabled={incomeBusy} aria-busy={incomeBusy} onClick={() => bringBack(index)}>
                     <RotateCcw size={14} aria-hidden="true" />
                   </button>
                 )}
@@ -175,7 +182,7 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
                   </p>
                 )}
                 <div className="cost-editor__actions">
-                  <button type="button" className="btn-primary-apply" onClick={confirmEnding}>
+                  <button type="button" className="btn-primary-apply" disabled={incomeBusy} aria-busy={incomeBusy} onClick={confirmEnding}>
                     End job
                   </button>
                   <button type="button" className="btn-secondary-cancel" onClick={() => setEnding(null)}>

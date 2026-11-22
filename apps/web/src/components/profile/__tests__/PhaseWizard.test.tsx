@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDraft } from '../../../lib/stepDraft';
 import { ApiError } from '../../../lib/apiClient';
 import { makePhase } from '../../../test/fixtures';
+import { tapTwice } from '../../../test/doubleTap';
 import { chooseCountry, clickContinue } from '../../../test/wizardHelpers';
 import { phaseDraftSchema } from '../phaseForm';
 import PhaseWizard from '../PhaseWizard';
@@ -210,6 +211,19 @@ describe('PhaseWizard', () => {
 
     await waitFor(() => expect(props.onSubmit).toHaveBeenCalled());
     expect(vi.mocked(props.onSubmit).mock.calls[0][0].create.incomeStreams).toEqual([]);
+  });
+
+  it('adds the phase once when the last button is tapped twice', async () => {
+    const { props } = renderWizard();
+    await fillPlace();
+    clickContinue();
+    fillDates();
+    clickContinue();
+    clickContinue();
+
+    tapTwice(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
+
+    await waitFor(() => expect(props.onSubmit).toHaveBeenCalledTimes(1));
   });
 
   it('can add a phase with no bills at all', async () => {

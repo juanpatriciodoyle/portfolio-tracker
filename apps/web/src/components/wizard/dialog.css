@@ -40,13 +40,6 @@
   color: var(--text-heading);
 }
 
-.dialog__hint {
-  margin: 6px 0 0 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text-muted);
-}
-
 .dialog__close {
   position: absolute;
   top: 16px;

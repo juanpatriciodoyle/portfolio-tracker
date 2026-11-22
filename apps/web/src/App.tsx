@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import TransactionForm from './components/TransactionForm';
 import Modal from './components/Modal';
 import LoginModal from './components/LoginModal';
@@ -9,63 +9,25 @@ import TransactionHistoryTable from './components/TransactionHistoryTable';
 import ReportingPeriodBar from './components/ReportingPeriodBar';
 import PortfolioChart from './components/PortfolioChart';
 import HeroMetrics from './components/HeroMetrics';
-import HoldingsTable, { type PositionItem, type SoldAssetItem } from './components/HoldingsTable';
-import CashBalancesTable, { type CashBalanceItem } from './components/CashBalancesTable';
+import HoldingsTable from './components/HoldingsTable';
+import CashBalancesTable from './components/CashBalancesTable';
 import PerformanceBreakdown from './components/PerformanceBreakdown';
 import AllocationBreakdown from './components/AllocationBreakdown';
 import ProfilePage from './components/profile/ProfilePage';
 import { PROFILE_PATH, useHashRoute } from './hooks/useHashRoute';
-import { type ChartDataPoint, type ReportingPeriod, type DateRange } from './data/sampleChartData';
-import { authorizedFetch, readAuthToken } from './lib/authorizedFetch';
+import { clearPortfolioCache, usePortfolio } from './hooks/usePortfolio';
+import { filterDataByPeriod, type ReportingPeriod, type DateRange } from './data/sampleChartData';
+import { readAuthToken } from './lib/authorizedFetch';
 import { endGuestSession } from './lib/guestSession';
 import { clearAllDrafts } from './lib/stepDraft';
 import { returnForPeriod } from './lib/returnForPeriod';
 import { greetingFor } from './lib/greeting';
 import { describePeriodWindow } from './lib/periodWindow';
-import { filterDataByPeriod } from './data/sampleChartData';
 
 interface User {
   id: string;
   email: string;
   name?: string;
-}
-
-interface BreakdownItem {
-  name: string;
-  amount: number;
-  percentage: number;
-}
-
-interface StatsData {
-  netWorth: number;
-  realNetWorth: number;
-  cashBalance: number;
-  totalInvested: number;
-  openInvestedValue: number;
-  openMarketValue: number;
-  soldProfit: number;
-  openProfit: number;
-  realSoldProfit: number;
-  realOpenProfit: number;
-  dividends: number;
-  pricesAvailable: boolean;
-  totalProfit: number;
-  totalFees?: number;
-  totalIncome?: number;
-  allTimeRoiPercent: number;
-  realProfitEuros: number;
-  realRoiPercent: number;
-  annualInflationRate?: number;
-  country: string;
-  baseCurrency: string;
-  breakdowns: {
-    regions: BreakdownItem[];
-    sectors: BreakdownItem[];
-    assetClasses: BreakdownItem[];
-  };
-  positions: PositionItem[];
-  soldAssets: SoldAssetItem[];
-  cashBalances?: CashBalanceItem[];
 }
 
 function App() {
@@ -80,36 +42,12 @@ function App() {
   const [isInflationModalOpen, setIsInflationModalOpen] = useState(false);
   const [isRealInflationMode, setIsRealInflationMode] = useState(false);
   const [tableKey, setTableKey] = useState(0);
-  const [hasLoaded, setHasLoaded] = useState(false);
   const [greeting] = useState(() => greetingFor(new Date().getHours()));
 
   const [period, setPeriod] = useState<ReportingPeriod>('All');
   const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
-  const [historyData, setHistoryData] = useState<ChartDataPoint[]>([]);
 
-  const [stats, setStats] = useState<StatsData>({
-    netWorth: 0,
-    realNetWorth: 0,
-    cashBalance: 0,
-    totalInvested: 0,
-    openInvestedValue: 0,
-    openMarketValue: 0,
-    openProfit: 0,
-    realSoldProfit: 0,
-    realOpenProfit: 0,
-    dividends: 0,
-    pricesAvailable: true,
-    soldProfit: 0,
-    totalProfit: 0,
-    allTimeRoiPercent: 0,
-    realProfitEuros: 0,
-    realRoiPercent: 0,
-    country: 'Spain',
-    baseCurrency: 'EUR',
-    breakdowns: { regions: [], sectors: [], assetClasses: [] },
-    positions: [],
-    soldAssets: [],
-  });
+  const { stats, history: historyData, hasLoaded, fromMemory, refresh, applyCountry } = usePortfolio(user !== null);
 
   const getGreetingName = () => {
     if (!user) return 'Joe';
@@ -135,34 +73,6 @@ function App() {
     return user.name || 'Joe';
   };
 
-  const fetchStats = async () => {
-    try {
-      const [statsRes, historyRes] = await Promise.all([
-        authorizedFetch('/api/portfolio/stats'),
-        authorizedFetch('/api/portfolio/history'),
-      ]);
-
-      if (statsRes.ok) {
-        const data = await statsRes.json();
-        setStats(data);
-      }
-      if (historyRes.ok) {
-        const hist = await historyRes.json();
-        setHistoryData(hist);
-      }
-    } catch (err) {
-      console.error('Failed to fetch portfolio data:', err);
-    } finally {
-      setHasLoaded(true);
-    }
-  };
-
-  useEffect(() => {
-    if (user) {
-      fetchStats();
-    }
-  }, [user]);
-
   const handleLogout = () => {
     // The guest's reset needs the token: read it first, then drop it so signing out is instant.
     void endGuestSession(user, readAuthToken());
@@ -170,12 +80,14 @@ function App() {
     localStorage.removeItem('auth_user');
     // Half-filled forms hold personal answers: they do not outlive the session.
     clearAllDrafts(sessionStorage);
+    // The same goes for the last figures shown: nobody's portfolio is left in memory for the next person.
+    clearPortfolioCache();
     setUser(null);
   };
 
   const handleTransactionSuccess = () => {
     setIsLogOpen(false);
-    fetchStats();
+    refresh();
     setTableKey((prev) => prev + 1);
   };
 
@@ -265,6 +177,7 @@ function App() {
             isRealInflationMode={isRealInflationMode}
             country={stats.country}
             loading={!hasLoaded}
+            settled={fromMemory}
           >
             <ReportingPeriodBar
               activePeriod={period}
@@ -339,10 +252,7 @@ function App() {
           currentCountry={stats.country}
           currentRate={stats.annualInflationRate || 2.8}
           onClose={() => setIsInflationModalOpen(false)}
-          onUpdate={(country, rate) => {
-            setStats((prev) => ({ ...prev, country, annualInflationRate: rate }));
-            fetchStats();
-          }}
+          onUpdate={applyCountry}
         />
       )}
     </div>

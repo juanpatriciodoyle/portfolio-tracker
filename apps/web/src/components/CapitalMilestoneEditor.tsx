@@ -5,6 +5,7 @@ import { keepDecimal, keepDigits } from '../lib/inputFilters';
 import { describeFailure } from './profile/failureMessage';
 import Modal from './Modal';
 import { CATEGORY_LABELS, validateMilestoneForm, withCategory, type MilestoneErrors, type MilestoneForm } from './capitalMilestoneForm';
+import { useSubmitOnce } from '../hooks/useSubmitOnce';
 
 interface CapitalMilestoneEditorProps {
   initial: MilestoneForm;
@@ -23,15 +24,14 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
   const [form, setForm] = useState(initial);
   const [errors, setErrors] = useState<MilestoneErrors & { form?: string }>({});
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { run, pending: busy } = useSubmitOnce();
 
-  const finish = async (action: () => Promise<MutationResult>) => {
-    setBusy(true);
-    const result = await action();
-    setBusy(false);
-    if (result.ok) onClose();
-    else setErrors({ form: describeFailure(result.failure) });
-  };
+  const finish = (action: () => Promise<MutationResult>) =>
+    run(async () => {
+      const result = await action();
+      if (result.ok) onClose();
+      else setErrors({ form: describeFailure(result.failure) });
+    });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -157,7 +157,7 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
           <button type="button" className="btn-secondary-cancel" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="btn-primary-apply" disabled={busy}>
+          <button type="submit" className="btn-primary-apply" disabled={busy} aria-busy={busy}>
             {busy ? 'Saving…' : 'Save milestone'}
           </button>
         </div>

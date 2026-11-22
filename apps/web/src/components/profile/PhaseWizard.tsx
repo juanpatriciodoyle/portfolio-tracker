@@ -10,6 +10,7 @@ import { phaseFailureFeedback } from './phaseFailure';
 import PhaseStepFields from './PhaseStepFields';
 import { PHASE_STEP_COPY, type PhaseFlowStepId } from './phaseStepCopy';
 import { firstStepWithError, usePhaseFormFeedback } from './usePhaseFormFeedback';
+import { useSubmitOnce } from '../../hooks/useSubmitOnce';
 
 interface PhaseWizardProps {
   /** The phase being edited, or null to add a new one. */
@@ -42,7 +43,7 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
   // A new home can keep the jobs the previous one had; changing a home never touches its income.
   const candidates = useMemo(() => (phase === null ? carryCandidates(phases, form.startDate, form.currency) : []), [phase, phases, form.startDate, form.currency]);
   const feedback = usePhaseFormFeedback(form, today);
-  const [saving, setSaving] = useState(false);
+  const { run, pending: saving } = useSubmitOnce();
   const [addingBill, setAddingBill] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -71,21 +72,21 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
       return;
     }
 
-    setSaving(true);
-    setFormError(null);
-    const outcome = await onSubmit(result.payload);
-    setSaving(false);
-    if (outcome.ok) {
-      discard();
-      return;
-    }
+    await run(async () => {
+      setFormError(null);
+      const outcome = await onSubmit(result.payload);
+      if (outcome.ok) {
+        discard();
+        return;
+      }
 
-    const { fieldErrors, message } = phaseFailureFeedback(outcome.failure, phases);
-    feedback.showServerErrors(fieldErrors);
-    setFormError(message);
-    const failing = firstStepWithError(fieldErrors) ?? (message ? stepIds.indexOf('dates') : undefined);
-    if (typeof failing === 'number') setStep(failing);
-    else if (failing) setStep(stepIds.indexOf(failing));
+      const { fieldErrors, message } = phaseFailureFeedback(outcome.failure, phases);
+      feedback.showServerErrors(fieldErrors);
+      setFormError(message);
+      const failing = firstStepWithError(fieldErrors) ?? (message ? stepIds.indexOf('dates') : undefined);
+      if (typeof failing === 'number') setStep(failing);
+      else if (failing) setStep(stepIds.indexOf(failing));
+    });
   };
 
   const next = () => {

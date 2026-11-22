@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import type { CreateBillingRecordRequest, CreateFixedCostRequest, LivingPhaseDto } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import { clampDateYear, keepDecimal } from '../../lib/inputFilters';
@@ -24,6 +24,7 @@ import {
   type ExpenseStepId,
 } from './expenseForm';
 import SegmentedChoice from './SegmentedChoice';
+import { useSubmitOnce } from '../../hooks/useSubmitOnce';
 
 export interface ExpenseStepsProps {
   initial: ExpenseForm;
@@ -85,8 +86,7 @@ export default function ExpenseSteps({
   const [form, setForm] = useState<ExpenseForm>(initial);
   const [step, setStep] = useState<ExpenseStepId>('who');
   const [errors, setErrors] = useState<ExpenseErrors>({});
-  const [busy, setBusy] = useState(false);
-  const submitting = useRef(false);
+  const { run, pending: busy } = useSubmitOnce();
 
   const ids = stepsFor(form);
   const position = Math.max(ids.indexOf(step), 0);
@@ -108,7 +108,6 @@ export default function ExpenseSteps({
     );
 
   const save = async () => {
-    if (submitting.current) return;
     const result = resolveExpense(form, phases, context.today, chosenPhaseId);
     if (!result.ok) {
       setErrors(result.errors);
@@ -117,13 +116,11 @@ export default function ExpenseSteps({
       if (back !== null && ids.includes(back)) setStep(back);
       return;
     }
-    submitting.current = true;
-    setBusy(true);
-    const saved = result.kind === 'RATE' ? await onSubmitRate(result.phase, result.create) : await onSubmitReceipt(result.create);
-    submitting.current = false;
-    setBusy(false);
-    if (saved.ok) onSaved();
-    else setErrors({ form: describeDocumentFailure(saved.failure) });
+    await run(async () => {
+      const saved = result.kind === 'RATE' ? await onSubmitRate(result.phase, result.create) : await onSubmitReceipt(result.create);
+      if (saved.ok) onSaved();
+      else setErrors({ form: describeDocumentFailure(saved.failure) });
+    });
   };
 
   const next = () => {

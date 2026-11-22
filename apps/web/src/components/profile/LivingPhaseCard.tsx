@@ -13,6 +13,7 @@ import { summarizeActiveIncome } from './incomeSummary';
 import PhaseDetails from './PhaseDetails';
 import IncomeViewToggle from './IncomeViewToggle';
 import { burnRateMinor, housingBurden, incomeFigures, type IncomeView } from './phaseRatios';
+import { useSubmitOnce } from '../../hooks/useSubmitOnce';
 
 interface LivingPhaseCardProps {
   phase: LivingPhaseDto;
@@ -50,7 +51,7 @@ export default function LivingPhaseCard({
 }: LivingPhaseCardProps) {
   const id = useId();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const { run: runDelete, pending: deleting } = useSubmitOnce();
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [incomeView, setIncomeView] = useState<IncomeView>('current');
   const [incomeOpen, setIncomeOpen] = useState(false);
@@ -66,12 +67,11 @@ export default function LivingPhaseCard({
   const incomeDay = phase.endDate !== null && phase.endDate < today ? phase.endDate : today < phase.startDate ? phase.startDate : today;
   const incomeSummary = summarizeActiveIncome(phase.incomeStreams, incomeDay, (amountMinor) => formatMinor(amountMinor, phase.currency), (day) => formatCalendarDate(day));
 
-  const confirmDelete = async () => {
-    setDeleting(true);
-    const result = await onDelete();
-    setDeleting(false);
-    if (!result.ok) setDeleteError(describeFailure(result.failure));
-  };
+  const confirmDelete = () =>
+    runDelete(async () => {
+      const result = await onDelete();
+      if (!result.ok) setDeleteError(describeFailure(result.failure));
+    });
 
   return (
     <article
@@ -186,7 +186,7 @@ export default function LivingPhaseCard({
             {confirmingDelete ? (
               <div className="confirm-inline" role="group" aria-label={`Confirm deleting ${phase.name}`}>
                 <span>Delete {phase.name} and its costs?</span>
-                <button type="button" className="profile-danger-button" onClick={confirmDelete} disabled={deleting}>
+                <button type="button" className="profile-danger-button" onClick={confirmDelete} disabled={deleting} aria-busy={deleting}>
                   {deleting ? 'Deleting…' : 'Delete'}
                 </button>
                 <button type="button" className="profile-text-button" onClick={() => setConfirmingDelete(false)}>

@@ -2,6 +2,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { BillingRecordDto, CreateBillingRecordRequest, LivingPhaseDto, UpdateBillingRecordRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
+import { useSubmitOnce } from '../../hooks/useSubmitOnce';
 import { formatMinor, formatPhaseRange } from '../../lib/money';
 import Modal from '../Modal';
 import BillEditor from './BillEditor';
@@ -27,6 +28,7 @@ export default function BillsLedger({ phase, records, context, onUpdate, onDelet
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const { run: runRemove, pending: removing } = useSubmitOnce();
 
   const sorted = [...records].sort((a, b) => b.periodEnd.localeCompare(a.periodEnd) || b.periodStart.localeCompare(a.periodStart));
 
@@ -39,16 +41,17 @@ export default function BillsLedger({ phase, records, context, onUpdate, onDelet
     return result;
   };
 
-  const removeBill = async (recordId: string) => {
-    const result = await onDelete(recordId);
-    if (result.ok) {
-      setConfirmingId(null);
-      setRemoveError(null);
-      announce('Bill removed');
-    } else {
-      setRemoveError(describeFailure(result.failure));
-    }
-  };
+  const removeBill = (recordId: string) =>
+    runRemove(async () => {
+      const result = await onDelete(recordId);
+      if (result.ok) {
+        setConfirmingId(null);
+        setRemoveError(null);
+        announce('Bill removed');
+      } else {
+        setRemoveError(describeFailure(result.failure));
+      }
+    });
 
   return (
     <Modal label="Manage bills and documents" onClose={onClose}>
@@ -95,7 +98,7 @@ export default function BillsLedger({ phase, records, context, onUpdate, onDelet
                       {confirmingId === record.id ? (
                         <div className="confirm-inline" role="group" aria-label={`Confirm removing ${name}`}>
                           <span>Remove this bill?</span>
-                          <button type="button" className="profile-danger-button" onClick={() => removeBill(record.id)}>
+                          <button type="button" className="profile-danger-button" disabled={removing} aria-busy={removing} onClick={() => removeBill(record.id)}>
                             Remove
                           </button>
                           <button type="button" className="profile-text-button" onClick={() => setConfirmingId(null)}>

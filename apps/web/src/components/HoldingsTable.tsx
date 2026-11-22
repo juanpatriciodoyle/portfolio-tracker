@@ -547,7 +547,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                     <td
                       colSpan={6}
                       className="dashboard-table__cell dashboard-table__cell--empty"
-                      style={{ textAlign: 'center', padding: '36px 16px', color: '#71717A' }}
+                      style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-muted)' }}
                     >
                       {query.trim() ? (
                         'No holdings match your search.'

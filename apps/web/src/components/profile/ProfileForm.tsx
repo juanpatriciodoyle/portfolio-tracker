@@ -16,6 +16,7 @@ import {
 } from './profileDraft';
 import Stepper from './Stepper';
 import { keepDigits, keepNameCharacters } from '../../lib/inputFilters';
+import { useSubmitOnce } from '../../hooks/useSubmitOnce';
 
 interface ProfileFormProps {
   profile: ProfileData;
@@ -109,7 +110,7 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
   const [draft, setDraft] = useState<ProfileDraft>(() => toProfileDraft(profile));
   const [errors, setErrors] = useState<ProfileFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const { run, pending: saving } = useSubmitOnce();
 
   const set = <K extends keyof ProfileDraft>(key: K, value: ProfileDraft[K]) => setDraft((previous) => ({ ...previous, [key]: value }));
 
@@ -129,15 +130,15 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
     }
     setErrors({});
     setFormError(null);
-    setSaving(true);
-    const outcome = await onSave(result.profile);
-    setSaving(false);
-    if (outcome.ok) {
-      setEditing(false);
-      announce('Profile saved');
-    } else {
-      setFormError(describeFailure(outcome.failure));
-    }
+    await run(async () => {
+      const outcome = await onSave(result.profile);
+      if (outcome.ok) {
+        setEditing(false);
+        announce('Profile saved');
+      } else {
+        setFormError(describeFailure(outcome.failure));
+      }
+    });
   };
 
   if (!editing) {
@@ -270,7 +271,7 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
         )}
 
         <div className="profile-form__actions">
-          <button type="submit" className="btn-primary-apply" disabled={saving}>
+          <button type="submit" className="btn-primary-apply" disabled={saving} aria-busy={saving}>
             {saving ? 'Saving…' : 'Save'}
           </button>
           <button type="button" className="btn-secondary-cancel" onClick={() => setEditing(false)}>

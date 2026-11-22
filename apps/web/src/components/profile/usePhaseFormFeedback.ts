@@ -10,11 +10,6 @@ import {
 
 const STEP_IDS = Object.keys(PHASE_STEP_FIELDS) as PhaseStepId[];
 
-/** The step that asks for a field. */
-export function stepOfPhaseField(field: keyof PhaseFormState): PhaseStepId | undefined {
-  return STEP_IDS.find((step) => (PHASE_STEP_FIELDS[step] as readonly string[]).includes(field));
-}
-
 /**
  * What a guided phase form shows as it is filled in: errors for steps that were tried or answers that
  * cannot be right, checkmarks for answers that pass, and whatever the server said about a field.

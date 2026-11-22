@@ -2,6 +2,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makePhase, makeProfile } from '../../../test/fixtures';
+import { tapTwice } from '../../../test/doubleTap';
 import { chooseCountry, clickContinue } from '../../../test/wizardHelpers';
 import OnboardingWizard from '../OnboardingWizard';
 
@@ -104,6 +105,18 @@ describe('OnboardingWizard', () => {
 
     expect(screen.getByRole('list', { name: 'Chosen nationalities' })).toHaveTextContent('🇦🇷 Argentina');
     expect(screen.getByRole('list', { name: 'Chosen nationalities' })).toHaveTextContent('🇪🇸 Spain');
+  });
+
+  it('saves the profile and the home once, and finishes once, when Finish is tapped twice', async () => {
+    const { props } = renderWizard();
+    await completeAboutYou();
+    await completeFirstHome();
+
+    tapTwice(within(screen.getByRole('dialog')).getByRole('button', { name: 'Finish' }));
+
+    await waitFor(() => expect(props.onFinished).toHaveBeenCalledTimes(1));
+    expect(props.onSaveProfile).toHaveBeenCalledTimes(1);
+    expect(props.onCreatePhase).toHaveBeenCalledTimes(1);
   });
 
   it('saves the profile, then the first home with its bills, and reports that it is done', async () => {

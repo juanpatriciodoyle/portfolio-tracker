@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSubmitOnce } from '../hooks/useSubmitOnce';
 import { KeyRound, ShieldCheck } from 'lucide-react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { startRegistration, startAuthentication } from '@simplewebauthn/browser';
@@ -15,50 +16,40 @@ interface LoginModalProps {
 }
 
 export default function LoginModal({ onSuccess }: LoginModalProps) {
-  const [isLoading, setIsLoading] = useState(false);
+  const { run, pending: isLoading } = useSubmitOnce();
   const [error, setError] = useState<string | null>(null);
 
   const googleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
-      setIsLoading(true);
-      setError(null);
+      await run(async () => {
+        setError(null);
 
-      try {
-        const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-        });
-        const googleUser = await userInfoRes.json();
+        try {
+          // Only Google's token goes to the server, which asks Google who it belongs to. What the browser says is never trusted.
+          const res = await fetch('/api/auth/google', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accessToken: tokenResponse.access_token }),
+          });
 
-        const res = await fetch('/api/auth/google', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: googleUser.email,
-            name: googleUser.name,
-            googleId: googleUser.sub,
-            avatarUrl: googleUser.picture,
-          }),
-        });
-
-        const data = await res.json();
-        if (res.ok && data.success) {
-          try {
-            if (data.token) {
-              localStorage.setItem('auth_token', data.token);
-            }
-            if (googleUser.email) {
-              localStorage.setItem('auth_user_email', googleUser.email);
-            }
-          } catch (_) {}
-          onSuccess(data.user);
-        } else {
-          setError(data.error || 'Google Sign-In failed.');
+          const data = await res.json();
+          if (res.ok && data.success) {
+            try {
+              if (data.token) {
+                localStorage.setItem('auth_token', data.token);
+              }
+              if (data.user?.email) {
+                localStorage.setItem('auth_user_email', data.user.email);
+              }
+            } catch (_) {}
+            onSuccess(data.user);
+          } else {
+            setError(data.error || 'Google Sign-In failed.');
+          }
+        } catch (err) {
+          setError('Could not reach the server. Check your connection and try again.');
         }
-      } catch (err) {
-        setError('Could not reach the server. Check your connection and try again.');
-      } finally {
-        setIsLoading(false);
-      }
+      });
     },
     onError: () => {
       setError('Google Sign-In was cancelled or failed.');
@@ -66,106 +57,106 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
   });
 
   const handleGoogleSignIn = () => {
+    if (isLoading) return;
     setError(null);
     googleLogin();
   };
 
   const handlePasskeySignIn = async () => {
-    setIsLoading(true);
-    setError(null);
+    await run(async () => {
+      setError(null);
 
-    let storedEmail = 'juan@portfolio.local';
-    try {
-      storedEmail = localStorage.getItem('auth_user_email') || 'juan@portfolio.local';
-    } catch (_) {}
+      let storedEmail = 'juan@portfolio.local';
+      try {
+        storedEmail = localStorage.getItem('auth_user_email') || 'juan@portfolio.local';
+      } catch (_) {}
 
-    try {
-      // 1. Get WebAuthn options from server
-      const optRes = await fetch('/api/auth/passkey/generate-options', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: storedEmail }),
-      });
+      try {
+        // 1. Get WebAuthn options from server
+        const optRes = await fetch('/api/auth/passkey/generate-options', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: storedEmail }),
+        });
 
-      const optData = await optRes.json();
-      if (!optRes.ok) {
-        throw new Error(optData.error || 'Failed to fetch passkey challenge.');
+        const optData = await optRes.json();
+        if (!optRes.ok) {
+          throw new Error(optData.error || 'Failed to fetch passkey challenge.');
+        }
+
+        // 2. Trigger native browser TouchID / FaceID prompt
+        let credentialResponse;
+        if (optData.isRegistration) {
+          credentialResponse = await startRegistration({ optionsJSON: optData.options });
+        } else {
+          credentialResponse = await startAuthentication({ optionsJSON: optData.options });
+        }
+
+        // 3. Verify signed credential response on server
+        const verifyRes = await fetch('/api/auth/passkey/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: storedEmail,
+            credential: credentialResponse,
+          }),
+        });
+
+        const verifyData = await verifyRes.json();
+        if (verifyRes.ok && verifyData.success) {
+          try {
+            if (verifyData.token) {
+              localStorage.setItem('auth_token', verifyData.token);
+            }
+          } catch (_) {}
+          onSuccess(verifyData.user);
+        } else {
+          setError(verifyData.error || 'Passkey verification failed.');
+        }
+      } catch (err: unknown) {
+        const failure = err instanceof Error ? err : null;
+        if (failure?.name === 'NotAllowedError') {
+          setError('Passkey prompt was cancelled.');
+        } else {
+          setError(failure?.message || 'Passkey authentication error.');
+        }
       }
-
-      // 2. Trigger native browser TouchID / FaceID prompt
-      let credentialResponse;
-      if (optData.isRegistration) {
-        credentialResponse = await startRegistration({ optionsJSON: optData.options });
-      } else {
-        credentialResponse = await startAuthentication({ optionsJSON: optData.options });
-      }
-
-      // 3. Verify signed credential response on server
-      const verifyRes = await fetch('/api/auth/passkey/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: storedEmail,
-          credential: credentialResponse,
-        }),
-      });
-
-      const verifyData = await verifyRes.json();
-      if (verifyRes.ok && verifyData.success) {
-        try {
-          if (verifyData.token) {
-            localStorage.setItem('auth_token', verifyData.token);
-          }
-        } catch (_) {}
-        onSuccess(verifyData.user);
-      } else {
-        setError(verifyData.error || 'Passkey verification failed.');
-      }
-    } catch (err: any) {
-      if (err.name === 'NotAllowedError') {
-        setError('Passkey prompt was cancelled.');
-      } else {
-        setError(err.message || 'Passkey authentication error.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
+    });
   };
 
   const handleDemoSignIn = async () => {
-    setIsLoading(true);
-    setError(null);
+    await run(async () => {
+      setError(null);
 
-    try {
-      const res = await fetch('/api/auth/demo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      try {
+        const res = await fetch('/api/auth/demo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        const demoUser = {
-          ...data.user,
-          name: 'Joe',
-        };
-        try {
-          if (data.token) {
-            localStorage.setItem('auth_token', data.token);
-          }
-          if (demoUser.email) {
-            localStorage.setItem('auth_user_email', demoUser.email);
-          }
-          localStorage.setItem('auth_user', JSON.stringify(demoUser));
-        } catch (_) {}
-        onSuccess(demoUser);
-      } else {
-        setError(data.error || 'Failed to initialize demo portfolio.');
+        const data = await res.json();
+        if (res.ok && data.success) {
+          const demoUser = {
+            ...data.user,
+            name: 'Joe',
+          };
+          try {
+            if (data.token) {
+              localStorage.setItem('auth_token', data.token);
+            }
+            if (demoUser.email) {
+              localStorage.setItem('auth_user_email', demoUser.email);
+            }
+            localStorage.setItem('auth_user', JSON.stringify(demoUser));
+          } catch (_) {}
+          onSuccess(demoUser);
+        } else {
+          setError(data.error || 'Failed to initialize demo portfolio.');
+        }
+      } catch (err) {
+        setError('Could not reach the server. Check your connection and try again.');
       }
-    } catch (err) {
-      setError('Could not reach the server. Check your connection and try again.');
-    } finally {
-      setIsLoading(false);
-    }
+    });
   };
 
   return (
@@ -189,7 +180,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
           border: 'var(--border-card)',
           borderRadius: '16px',
           padding: '36px',
-          boxShadow: '0 24px 48px rgba(0, 0, 0, 0.8)',
+          boxShadow: 'var(--shadow-dialog)',
           textAlign: 'center',
         }}
       >
@@ -222,6 +213,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
           <button
             onClick={handleGoogleSignIn}
             disabled={isLoading}
+            aria-busy={isLoading}
             style={{
               width: '100%',
               padding: '14px',
@@ -263,6 +255,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
           <button
             onClick={handlePasskeySignIn}
             disabled={isLoading}
+            aria-busy={isLoading}
             style={{
               width: '100%',
               padding: '14px',
@@ -308,12 +301,13 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
             type="button"
             onClick={handleDemoSignIn}
             disabled={isLoading}
+            aria-busy={isLoading}
             style={{
               width: '100%',
               padding: '14px',
               borderRadius: '10px',
               border: '1px solid var(--accent-primary)',
-              background: 'linear-gradient(135deg, var(--accent-blue-subtle), rgba(59, 130, 246, 0.06))',
+              background: 'var(--gradient-accent-soft)',
               color: 'var(--text-accent)',
               fontSize: '14px',
               fontWeight: 600,
@@ -325,14 +319,12 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
               transition: 'all 0.2s ease',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background =
-                'linear-gradient(135deg, rgba(37, 99, 235, 0.28), rgba(59, 130, 246, 0.16))';
+              e.currentTarget.style.background = 'var(--gradient-accent-soft-hover)';
               e.currentTarget.style.borderColor = 'var(--accent-blue-light)';
               e.currentTarget.style.color = 'var(--text-accent-hover)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background =
-                'linear-gradient(135deg, var(--accent-blue-subtle), rgba(59, 130, 246, 0.06))';
+              e.currentTarget.style.background = 'var(--gradient-accent-soft)';
               e.currentTarget.style.borderColor = 'var(--accent-primary)';
               e.currentTarget.style.color = 'var(--text-accent)';
             }}

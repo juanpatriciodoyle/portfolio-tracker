@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { chartThemeFromDocument } from '../lib/chartTheme';
 import { easeOutExpo } from '../lib/easing';
 import { prefersReducedMotion } from '../lib/prefersReducedMotion';
 import {
@@ -27,6 +28,8 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
   currency = 'EUR',
 }) => {
   const [chartMode, setChartMode] = useState<ChartMode>('value');
+  // The canvas cannot read CSS variables itself: the colours come from the same tokens as everything else.
+  const [theme] = useState(chartThemeFromDocument);
 
   // Dataset visibility toggles
   const [visibleDatasets, setVisibleDatasets] = useState({
@@ -136,8 +139,8 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
     // Draw Grid lines & Y-axis labels
     const gridSteps = 4;
     ctx.lineWidth = 1;
-    ctx.strokeStyle = '#1E1E22';
-    ctx.fillStyle = '#71717A';
+    ctx.strokeStyle = theme.grid;
+    ctx.fillStyle = theme.axisText;
     ctx.font = '11px Inter, system-ui, sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
@@ -163,7 +166,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
     if (minY < 0 && maxY > 0) {
       const zeroY = getY(0);
       ctx.beginPath();
-      ctx.strokeStyle = '#3F3F46';
+      ctx.strokeStyle = theme.zeroLine;
       ctx.setLineDash([4, 4]);
       ctx.moveTo(padding.left, zeroY);
       ctx.lineTo(padding.left + chartW, zeroY);
@@ -230,7 +233,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
 
         const grad = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartH);
         grad.addColorStop(0, gradientColor);
-        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        grad.addColorStop(1, 'transparent');
 
         ctx.fillStyle = grad;
         ctx.fill();
@@ -249,18 +252,18 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
     if (chartMode === 'value') {
       // 1. Net Contributions (Cashflow)
       if (visibleDatasets.cashflow) {
-        drawLineSeries((d) => d.cumulative_cost_in_reporting_currency, '#71717A', undefined, true);
+        drawLineSeries((d) => d.cumulative_cost_in_reporting_currency, theme.costLine, undefined, true);
       }
       // 2. Benchmark
       if (visibleDatasets.benchmark) {
-        drawLineSeries((d) => d.benchmark_value_in_reporting_currency, '#F59E0B', undefined, false);
+        drawLineSeries((d) => d.benchmark_value_in_reporting_currency, theme.benchmarkLine, undefined, false);
       }
       // 3. Portfolio Value
       if (visibleDatasets.portfolio) {
         drawLineSeries(
           (d) => d.portfolio_value_in_reporting_currency,
-          '#3B82F6', // Vibrant Electric Blue
-          'rgba(59, 130, 246, 0.18)',
+          theme.portfolioLine,
+          theme.portfolioArea,
           false
         );
       }
@@ -269,7 +272,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
       if (visibleDatasets.benchmark) {
         drawLineSeries(
           (d) => d.benchmark_value_in_reporting_currency - d.cumulative_cost_in_reporting_currency,
-          '#F59E0B',
+          theme.benchmarkLine,
           undefined,
           true
         );
@@ -278,21 +281,21 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
       if (visibleDatasets.portfolio) {
         drawLineSeries(
           (d) => d.portfolio_value_in_reporting_currency - d.cumulative_cost_in_reporting_currency,
-          '#10B981', // Emerald
-          'rgba(16, 185, 129, 0.18)',
+          theme.profitLine,
+          theme.profitArea,
           false
         );
       }
     } else {
       // Performance mode (%)
       if (visibleDatasets.benchmark) {
-        drawLineSeries((d) => d.cumulative_benchmark_time_weighted_return_rate * 100, '#F59E0B', undefined, true);
+        drawLineSeries((d) => d.cumulative_benchmark_time_weighted_return_rate * 100, theme.benchmarkLine, undefined, true);
       }
       if (visibleDatasets.portfolio) {
         drawLineSeries(
           (d) => d.cumulative_time_weighted_return_rate * 100,
-          '#10B981',
-          'rgba(16, 185, 129, 0.18)',
+          theme.profitLine,
+          theme.profitArea,
           false
         );
       }
@@ -302,7 +305,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
 
     // Draw X-axis date ticks
     if (filteredData.length === 1) {
-      ctx.fillStyle = '#71717A';
+      ctx.fillStyle = theme.axisText;
       ctx.font = '11px Inter, system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
@@ -311,7 +314,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
       ctx.fillText(dateLabel, padding.left + chartW / 2, padding.top + chartH + 10);
     } else if (filteredData.length > 1) {
       const xStepCount = Math.min(6, filteredData.length);
-      ctx.fillStyle = '#71717A';
+      ctx.fillStyle = theme.axisText;
       ctx.font = '11px Inter, system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
@@ -342,7 +345,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
         ctx.save();
         ctx.beginPath();
         ctx.setLineDash([3, 3]);
-        ctx.strokeStyle = '#A1A1AA';
+        ctx.strokeStyle = theme.crosshair;
         ctx.lineWidth = 1;
         ctx.moveTo(hX, padding.top);
         ctx.lineTo(hX, padding.top + chartH);
@@ -359,16 +362,16 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
         const dotY = getY(mainVal);
         ctx.beginPath();
         ctx.arc(hX, dotY, 5, 0, Math.PI * 2);
-        ctx.fillStyle = chartMode === 'value' ? '#3B82F6' : '#10B981';
+        ctx.fillStyle = chartMode === 'value' ? theme.portfolioLine : theme.profitLine;
         ctx.fill();
         ctx.lineWidth = 2;
-        ctx.strokeStyle = '#FFFFFF';
+        ctx.strokeStyle = theme.markerRing;
         ctx.stroke();
 
         ctx.restore();
       }
     }
-  }, [filteredData, chartMode, visibleDatasets, currency, hoverPoint, period]);
+  }, [filteredData, chartMode, visibleDatasets, currency, hoverPoint, period, theme]);
 
   // Redraw when dependencies change or resize occurs
   useEffect(() => {

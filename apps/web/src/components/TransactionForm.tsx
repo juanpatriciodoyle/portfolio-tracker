@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { FormEvent } from 'react';
 import { DollarSign, ArrowUpRight, ArrowDownLeft, PlusCircle, MinusCircle, Calendar, Search } from 'lucide-react';
 import { authorizedFetch } from '../lib/authorizedFetch';
+import { useSubmitOnce } from '../hooks/useSubmitOnce';
 import OwnedHoldingPicker from './OwnedHoldingPicker';
 import { checkSaleQuantity, formatUnits, type SellablePosition } from '../lib/saleRules';
 
@@ -39,7 +40,7 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { run, pending: isSubmitting } = useSubmitOnce();
   const [sellingHolding, setSellingHolding] = useState<SellablePosition | null>(null);
   const isSale = type === 'SOLD';
   const saleCheck = isSale && sellingHolding ? checkSaleQuantity(quantity, sellingHolding.quantity) : null;
@@ -140,51 +141,49 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
       return;
     }
 
-    setIsSubmitting(true);
-
-    try {
-      const response = await authorizedFetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type,
-          symbol: isCashOp ? 'CASH' : symbol.toUpperCase(),
-          name: name || (isCashOp ? 'Cash Operation' : symbol.toUpperCase()),
-          quantity: isCashOp ? 1.0 : parseFloat(quantity || '1'),
-          amount: parseFloat(amount),
-          fee: parseFloat(fee || '0'),
-          date: date ? new Date(date).toISOString() : new Date().toISOString(),
-          assetClass: isCashOp ? 'Cash' : assetClass,
-          sector: isCashOp ? 'Financials' : sector,
-          region: isCashOp ? 'Global' : region,
-          currency: 'EUR',
-        }),
-      });
-
-      const data = await response.json().catch(() => ({}) as { error?: string });
-
-      if (response.ok) {
-        setStatus({
-          type: 'success',
-          message: `Recorded transaction successfully!`,
+    await run(async () => {
+      try {
+        const response = await authorizedFetch('/api/transactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type,
+            symbol: isCashOp ? 'CASH' : symbol.toUpperCase(),
+            name: name || (isCashOp ? 'Cash Operation' : symbol.toUpperCase()),
+            quantity: isCashOp ? 1.0 : parseFloat(quantity || '1'),
+            amount: parseFloat(amount),
+            fee: parseFloat(fee || '0'),
+            date: date ? new Date(date).toISOString() : new Date().toISOString(),
+            assetClass: isCashOp ? 'Cash' : assetClass,
+            sector: isCashOp ? 'Financials' : sector,
+            region: isCashOp ? 'Global' : region,
+            currency: 'EUR',
+          }),
         });
-        setSymbol('');
-        setName('');
-        setQuantity(isSale ? '' : '1');
-        setSellingHolding(null);
-        setAmount('');
-        setFee('0');
-        if (onSuccess) {
-          onSuccess();
+
+        const data = await response.json().catch(() => ({}) as { error?: string });
+
+        if (response.ok) {
+          setStatus({
+            type: 'success',
+            message: `Recorded transaction successfully!`,
+          });
+          setSymbol('');
+          setName('');
+          setQuantity(isSale ? '' : '1');
+          setSellingHolding(null);
+          setAmount('');
+          setFee('0');
+          if (onSuccess) {
+            onSuccess();
+          }
+        } else {
+          setStatus({ type: 'error', message: data.error || 'The transaction was not recorded. Check the details and try again.' });
         }
-      } else {
-        setStatus({ type: 'error', message: data.error || 'The transaction was not recorded. Check the details and try again.' });
+      } catch (err) {
+        setStatus({ type: 'error', message: 'Could not reach the server, so the transaction was not recorded. Check your connection and try again.' });
       }
-    } catch (err) {
-      setStatus({ type: 'error', message: 'Could not reach the server, so the transaction was not recorded. Check your connection and try again.' });
-    } finally {
-      setIsSubmitting(false);
-    }
+    });
   };
 
   const isCashOp = type === 'DEPOSIT' || type === 'WITHDRAWAL';
@@ -558,6 +557,7 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
         <button
           type="submit"
           disabled={isSubmitting || cannotConfirm}
+          aria-busy={isSubmitting}
           style={{
             marginTop: '8px',
             padding: '12px',

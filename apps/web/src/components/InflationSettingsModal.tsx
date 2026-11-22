@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Percent, Globe, Check, RefreshCw } from 'lucide-react';
 import { authorizedFetch } from '../lib/authorizedFetch';
+import { useSubmitOnce } from '../hooks/useSubmitOnce';
 
 interface InflationSettingsModalProps {
   currentCountry: string;
@@ -27,8 +28,8 @@ export default function InflationSettingsModal({
 }: InflationSettingsModalProps) {
   const [country, setCountry] = useState(currentCountry || 'Spain');
   const [rate, setRate] = useState((currentRate || 2.8).toString());
-  const [isSaving, setIsSaving] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const { run: runSave, pending: isSaving } = useSubmitOnce();
+  const { run: runSync, pending: isSyncing } = useSubmitOnce();
 
   const handleCountrySelect = (selectedCountry: string) => {
     setCountry(selectedCountry);
@@ -37,44 +38,41 @@ export default function InflationSettingsModal({
     }
   };
 
-  const handleAutoSyncSpain = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await authorizedFetch('/api/user/sync-inflation', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        setCountry('Spain');
-        setRate(data.annualInflationRate.toString());
+  const handleAutoSyncSpain = () =>
+    runSync(async () => {
+      try {
+        const res = await authorizedFetch('/api/user/sync-inflation', { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json();
+          setCountry('Spain');
+          setRate(data.annualInflationRate.toString());
+        }
+      } catch (err) {
+        console.error('Failed to sync Spain inflation:', err);
       }
-    } catch (err) {
-      console.error('Failed to sync Spain inflation:', err);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+    });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaving(true);
     const numericRate = parseFloat(rate) || 0;
 
-    try {
-      await authorizedFetch('/api/user/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          country,
-          annualInflationRate: numericRate,
-        }),
-      });
+    await runSave(async () => {
+      try {
+        await authorizedFetch('/api/user/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            country,
+            annualInflationRate: numericRate,
+          }),
+        });
 
-      onUpdate(country, numericRate);
-      onClose();
-    } catch (err) {
-      console.error('Failed to update inflation config:', err);
-    } finally {
-      setIsSaving(false);
-    }
+        onUpdate(country, numericRate);
+        onClose();
+      } catch (err) {
+        console.error('Failed to update inflation config:', err);
+      }
+    });
   };
 
   return (
@@ -228,6 +226,7 @@ export default function InflationSettingsModal({
             <button
               type="submit"
               disabled={isSaving}
+              aria-busy={isSaving}
               style={{
                 flex: 1,
                 padding: '12px',

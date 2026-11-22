@@ -50,9 +50,14 @@ export interface HeroSummary {
   totalValue: { title: string; amount: number; beforeInflation: number | null };
   invested: number;
   cash: number;
-  gain: { amount: number; percent: number; phrase: string };
+  gain: { label: string; amount: number; percent: number; phrase: string };
   /** The split of the whole-history gain; null for a window, whose gain comes from the value history. */
   gainParts: GainPart[] | null;
+  /**
+   * The two answers to "how much have I made?": what the things still held have gained today, and what selling
+   * already locked in. Null for a window. A part that is zero stays, so "nothing sold yet" can be said.
+   */
+  gainSplit: { stillInvested: number; sold: number } | null;
   pricesAvailable: boolean;
 }
 
@@ -97,9 +102,14 @@ export function heroSummary(input: HeroSummaryInput): HeroSummary {
     invested: figures.openMarketValue,
     cash: figures.cashBalance,
     gain: wholeHistory
-      ? { amount: figures.totalGain, percent: figures.totalGainPercent, phrase }
-      : { amount: periodGain, percent: periodPercent, phrase },
+      ? { label: 'Total profit', amount: figures.totalGain, percent: figures.totalGainPercent, phrase }
+      : { label: 'Profit', amount: periodGain, percent: periodPercent, phrase },
     gainParts: wholeHistory ? gainParts(input) : null,
+    gainSplit: wholeHistory
+      ? isRealInflationMode
+        ? { stillInvested: figures.realOpenProfit, sold: figures.realSoldProfit }
+        : { stillInvested: figures.openProfit, sold: figures.soldProfit }
+      : null,
     pricesAvailable: figures.pricesAvailable,
   };
 }

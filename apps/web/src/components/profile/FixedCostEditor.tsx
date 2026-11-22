@@ -13,6 +13,7 @@ import CategoryChips from './CategoryChips';
 import { describeFailure } from './failureMessage';
 import { CADENCE_OPTIONS } from './labels';
 import SegmentedChoice from './SegmentedChoice';
+import { useSubmitOnce } from '../../hooks/useSubmitOnce';
 
 interface FixedCostEditorProps {
   currency: string;
@@ -38,7 +39,7 @@ export default function FixedCostEditor({ currency, initial, onSubmit, onCancel 
   const [label, setLabel] = useState(initial?.label ?? '');
   const [endDate, setEndDate] = useState(initial?.endDate ?? '');
   const [errors, setErrors] = useState<Errors>({});
-  const [saving, setSaving] = useState(false);
+  const { run, pending: saving } = useSubmitOnce();
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -69,10 +70,10 @@ export default function FixedCostEditor({ currency, initial, onSubmit, onCancel 
     }
 
     setErrors({});
-    setSaving(true);
-    const result = await onSubmit(parsed.data);
-    setSaving(false);
-    if (!result.ok) setErrors({ form: describeFailure(result.failure) });
+    await run(async () => {
+      const result = await onSubmit(parsed.data);
+      if (!result.ok) setErrors({ form: describeFailure(result.failure) });
+    });
   };
 
   return (
@@ -171,7 +172,7 @@ export default function FixedCostEditor({ currency, initial, onSubmit, onCancel 
       )}
 
       <div className="cost-editor__actions">
-        <button type="submit" className="btn-primary-apply" disabled={saving}>
+        <button type="submit" className="btn-primary-apply" disabled={saving} aria-busy={saving}>
           {saving ? 'Saving…' : initial ? 'Save changes' : 'Add cost'}
         </button>
         <button type="button" className="btn-secondary-cancel" onClick={onCancel}>

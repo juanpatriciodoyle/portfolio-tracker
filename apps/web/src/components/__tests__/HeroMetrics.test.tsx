@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import HeroMetrics, { type HeroFigures } from '../HeroMetrics';
 
@@ -22,6 +22,9 @@ const figures: HeroFigures = {
   totalGainPercent: 70.25,
   pricesAvailable: true,
 };
+
+/** The two headline figures only: the folded breakdown repeats some of their words. */
+const figuresBlock = () => within(document.querySelector<HTMLElement>('.hero__figures')!);
 
 const props = {
   figures,
@@ -51,9 +54,41 @@ describe('HeroMetrics: one answer to "how am I doing?"', () => {
 
   it('says what it has earned, with the percentage and the period in plain words', () => {
     render(<HeroMetrics {...props} />);
+    expect(figuresBlock().getByText('Total profit')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '+€199,171.51' })).toBeInTheDocument();
-    expect(screen.getByText('(+70.25%)')).toBeInTheDocument();
-    expect(screen.getByText('since you started')).toBeInTheDocument();
+    expect(screen.getByText('+70.25%')).toBeInTheDocument();
+    expect(screen.getByText(/since you started/)).toBeInTheDocument();
+  });
+
+  it('puts the profit beside the total value, as the second of two figures at the same level', () => {
+    render(<HeroMetrics {...props} />);
+    const figures = document.querySelectorAll('.hero__figures > .hero__figure');
+    expect(figures).toHaveLength(2);
+    expect(figures[0]).toHaveTextContent('Total value');
+    expect(figures[1]).toHaveTextContent('Total profit');
+  });
+
+  it('shows without opening anything what the holdings have gained now and what selling already made', () => {
+    render(<HeroMetrics {...props} />);
+    expect(figuresBlock().getByText('Still invested').nextSibling).toHaveTextContent('+€154,392.51');
+    expect(figuresBlock().getByText('Already sold').nextSibling).toHaveTextContent('+€44,900.00');
+  });
+
+  it('says "None yet" when nothing was sold, instead of a zero that looks like a result', () => {
+    render(<HeroMetrics {...props} figures={{ ...figures, soldProfit: 0, totalGain: 154271.51 }} />);
+    expect(figuresBlock().getByText('Already sold').nextSibling).toHaveTextContent('None yet');
+  });
+
+  it('with inflation on, shows the adjusted parts', () => {
+    render(<HeroMetrics {...props} isRealInflationMode />);
+    expect(figuresBlock().getByText('Still invested').nextSibling).toHaveTextContent('+€100,000.00');
+    expect(figuresBlock().getByText('Already sold').nextSibling).toHaveTextContent('+€20,000.00');
+  });
+
+  it('shows no split for a window', () => {
+    render(<HeroMetrics {...props} period="YTD" periodGain={10} periodPercent={1} />);
+    expect(screen.queryByText('Still invested')).not.toBeInTheDocument();
+    expect(screen.queryByText('Already sold')).not.toBeInTheDocument();
   });
 
   it('splits the total into what is invested and what is cash', () => {
@@ -64,8 +99,8 @@ describe('HeroMetrics: one answer to "how am I doing?"', () => {
 
   it('marks a loss as negative', () => {
     render(<HeroMetrics {...props} figures={{ ...figures, totalGain: -1200, totalGainPercent: -3.5 }} />);
-    expect(screen.getByRole('img', { name: '-€1,200.00' }).closest('.hero__gain')).toHaveClass('is-negative');
-    expect(screen.getByText('(-3.50%)')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '-€1,200.00' }).closest('.hero__figure--profit')).toHaveClass('is-negative');
+    expect(screen.getByText('-3.50%')).toBeInTheDocument();
   });
 });
 
@@ -93,7 +128,7 @@ describe('HeroMetrics: how this adds up', () => {
       ['Still invested', '+€154,392.51'],
       ['Sold', '+€44,900.00'],
       ['Fees', '-€121.00'],
-      ['Total gain', '+€199,171.51'],
+      ['Total profit', '+€199,171.51'],
     ]);
     expect(panel).toHaveTextContent('It only becomes yours when you sell');
   });
@@ -108,8 +143,8 @@ describe('HeroMetrics: periods', () => {
   it('shows the gain of the window, names it in words and shows its dates', () => {
     render(<HeroMetrics {...props} period="YTD" periodGain={117670.76} periodPercent={41.51} />);
     expect(screen.getByRole('img', { name: '+€117,670.76' })).toBeInTheDocument();
-    expect(screen.getByText('(+41.51%)')).toBeInTheDocument();
-    expect(screen.getByText('this year')).toBeInTheDocument();
+    expect(screen.getByText('+41.51%')).toBeInTheDocument();
+    expect(screen.getByText(/this year/)).toBeInTheDocument();
     expect(screen.getByText('1 Jan – 11 Nov 2026')).toBeInTheDocument();
   });
 
@@ -125,7 +160,7 @@ describe('HeroMetrics: inflation', () => {
     expect(screen.getByText('Total value, after inflation')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '€480,000.00' })).toBeInTheDocument();
     expect(screen.getByText('Before inflation: €559,342.51')).toBeInTheDocument();
-    expect(screen.getByText('since you started, after inflation')).toBeInTheDocument();
+    expect(screen.getByText(/since you started, after inflation/)).toBeInTheDocument();
   });
 
   it('drops the invested and cash split, which would not add up to the adjusted total', () => {
@@ -136,7 +171,7 @@ describe('HeroMetrics: inflation', () => {
 
   it('leaves a window as it is, with nothing about inflation added', () => {
     render(<HeroMetrics {...props} period="1Y" periodGain={10} periodPercent={1} isRealInflationMode />);
-    expect(screen.getByText('in the past year')).toBeInTheDocument();
+    expect(screen.getByText(/in the past year/)).toBeInTheDocument();
   });
 });
 
@@ -156,7 +191,7 @@ describe('HeroMetrics: states', () => {
     const empty = { ...figures, netWorth: 0, realNetWorth: 0, cashBalance: 0, openMarketValue: 0, openCostBasis: 0, totalGain: 0, totalGainPercent: 0, openProfit: 0, soldProfit: 0, totalFees: 0 };
     render(<HeroMetrics {...props} figures={empty} />);
     expect(screen.getByText('Nothing here yet')).toBeInTheDocument();
-    expect(screen.queryByText('since you started')).not.toBeInTheDocument();
+    expect(screen.queryByText(/since you started/)).not.toBeInTheDocument();
   });
 
   it('puts the period picker under the figures it changes', () => {

@@ -15,6 +15,7 @@ import {
 } from './phaseForm';
 import PhaseStepFields from './PhaseStepFields';
 import { PHASE_STEP_COPY, type PhaseFlowStepId } from './phaseStepCopy';
+import { NO_CARRY_CHOICE } from './carryOver';
 import { ONBOARDING_STEP_COPY } from './onboardingStepCopy';
 import {
   ONBOARDING_STEP_FIELDS,
@@ -28,6 +29,7 @@ import {
 } from './profileDraft';
 import ProfileStepFields from './ProfileStepFields';
 import { firstStepWithError, usePhaseFormFeedback } from './usePhaseFormFeedback';
+import { useSubmitOnce } from '../../hooks/useSubmitOnce';
 
 interface OnboardingWizardProps {
   profile: ProfileData;
@@ -80,14 +82,14 @@ export default function OnboardingWizard({
     draftSchema,
     () => ({
       profile: toProfileDraft(profile),
-      phase: { form: initialPhaseForm(null, { currency: defaultCurrency, stillLivingHere: !hasCurrentPhase }), costs: [], carry: { unticked: [], amounts: {} } },
+      phase: { form: initialPhaseForm(null, { currency: defaultCurrency, stillLivingHere: !hasCurrentPhase }), costs: [], carry: NO_CARRY_CHOICE },
     }),
     stepIds.length
   );
   const { profile: draft, phase } = values;
   const feedback = usePhaseFormFeedback(phase.form, today);
   const [tried, setTried] = useState<ReadonlySet<OnboardingStepId>>(new Set());
-  const [saving, setSaving] = useState(false);
+  const { run, pending: saving } = useSubmitOnce();
   const [addingBill, setAddingBill] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   /** The profile is saved before the phase, and only once, even if the phase has to be retried. */
@@ -136,14 +138,14 @@ export default function OnboardingWizard({
       return;
     }
 
-    setSaving(true);
-    setFormError(null);
-    try {
+    // `run` answers undefined when a save is already on its way: that one finishes the flow.
+    const saved = await run(async () => {
+      setFormError(null);
       if (!profileSaved.current) {
-        const saved = await onSaveProfile(profileResult.profile);
-        if (!saved.ok) {
-          setFormError(describeFailure(saved.failure));
-          return;
+        const result = await onSaveProfile(profileResult.profile);
+        if (!result.ok) {
+          setFormError(describeFailure(result.failure));
+          return false;
         }
         profileSaved.current = true;
       }
@@ -155,12 +157,12 @@ export default function OnboardingWizard({
           feedback.showServerErrors(fieldErrors);
           setFormError(message);
           goToStep(firstStepWithError(fieldErrors) ?? 'dates');
-          return;
+          return false;
         }
       }
-    } finally {
-      setSaving(false);
-    }
+      return true;
+    });
+    if (!saved) return;
     discard();
     onFinished();
   };

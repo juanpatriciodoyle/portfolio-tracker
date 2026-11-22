@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { tapTwice } from '../../../test/doubleTap';
 import { makePhase } from '../../../test/fixtures';
 import type { BillFormContext } from '../billForm';
 import ExpenseWizard from '../ExpenseWizard';
@@ -88,6 +89,55 @@ describe('the steps check each answer where it is given', () => {
 
     expect(screen.getByText('Enter an amount such as 96 or 96.50.')).toBeInTheDocument();
     expect(screen.getByText('Pick how often it comes.')).toBeInTheDocument();
+  });
+});
+
+describe('saving an expense once', () => {
+  const toLastStep = () => {
+    startManually();
+    type('Who sent it?', 'Netflix');
+    next();
+    type('Total on the bill', '12.99');
+    next();
+  };
+
+  it('when Add expense is tapped twice', async () => {
+    const props = renderWizard();
+    toLastStep();
+
+    tapTwice(screen.getByRole('button', { name: 'Add expense' }));
+
+    await waitFor(() => expect(props.onSubmitRate).toHaveBeenCalledTimes(1));
+    expect(props.onSubmitReceipt).not.toHaveBeenCalled();
+  });
+
+  it('when a tap and Enter in a field land together: both go through the same guard', async () => {
+    const props = renderWizard();
+    toLastStep();
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add expense' }));
+      fireEvent.keyDown(screen.getByLabelText('Covers from'), { key: 'Enter' });
+      fireEvent.keyDown(screen.getByLabelText('Covers from'), { key: 'Enter' });
+    });
+
+    await waitFor(() => expect(props.onSubmitRate).toHaveBeenCalledTimes(1));
+  });
+
+  it('and can be saved again after the server refused it', async () => {
+    const onSubmitRate = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, failure: { kind: 'unknown', message: 'offline' } })
+      .mockResolvedValueOnce(ok);
+    renderWizard({ onSubmitRate });
+    toLastStep();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add expense' }));
+    await waitFor(() => expect(onSubmitRate).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Add expense' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Add expense' }));
+
+    await waitFor(() => expect(onSubmitRate).toHaveBeenCalledTimes(2));
   });
 });
 

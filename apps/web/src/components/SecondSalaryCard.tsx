@@ -6,6 +6,7 @@ import { minorToInputString } from '../lib/money';
 import { describeSecondSalary } from './describeSecondSalary';
 import { describeFailure } from './profile/failureMessage';
 import { validateTargetForm } from './secondSalaryTargetForm';
+import { useSubmitOnce } from '../hooks/useSubmitOnce';
 
 interface SecondSalaryCardProps {
   secondSalary: SecondSalaryResponse;
@@ -20,7 +21,7 @@ export default function SecondSalaryCard({ secondSalary, onSaveTarget }: SecondS
   const [editing, setEditing] = useState(false);
   const [typed, setTyped] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { run, pending: busy } = useSubmitOnce();
 
   const open = () => {
     setTyped(secondSalary.target ? minorToInputString(secondSalary.target.monthlyMinor, secondSalary.currency) : '');
@@ -35,11 +36,11 @@ export default function SecondSalaryCard({ secondSalary, onSaveTarget }: SecondS
       setError(result.error);
       return;
     }
-    setBusy(true);
-    const saved = await onSaveTarget(result.monthlyMinor);
-    setBusy(false);
-    if (saved.ok) setEditing(false);
-    else setError(describeFailure(saved.failure));
+    await run(async () => {
+      const saved = await onSaveTarget(result.monthlyMinor);
+      if (saved.ok) setEditing(false);
+      else setError(describeFailure(saved.failure));
+    });
   };
 
   const form = (
@@ -70,7 +71,7 @@ export default function SecondSalaryCard({ secondSalary, onSaveTarget }: SecondS
         <button type="button" className="btn-secondary-cancel" onClick={() => setEditing(false)}>
           Cancel
         </button>
-        <button type="submit" className="btn-primary-apply" disabled={busy}>
+        <button type="submit" className="btn-primary-apply" disabled={busy} aria-busy={busy}>
           {busy ? 'Saving…' : 'Save target'}
         </button>
       </div>

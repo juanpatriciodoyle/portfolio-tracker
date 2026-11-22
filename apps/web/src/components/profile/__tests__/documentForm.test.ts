@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BillingDraft } from '../../../contracts';
-import { blankFields, reviewFormFrom, validateReview } from '../documentForm';
+import { validateBill } from '../billForm';
+import { blankFields, reviewFormFrom } from '../documentForm';
 import type { BillFormContext } from '../billForm';
 
 const empty: BillingDraft = { amountMinor: null, currency: null, vendor: null, category: null, cadence: null, periodStart: null, periodEnd: null };
@@ -81,22 +82,22 @@ describe('blankFields', () => {
   });
 });
 
-describe('validateReview', () => {
+describe('validateBill on a reviewed document', () => {
   it('blocks saving while the cadence is still blank', () => {
-    const result = validateReview({ ...reviewFormFrom(full, 'EUR'), cadence: null }, 'p1', 'EUR');
+    const result = validateBill({ ...reviewFormFrom(full, 'EUR'), cadence: null }, 'p1', 'EUR');
 
     expect(result).toEqual({ ok: false, errors: { cadence: expect.any(String) } });
   });
 
   it('blocks saving an empty draft with an error on every field', () => {
-    const result = validateReview(reviewFormFrom(empty, 'EUR'), 'p1', 'EUR');
+    const result = validateBill(reviewFormFrom(empty, 'EUR'), 'p1', 'EUR');
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(Object.keys(result.errors).sort()).toEqual(['amount', 'cadence', 'category', 'periodEnd', 'periodStart', 'vendor']);
   });
 
   it('produces the request for a complete form', () => {
-    const result = validateReview(reviewFormFrom(full, 'EUR'), 'p1', 'EUR');
+    const result = validateBill(reviewFormFrom(full, 'EUR'), 'p1', 'EUR');
 
     expect(result).toEqual({
       ok: true,

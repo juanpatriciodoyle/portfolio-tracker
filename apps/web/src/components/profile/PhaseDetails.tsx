@@ -5,6 +5,7 @@ import type { MutationResult } from '../../lib/apiErrors';
 import { formatMonths } from '../../lib/duration';
 import { clampDateYear } from '../../lib/inputFilters';
 import { formatCalendarDate, formatMinor } from '../../lib/money';
+import { useSubmitOnce } from '../../hooks/useSubmitOnce';
 import BillsLedger from './BillsLedger';
 import type { BillFormContext } from './billForm';
 import type { BillingView } from './billingView';
@@ -37,6 +38,8 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
   const [endingId, setEndingId] = useState<string | null>(null);
   const [lastDay, setLastDay] = useState('');
   const [removeError, setRemoveError] = useState<string | null>(null);
+  /** Ending or removing a cost: one at a time, however fast the button is tapped. */
+  const { run: runCostAction, pending: costBusy } = useSubmitOnce();
 
   const monthly = entry?.fixedCostsByCategoryMinor;
   const basisOf = entry?.costBasisByCategory;
@@ -76,27 +79,29 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
     return result;
   };
 
-  const endCost = async (costId: string) => {
-    const result = await onUpdateCost(phase.id, costId, { endDate: lastDay });
-    if (result.ok) {
-      setEndingId(null);
-      setRemoveError(null);
-      announce('Subscription ended');
-    } else {
-      setRemoveError(describeFailure(result.failure));
-    }
-  };
+  const endCost = (costId: string) =>
+    runCostAction(async () => {
+      const result = await onUpdateCost(phase.id, costId, { endDate: lastDay });
+      if (result.ok) {
+        setEndingId(null);
+        setRemoveError(null);
+        announce('Subscription ended');
+      } else {
+        setRemoveError(describeFailure(result.failure));
+      }
+    });
 
-  const removeCost = async (costId: string) => {
-    const result = await onDeleteCost(phase.id, costId);
-    if (result.ok) {
-      setConfirmingId(null);
-      setRemoveError(null);
-      announce('Cost removed');
-    } else {
-      setRemoveError(describeFailure(result.failure));
-    }
-  };
+  const removeCost = (costId: string) =>
+    runCostAction(async () => {
+      const result = await onDeleteCost(phase.id, costId);
+      if (result.ok) {
+        setConfirmingId(null);
+        setRemoveError(null);
+        announce('Cost removed');
+      } else {
+        setRemoveError(describeFailure(result.failure));
+      }
+    });
 
   /** Edit and remove for one declared cost, or the question that confirms removing it. */
   const costControls = (cost: LivingPhaseDto['fixedCosts'][number]): ReactNode => {
@@ -112,7 +117,7 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
             value={lastDay}
             onChange={(event) => setLastDay(clampDateYear(event.target.value))}
           />
-          <button type="button" className="profile-danger-button" disabled={lastDay === ''} onClick={() => endCost(cost.id)}>
+          <button type="button" className="profile-danger-button" disabled={lastDay === '' || costBusy} aria-busy={costBusy} onClick={() => endCost(cost.id)}>
             End subscription
           </button>
           <button type="button" className="profile-text-button" onClick={() => setEndingId(null)}>
@@ -124,7 +129,7 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
     return confirmingId === cost.id ? (
       <div className="confirm-inline" role="group" aria-label={`Confirm removing ${name}`}>
         <span>Remove this cost?</span>
-        <button type="button" className="profile-danger-button" onClick={() => removeCost(cost.id)}>
+        <button type="button" className="profile-danger-button" disabled={costBusy} aria-busy={costBusy} onClick={() => removeCost(cost.id)}>
           Remove
         </button>
         <button type="button" className="profile-text-button" onClick={() => setConfirmingId(null)}>

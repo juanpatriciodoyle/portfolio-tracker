@@ -13,6 +13,7 @@ import {
   type IncomeKind,
   type IncomeStreamForm,
 } from './incomeForm';
+import { useSubmitOnce } from '../../hooks/useSubmitOnce';
 
 const KIND_OPTIONS: readonly { value: IncomeKind; label: string }[] = [
   { value: 'MONTHLY', label: 'Pays every month' },
@@ -32,7 +33,7 @@ export default function IncomeStreamEditor({ phase, initial, onSubmit, onCancel 
   const id = useId();
   const [form, setForm] = useState<IncomeStreamForm>(() => (initial ? incomeStreamFormFrom(initial, phase.currency) : emptyIncomeStreamForm(phase)));
   const [errors, setErrors] = useState<IncomeStreamErrors & { form?: string }>({});
-  const [saving, setSaving] = useState(false);
+  const { run, pending: saving } = useSubmitOnce();
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -43,10 +44,10 @@ export default function IncomeStreamEditor({ phase, initial, onSubmit, onCancel 
     }
 
     setErrors({});
-    setSaving(true);
-    const saved = await onSubmit(result.stream);
-    setSaving(false);
-    if (!saved.ok) setErrors({ form: describeFailure(saved.failure) });
+    await run(async () => {
+      const saved = await onSubmit(result.stream);
+      if (!saved.ok) setErrors({ form: describeFailure(saved.failure) });
+    });
   };
 
   const describedBy = (field: keyof IncomeStreamErrors) => (errors[field] ? `${id}-${field}-error` : undefined);
@@ -155,7 +156,7 @@ export default function IncomeStreamEditor({ phase, initial, onSubmit, onCancel 
       )}
 
       <div className="cost-editor__actions">
-        <button type="submit" className="btn-primary-apply" disabled={saving}>
+        <button type="submit" className="btn-primary-apply" disabled={saving} aria-busy={saving}>
           {saving ? 'Saving…' : initial ? 'Save changes' : once ? 'Add deposit' : 'Add income'}
         </button>
         <button type="button" className="btn-secondary-cancel" onClick={onCancel}>

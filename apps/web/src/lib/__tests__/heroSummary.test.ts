@@ -45,12 +45,12 @@ describe('heroSummary: the total value', () => {
 describe('heroSummary: the gain', () => {
   it('on the whole history is the total gain', () => {
     const { gain } = heroSummary(input);
-    expect(gain).toEqual({ amount: 199171.51, percent: 70.25, phrase: 'since you started' });
+    expect(gain).toEqual({ label: 'Total profit', amount: 199171.51, percent: 70.25, phrase: 'since you started' });
   });
 
   it('for a window is what the window gained, said in plain words', () => {
     const { gain, gainParts } = heroSummary({ ...input, period: 'YTD', periodGain: 117670.76, periodPercent: 41.51 });
-    expect(gain).toEqual({ amount: 117670.76, percent: 41.51, phrase: 'this year' });
+    expect(gain).toEqual({ label: 'Profit', amount: 117670.76, percent: 41.51, phrase: 'this year' });
     expect(gainParts).toBeNull();
   });
 
@@ -68,6 +68,25 @@ describe('heroSummary: the gain', () => {
     const { gain } = heroSummary({ ...input, figures: { ...figures, totalGain: -1200, totalGainPercent: -3.5 } });
     expect(gain.amount).toBe(-1200);
     expect(gain.percent).toBe(-3.5);
+  });
+});
+
+describe('heroSummary: profit right now and profit already made', () => {
+  it('splits the whole-history gain into what the holdings have gained and what selling already locked in', () => {
+    expect(heroSummary(input).gainSplit).toEqual({ stillInvested: 154392.51, sold: 44900 });
+  });
+
+  it('uses the inflation-adjusted figures when inflation is on', () => {
+    expect(heroSummary({ ...input, isRealInflationMode: true }).gainSplit).toEqual({ stillInvested: 100000, sold: 20000 });
+  });
+
+  it('keeps a zero part so "nothing sold yet" can be said instead of hidden', () => {
+    const neverSold = { ...figures, soldProfit: 0, totalGain: 154271.51 };
+    expect(heroSummary({ ...input, figures: neverSold }).gainSplit).toEqual({ stillInvested: 154392.51, sold: 0 });
+  });
+
+  it('has no split for a window: its gain comes from the value history', () => {
+    expect(heroSummary({ ...input, period: 'YTD', periodGain: 5, periodPercent: 1 }).gainSplit).toBeNull();
   });
 });
 

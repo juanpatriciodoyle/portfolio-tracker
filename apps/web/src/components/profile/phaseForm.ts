@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NO_CARRY_CHOICE } from './carryOver';
 import {
   HOUSING_TENURES,
   createFixedCostRequest,
@@ -33,7 +34,7 @@ export const phaseDraftSchema = z.object({
   form: phaseFormSchema,
   costs: z.array(createFixedCostRequest),
   /** The jobs of the previous home the person unticked, and the amounts they re-typed. Drafts from before this existed read as nothing chosen. */
-  carry: z.object({ unticked: z.array(z.string()), amounts: z.record(z.string(), z.string()) }).default({ unticked: [], amounts: {} }),
+  carry: z.object({ unticked: z.array(z.string()), amounts: z.record(z.string(), z.string()) }).default(NO_CARRY_CHOICE),
 });
 
 export type PhaseFieldErrors = Partial<Record<keyof PhaseFormState, string>>;

@@ -168,11 +168,6 @@
 /* ---------- Cards, sections, banners ---------- */
 
 /* The goals lead the page: where the portfolio is headed, before the places lived. */
-.profile-aspirations {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
 
 .profile-card {
   background-color: var(--bg-card);
@@ -278,24 +273,6 @@
 }
 
 /* The secondary action beside "Add expense": outlined, so only one button on the page is solid. */
-.profile-add-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background-color: transparent;
-  color: var(--text-primary);
-  border: 1px solid var(--border-hover);
-  border-radius: 8px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.profile-add-button:hover {
-  background-color: var(--border-subtle-color);
-}
 
 .profile-text-button {
   display: inline-flex;
@@ -478,8 +455,7 @@
 }
 
 .profile-form__actions,
-.cost-editor__actions,
-.phase-editor__actions {
+.cost-editor__actions {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -800,15 +776,6 @@
   flex-direction: column;
   gap: 8px;
   margin-top: 4px;
-}
-
-.phase-card__caption {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
 }
 
 .phase-bar-row {
@@ -1137,20 +1104,17 @@
   border-radius: 10px;
 }
 
-.cost-editor__row,
-.phase-editor__row {
+.cost-editor__row {
   display: grid;
   /* minmax(0, ...) lets a column shrink below its content: a select otherwise sizes itself by its longest option */
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-.cost-editor__row > *,
-.phase-editor__row > * {
+.cost-editor__row > * {
   min-width: 0;
 }
 
-.phase-editor .form-input,
 .cost-editor .form-input {
   width: 100%;
   min-width: 0;
@@ -1159,7 +1123,6 @@
 
 @media (max-width: 520px) {
   .cost-editor__row,
-  .phase-editor__row,
   .phase-stats {
     grid-template-columns: 1fr;
   }
@@ -1232,34 +1195,6 @@
 
 /* ---------- Phase editor drawer ---------- */
 
-.phase-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.phase-editor__title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-heading);
-}
-
-.phase-editor__intro,
-.phase-editor__hint {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--text-muted);
-}
-
-.phase-editor__notes {
-  resize: vertical;
-}
-
-.phase-editor__actions {
-  margin-top: 6px;
-}
-
 /* ---------- Motion: calm by default, still for people who ask ---------- */
 
 @media (prefers-reduced-motion: reduce) {
@@ -1295,130 +1230,7 @@
 
 /* ---------- Trends ---------- */
 
-.trends-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-bottom: 12px;
-}
-
-.trends-card__header {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.trends-card__header .profile-section__hint {
-  margin: 0;
-}
-
-.trends-card__problem,
-.trends-card__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.trends-card__how summary {
-  cursor: pointer;
-  font-size: 12.5px;
-  color: var(--text-muted);
-}
-
-.trends-card__how p {
-  margin: 8px 0 0 0;
-}
-
-.trends-block {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.trends-block__currency {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-}
-
-.trends-table {
-  width: 100%;
-  table-layout: fixed;
-  border-collapse: collapse;
-  font-size: 13.5px;
-  font-variant-numeric: tabular-nums;
-}
-
 /* One label column and three equal window columns: each figure and its hint stay inside their own cell. */
-.trends-table__col-label {
-  width: 28%;
-}
-
-.trends-table__col-window {
-  width: 24%;
-}
-
-.trends-table th,
-.trends-table td {
-  padding: 8px 6px;
-  text-align: right;
-  vertical-align: top;
-  overflow-wrap: break-word;
-  min-width: 0;
-}
-
-.trends-table tbody tr {
-  border-top: 1px solid var(--border-divider-color);
-}
-
-.trends-table__corner,
-.trends-table__row-label {
-  text-align: left;
-}
-
-.trends-table__row-label {
-  font-weight: 400;
-  color: var(--text-secondary);
-}
-
-.trends-table__window {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.trends-table__amount {
-  display: block;
-  color: var(--text-heading);
-  white-space: nowrap;
-}
-
-.trends-table__hint {
-  display: block;
-  margin-top: 2px;
-  font-size: 11px;
-  line-height: 1.3;
-  color: var(--text-muted);
-  text-wrap: balance;
-}
-
-@media (max-width: 520px) {
-  .trends-table {
-    font-size: 12.5px;
-  }
-
-  .trends-table__col-label {
-    width: 25%;
-  }
-
-  .trends-table__col-window {
-    width: 25%;
-  }
-}
 
 /* ---------- Converted comparison ---------- */
 
@@ -1444,53 +1256,10 @@
 
 /* ---------- Reading a bill from a PDF ---------- */
 
-.document-review {
-  position: fixed;
-  inset: 0;
-  z-index: 1200; /* above the dialogs it can be opened from */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-}
-
-.document-review__backdrop {
-  position: absolute;
-  inset: 0;
-  background: var(--bg-modal-overlay);
-}
-
-.document-review__panel {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  width: 100%;
-  max-width: 980px;
-  max-height: 100%;
-  overflow-y: auto;
-  padding: 24px;
-  background: var(--bg-card);
-  border: var(--border-card);
-  border-radius: 16px;
-}
-
-.document-review__title {
-  margin: 0;
-  font-size: 18px;
-  color: var(--text-heading);
-}
-
 .document-review__progress {
   margin: 4px 0 0 0;
   font-size: 13px;
   color: var(--text-muted);
-}
-
-.document-review__body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 20px;
 }
 
 .document-review__preview {
@@ -1500,13 +1269,6 @@
   background: var(--bg-panel);
   border: var(--border-subtle);
   border-radius: 12px;
-}
-
-.document-review__form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
 }
 
 .document-review__notice {
@@ -1525,9 +1287,6 @@
 }
 
 @media (max-width: 760px) {
-  .document-review__body {
-    grid-template-columns: minmax(0, 1fr);
-  }
 
   .document-review__preview {
     min-height: 240px;

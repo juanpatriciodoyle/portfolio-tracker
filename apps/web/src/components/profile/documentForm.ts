@@ -1,12 +1,10 @@
 import type { BillingDraft } from '../../contracts';
 import { minorToInputString } from '../../lib/money';
-import { emptyBillForm, NO_CONTEXT, validateBill, withPeriod, withVendor, type BillErrors, type BillField, type BillForm, type BillFormContext, type BillResult } from './billForm';
+import { emptyBillForm, NO_CONTEXT, withPeriod, withVendor, type BillField, type BillForm, type BillFormContext } from './billForm';
 
 /** The review form is the bill form: what a document did not say starts blank and stays mandatory. */
 export type ReviewForm = BillForm;
 export type ReviewField = BillField;
-export type ReviewErrors = BillErrors;
-export type ReviewResult = BillResult;
 
 /**
  * Prefills what the document said, in the chosen phase's currency exponent. What it did not say is helped
@@ -40,5 +38,3 @@ export function blankFields(draft: BillingDraft): ReviewField[] {
   if (draft.cadence === null) blanks.push('cadence');
   return blanks;
 }
-
-export const validateReview = validateBill;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { COUNTRY_CODES } from '../../data/countries';
-import { countryName, countryOptions, flagEmoji } from '../countries';
+import { countryName, flagEmoji } from '../countries';
 import { currencyOptions } from '../currencies';
 import { barWidthPercent } from '../scale';
 
@@ -20,13 +20,6 @@ describe('country list', () => {
     expect(countryName('ES', 'en')).toBe('Spain');
     expect(countryName('ES', 'es')).toBe('España');
     expect(countryName('??', 'en')).toBe('??');
-  });
-
-  it('sorts options by name', () => {
-    const names = countryOptions('en').map((option) => option.name);
-
-    expect(names[0]).toBe('Afghanistan');
-    expect([...names].sort(new Intl.Collator('en').compare)).toEqual(names);
   });
 
   it('turns a code into a flag', () => {
