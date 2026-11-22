@@ -1,3 +1,13 @@
 node_modules
 dist
+coverage
 .env
+.env.*
+*.env
+!.env.example
+src/tests
+**/*.test.ts
+jest*.js
+tsconfig.build.json.bak
+Dockerfile
+.dockerignore

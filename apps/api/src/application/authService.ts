@@ -20,6 +20,8 @@ export interface AuthServiceDeps {
   readonly hashIdentity: IdentityHasher;
   readonly issueToken: SessionTokenIssuer;
   readonly admins: AdminDirectory;
+  /** False closes sign-up: only people who already have an account (and the administrator) can sign in. */
+  readonly allowRegistration: boolean;
   readonly now: () => Date;
 }
 
@@ -56,15 +58,17 @@ export class AuthService {
   private readonly hashIdentity: IdentityHasher;
   private readonly issueToken: SessionTokenIssuer;
   private readonly admins: AdminDirectory;
+  private readonly allowRegistration: boolean;
   private readonly now: () => Date;
 
-  constructor({ users, googleIdentities, passkeys, hashIdentity, issueToken, admins, now }: AuthServiceDeps) {
+  constructor({ users, googleIdentities, passkeys, hashIdentity, issueToken, admins, allowRegistration, now }: AuthServiceDeps) {
     this.users = users;
     this.googleIdentities = googleIdentities;
     this.passkeys = passkeys;
     this.hashIdentity = hashIdentity;
     this.issueToken = issueToken;
     this.admins = admins;
+    this.allowRegistration = allowRegistration;
     this.now = now;
   }
 
@@ -94,7 +98,10 @@ export class AuthService {
 
   private async accountFor(email: string): Promise<AuthUser> {
     const userHash = this.hashIdentity(email);
-    return (await this.users.findByIdentityHash(userHash)) ?? (await this.users.create(userHash, NEW_USER_DEFAULTS));
+    const existing = await this.users.findByIdentityHash(userHash);
+    if (existing) return existing;
+    this.requireOpenRegistration(userHash);
+    return this.users.create(userHash, NEW_USER_DEFAULTS);
   }
 
   /**
@@ -106,7 +113,13 @@ export class AuthService {
     const userHash = this.hashIdentity(email);
     if (this.admins.isAdmin(userHash)) throw new SignInRejectedError('PASSKEY_NOT_FOR_ADMIN');
     const existing = await this.users.findByIdentityHash(userHash);
-    if (existing && !existing.hasPasskey) throw new SignInRejectedError('PASSKEY_NEEDS_SIGN_IN');
+    if (!existing) this.requireOpenRegistration(userHash);
+    else if (!existing.hasPasskey) throw new SignInRejectedError('PASSKEY_NEEDS_SIGN_IN');
+  }
+
+  /** With sign-up closed a new account is refused, except the administrator's own: without it nobody could ever get in. */
+  private requireOpenRegistration(userHash: string): void {
+    if (!this.allowRegistration && !this.admins.isAdmin(userHash)) throw new SignInRejectedError('REGISTRATION_CLOSED');
   }
 
   private async confirmedIdentity(accessToken: string): Promise<VerifiedGoogleIdentity> {

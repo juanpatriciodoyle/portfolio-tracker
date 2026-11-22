@@ -1,4 +1,5 @@
 import { db } from '../lib/db';
+import { log } from '../lib/logger';
 import { defaultAnnualInflationPercent, type InflationRateProvider } from '../domain/inflation';
 
 const COUNTRY_ISO3: Record<string, string> = {
@@ -62,12 +63,12 @@ export async function syncCountryInflationHistory(country: string): Promise<Reco
             }
           }
         }
-        console.log(`🌐 Synced historical annual inflation rates for ${country} (${Object.keys(rateMap).length} years)`);
+        log.info('inflation_history_synced', { country, years: Object.keys(rateMap).length });
         return rateMap;
       }
     }
   } catch (err) {
-    console.warn(`Could not fetch live inflation history for ${country}, using defaults.`);
+    log.warn('inflation_history_unavailable', { country });
   }
 
   // Fallback defaults for last 10 years if offline

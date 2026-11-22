@@ -4,6 +4,7 @@ import type { AuthService } from '../application/authService';
 import { SignInRejectedError, type SignInRejection } from '../application/errors';
 import type { SlidingWindowRateLimiter } from '../application/limits';
 import type { ApiErrorResponse } from '../contracts';
+import { errorName, log } from '../lib/logger';
 
 const GOOGLE_TOKEN_NEEDED = 'Google did not send a sign-in token. Try signing in again.';
 const TOO_MANY_ATTEMPTS = 'Too many sign-in attempts. Wait a moment and try again.';
@@ -21,6 +22,7 @@ const REJECTION_STATUS: Record<SignInRejection, number> = {
   GOOGLE_NOT_CONFIGURED: 503,
   PASSKEY_NEEDS_SIGN_IN: 403,
   PASSKEY_NOT_FOR_ADMIN: 403,
+  REGISTRATION_CLOSED: 403,
 };
 
 const passkeyEmailBody = z.object({ email: z.string().min(1) });
@@ -37,7 +39,6 @@ const passkeyVerifyBody = z.object({
 });
 
 const reply = (res: Response, status: number, error: string) => res.status(status).json({ error } satisfies ApiErrorResponse);
-const failureName = (error: unknown) => (error instanceof Error ? error.name : 'unknown');
 
 export interface AuthRouterOptions {
   /** Attempts allowed per address across the three sign-in endpoints. */
@@ -63,7 +64,7 @@ export function createAuthRouter(auth: AuthService, { limiter }: AuthRouterOptio
       res.status(200).json({ success: true, ...signedIn });
     } catch (error) {
       if (error instanceof SignInRejectedError) return void reply(res, REJECTION_STATUS[error.code], error.message);
-      console.error('Google Auth Error:', failureName(error));
+      log.error('google_sign_in_failed', { error: errorName(error) });
       reply(res, 500, GOOGLE_SIGN_IN_FAILED);
     }
   });
@@ -75,7 +76,7 @@ export function createAuthRouter(auth: AuthService, { limiter }: AuthRouterOptio
       res.json(await auth.passkeyChallenge(body.data.email));
     } catch (error) {
       if (error instanceof SignInRejectedError) return void reply(res, REJECTION_STATUS[error.code], error.message);
-      console.error('Passkey options error:', failureName(error));
+      log.error('passkey_options_failed', { error: errorName(error) });
       reply(res, 500, PASSKEY_START_FAILED);
     }
   });
@@ -88,7 +89,7 @@ export function createAuthRouter(auth: AuthService, { limiter }: AuthRouterOptio
       res.json({ success: true, ...signedIn });
     } catch (error) {
       if (error instanceof SignInRejectedError) return void reply(res, REJECTION_STATUS[error.code], error.message);
-      console.error('Passkey Verification Error:', failureName(error));
+      log.error('passkey_verification_failed', { error: errorName(error) });
       // The authenticator words its refusals for the person ("challenge expired", "verification failed").
       reply(res, 400, error instanceof Error && error.message ? error.message : PASSKEY_VERIFY_FAILED);
     }

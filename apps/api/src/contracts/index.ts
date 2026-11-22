@@ -1,4 +1,5 @@
 export * from './adminAnalytics';
+export * from './appConfig';
 export * from './benchmark';
 export * from './billingPeriod';
 export * from './billingRecord';

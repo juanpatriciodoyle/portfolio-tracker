@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import LoginModal from '../LoginModal';
 
 // Mock simplewebauthn and react-oauth. The mock keeps the handlers so a test can play Google's answer.
@@ -14,10 +14,60 @@ vi.mock('@react-oauth/google', () => ({
   },
 }));
 
+// Whether this deployment has a Google client id; each test sets it.
+const googleConfig = vi.hoisted(() => ({ configured: true }));
+vi.mock('../../lib/googleConfig', () => ({ GOOGLE_CLIENT_ID: 'test-client', isGoogleSignInConfigured: () => googleConfig.configured }));
+
+// What the server says about the sneak peek; each test sets it.
+const appConfig = vi.hoisted(() => ({ demoEnabled: true as boolean | null }));
+vi.mock('../../hooks/useAppConfig', () => ({ useAppConfig: () => appConfig }));
+
+beforeEach(() => {
+  appConfig.demoEnabled = true;
+  googleConfig.configured = true;
+  google.options = null;
+});
+
 vi.mock('@simplewebauthn/browser', () => ({
   startRegistration: vi.fn(),
   startAuthentication: vi.fn(),
 }));
+
+describe('LoginModal: the sneak peek exists only when the server has it', () => {
+  const peek = () => screen.queryByRole('button', { name: /Would you like to take a sneak peek\?/i });
+
+  it('shows it when the server says it is on', () => {
+    render(<LoginModal onSuccess={vi.fn()} />);
+    expect(peek()).toBeInTheDocument();
+  });
+
+  it.each([false, null])('hides it, and its explanation, when the server says %s', (demoEnabled) => {
+    appConfig.demoEnabled = demoEnabled;
+    render(<LoginModal onSuccess={vi.fn()} />);
+
+    expect(peek()).not.toBeInTheDocument();
+    expect(screen.queryByText(/demo portfolio/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Continue with Google')).toBeInTheDocument();
+    expect(screen.getByText('Continue with Passkey / Touch ID')).toBeInTheDocument();
+  });
+});
+
+describe('LoginModal: Google sign-in exists only where Google is set up', () => {
+  it('has no Google button, and starts nothing of Google, when the deployment has no client id', () => {
+    googleConfig.configured = false;
+    render(<LoginModal onSuccess={vi.fn()} />);
+
+    expect(screen.queryByText('Continue with Google')).not.toBeInTheDocument();
+    expect(google.options).toBeNull();
+    expect(screen.getByText('Continue with Passkey / Touch ID')).toBeInTheDocument();
+  });
+
+  it('shows it, and starts it, when there is one', () => {
+    render(<LoginModal onSuccess={vi.fn()} />);
+    expect(screen.getByText('Continue with Google')).toBeInTheDocument();
+    expect(google.options).not.toBeNull();
+  });
+});
 
 describe('LoginModal Component', () => {
   it('should render all three login options including the sneak peek demo box', () => {

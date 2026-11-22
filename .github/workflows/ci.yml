@@ -11,6 +11,25 @@ jobs:
     name: Backend API Tests & Build
     runs-on: ubuntu-latest
 
+    # A real database for the integration tests (the unit tests need none).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: portfolio_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: "postgresql://postgres:ci@localhost:5432/portfolio_test?schema=public"
+      TEST_DATABASE_URL: "postgresql://postgres:ci@localhost:5432/portfolio_test?schema=public"
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -28,24 +47,38 @@ jobs:
       - name: Install Backend Dependencies & Generate Prisma Client
         run: |
           cd apps/api
-          npm ci || npm install
+          npm ci
           npx prisma generate
-        env:
-          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/portfolio_tracker_db?schema=public"
+
+      - name: Type-check everything, tests included
+        run: |
+          cd apps/api
+          npm run typecheck
 
       - name: Run Backend Tests (Jest)
         run: |
           cd apps/api
           npm test
         env:
-          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/portfolio_tracker_db?schema=public"
           JWT_SECRET: "ci_jwt_secret_key"
           USER_HASH_SALT: "ci_hash_salt"
+
+      - name: Apply the migrations to a real database, then run the integration tests
+        run: |
+          cd apps/api
+          npx prisma migrate deploy
+          npm run test:integration
 
       - name: Build Backend TypeScript
         run: |
           cd apps/api
           npm run build
+
+      - name: Known vulnerabilities in what runs in production (report only)
+        continue-on-error: true
+        run: |
+          cd apps/api
+          npm audit --omit=dev --audit-level=high
 
   test-frontend:
     name: Frontend Web Tests & Build
@@ -65,7 +98,7 @@ jobs:
       - name: Install Frontend Dependencies
         run: |
           cd apps/web
-          npm ci || npm install
+          npm ci
 
       - name: Run Frontend Tests (Vitest)
         run: |
@@ -76,3 +109,45 @@ jobs:
         run: |
           cd apps/web
           npm run build
+
+      - name: Known vulnerabilities in what runs in production (report only)
+        continue-on-error: true
+        run: |
+          cd apps/web
+          npm audit --omit=dev --audit-level=high
+
+  # What gets deployed is the images, so they are built here too (nothing is pushed anywhere).
+  docker-images:
+    name: Production images build, and the compose file is valid
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build the API image
+        run: docker build -t portfolio-api:ci apps/api
+
+      - name: Build the web image
+        run: docker build --build-arg VITE_GOOGLE_CLIENT_ID=ci-client-id -t portfolio-web:ci apps/web
+
+      - name: Build the backup image
+        run: docker build -t portfolio-backup:ci infrastructure/backup
+
+      - name: The production compose file parses (with throwaway values)
+        run: docker compose -f docker-compose.prod.yml config -q
+        env:
+          POSTGRES_ADMIN_PASSWORD: ci
+          APP_DB_PASSWORD: ci
+          JWT_SECRET: ci
+          USER_HASH_SALT: ci
+          PROFILE_ENCRYPTION_KEY: ci
+          RP_ID: localhost
+          ORIGIN: http://localhost:8080
+          BACKUP_AGE_PUBLIC_KEY: ci
+
+      - name: The images contain what they should (the API has its build, nginx accepts its configuration)
+        run: |
+          docker run --rm --entrypoint node portfolio-api:ci -e "require('fs').accessSync('dist/index.js'); console.log('api image has its build')"
+          docker run --rm --entrypoint sh portfolio-web:ci -c "nginx -t"

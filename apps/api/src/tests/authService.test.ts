@@ -39,6 +39,7 @@ function build(overrides: Partial<AuthServiceDeps> = {}) {
     hashIdentity: (raw) => `hash:${raw}`,
     issueToken: (userId, claims) => (claimsSeen.push(claims), `token-for-${userId}`),
     admins: new AdminIdentities([], (raw) => `hash:${raw}`),
+    allowRegistration: true,
     now: () => SIGNED_IN_AT,
     ...overrides,
   };
@@ -277,5 +278,66 @@ describe('AuthService: last sign-in', () => {
     });
     await expect(service.signInWithGoogle('bad')).rejects.toBeInstanceOf(SignInRejectedError);
     expect(users.size).toBe(0);
+  });
+});
+
+describe('AuthService: closed registration', () => {
+  const closed = { allowRegistration: false };
+  const admins = new AdminIdentities(['boss@example.test'], (raw) => `hash:${raw}`);
+
+  it('lets someone who already has an account sign in with Google', async () => {
+    const { service, users } = build(closed);
+    await users.create('hash:verified@example.com', NEW_USER_DEFAULTS);
+
+    const signedIn = await service.signInWithGoogle('access-token');
+
+    expect(signedIn.user.id).toBe('user-1');
+  });
+
+  it('refuses a Google sign-in that would create an account, and creates nothing', async () => {
+    const { service, users } = build(closed);
+
+    await expect(service.signInWithGoogle('access-token')).rejects.toMatchObject({ code: 'REGISTRATION_CLOSED' });
+
+    expect(users.size).toBe(0);
+  });
+
+  it('still lets the administrator create their own account, or nobody could ever sign in', async () => {
+    const { service, users } = build({ ...closed, admins, googleIdentities: { verify: async () => ({ email: 'boss@example.test', googleId: 'g-boss' }) } });
+
+    const signedIn = await service.signInWithGoogle('access-token');
+
+    expect(signedIn.user.isAdmin).toBe(true);
+    expect(users.size).toBe(1);
+  });
+
+  it('refuses a passkey for an email with no account, before the authenticator is asked anything', async () => {
+    const { service, challengesMade, passkeyCalls } = build(closed);
+
+    await expect(service.passkeyChallenge('new@example.test')).rejects.toMatchObject({ code: 'REGISTRATION_CLOSED' });
+    await expect(service.signInWithPasskey('new@example.test', { id: 'x' })).rejects.toMatchObject({ code: 'REGISTRATION_CLOSED' });
+
+    expect(challengesMade).toEqual([]);
+    expect(passkeyCalls).toEqual([]);
+  });
+
+  it('lets an account that already has a passkey sign in with it', async () => {
+    const { service, users } = build(closed);
+    await users.createWithPasskey('hash:ana@example.test', NEW_USER_DEFAULTS);
+
+    await expect(service.signInWithPasskey('ana@example.test', { id: 'x' })).resolves.toMatchObject({ user: { id: 'user-passkey' } });
+  });
+
+  it('keeps saying "sign in with Google first" for an account made that way', async () => {
+    const { service, users } = build(closed);
+    await users.create('hash:ana@example.test', NEW_USER_DEFAULTS);
+
+    await expect(service.passkeyChallenge('ana@example.test')).rejects.toMatchObject({ code: 'PASSKEY_NEEDS_SIGN_IN' });
+  });
+
+  it('records no sign-in for a refused one', async () => {
+    const { service, users } = build(closed);
+    await expect(service.signInWithGoogle('access-token')).rejects.toBeInstanceOf(SignInRejectedError);
+    expect(users.lastLoginOf('user-1')).toBeNull();
   });
 });

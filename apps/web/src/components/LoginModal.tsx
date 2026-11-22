@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useSubmitOnce } from '../hooks/useSubmitOnce';
 import { KeyRound, ShieldCheck } from 'lucide-react';
-import { useGoogleLogin } from '@react-oauth/google';
 import { startRegistration, startAuthentication } from '@simplewebauthn/browser';
+import { useAppConfig } from '../hooks/useAppConfig';
+import { isGoogleSignInConfigured } from '../lib/googleConfig';
+import GoogleSignIn from './GoogleSignIn';
 
 interface User {
   id: string;
@@ -19,49 +21,38 @@ interface LoginModalProps {
 export default function LoginModal({ onSuccess }: LoginModalProps) {
   const { run, pending: isLoading } = useSubmitOnce();
   const [error, setError] = useState<string | null>(null);
+  const { demoEnabled } = useAppConfig();
 
-  const googleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      await run(async () => {
-        setError(null);
+  const signInWithGoogleToken = (accessToken: string) =>
+    run(async () => {
+      setError(null);
 
-        try {
-          // Only Google's token goes to the server, which asks Google who it belongs to. What the browser says is never trusted.
-          const res = await fetch('/api/auth/google', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accessToken: tokenResponse.access_token }),
-          });
+      try {
+        // Only Google's token goes to the server, which asks Google who it belongs to. What the browser says is never trusted.
+        const res = await fetch('/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken }),
+        });
 
-          const data = await res.json();
-          if (res.ok && data.success) {
-            try {
-              if (data.token) {
-                localStorage.setItem('auth_token', data.token);
-              }
-              if (data.user?.email) {
-                localStorage.setItem('auth_user_email', data.user.email);
-              }
-            } catch (_) {}
-            onSuccess(data.user);
-          } else {
-            setError(data.error || 'Google Sign-In failed.');
-          }
-        } catch (err) {
-          setError('Could not reach the server. Check your connection and try again.');
+        const data = await res.json();
+        if (res.ok && data.success) {
+          try {
+            if (data.token) {
+              localStorage.setItem('auth_token', data.token);
+            }
+            if (data.user?.email) {
+              localStorage.setItem('auth_user_email', data.user.email);
+            }
+          } catch (_) {}
+          onSuccess(data.user);
+        } else {
+          setError(data.error || 'Google Sign-In failed.');
         }
-      });
-    },
-    onError: () => {
-      setError('Google Sign-In was cancelled or failed.');
-    },
-  });
-
-  const handleGoogleSignIn = () => {
-    if (isLoading) return;
-    setError(null);
-    googleLogin();
-  };
+      } catch (err) {
+        setError('Could not reach the server. Check your connection and try again.');
+      }
+    });
 
   const handlePasskeySignIn = async () => {
     await run(async () => {
@@ -210,47 +201,57 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {/* Sign in with Google Button */}
-          <button
-            onClick={handleGoogleSignIn}
-            disabled={isLoading}
-            aria-busy={isLoading}
-            style={{
-              width: '100%',
-              padding: '14px',
-              borderRadius: '10px',
-              border: '1px solid var(--border-subtle-color)',
-              backgroundColor: 'var(--bg-input)',
-              color: 'var(--text-heading)',
-              fontSize: '14px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24">
-              <path
-                fill="#EA4335"
-                d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"
-              />
-              <path
-                fill="#4285F4"
-                d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 10.8 0 12.5s.7 2.8 1.9 5.2l3.7-2.9z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16C3.7 19.7 7.5 23 12 23z"
-              />
-            </svg>
-            Continue with Google
-          </button>
+          {/* Sign in with Google: only where the deployment has a Google client id */}
+          {isGoogleSignInConfigured() && (
+            <GoogleSignIn onToken={(accessToken) => void signInWithGoogleToken(accessToken)} onError={() => setError('Google Sign-In was cancelled or failed.')}>
+              {(signIn) => (
+              <button
+                onClick={() => {
+                  if (isLoading) return;
+                  setError(null);
+                  signIn();
+                }}
+                disabled={isLoading}
+                aria-busy={isLoading}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border-subtle-color)',
+                  backgroundColor: 'var(--bg-input)',
+                  color: 'var(--text-heading)',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px',
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24">
+                  <path
+                    fill="#EA4335"
+                    d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z"
+                  />
+                  <path
+                    fill="#4285F4"
+                    d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 10.8 0 12.5s.7 2.8 1.9 5.2l3.7-2.9z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16C3.7 19.7 7.5 23 12 23z"
+                  />
+                </svg>
+                Continue with Google
+              </button>
+              )}
+            </GoogleSignIn>
+          )}
 
           {/* Sign in with Passkey Button */}
           <button
@@ -278,7 +279,8 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
           </button>
         </div>
 
-        {/* Third Box: Sneak Peek Demo Account */}
+        {/* Third Box: Sneak Peek Demo Account, only when the server has one */}
+        {demoEnabled === true && (
         <div
           style={{
             marginTop: '20px',
@@ -333,6 +335,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
             <span>👀</span> Would you like to take a sneak peek?
           </button>
         </div>
+        )}
 
         <div
           style={{

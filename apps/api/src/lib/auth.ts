@@ -20,11 +20,6 @@ function jwtSecret(): string {
   return secret;
 }
 
-/** Stops a misconfigured server at boot with a clear message instead of failing on the first login. */
-export function assertJwtSecretConfigured(): void {
-  jwtSecret();
-}
-
 /**
  * Generates a signed JWT session token for a pseudonymous userId. The admin claim is written only when it is true,
  * so an ordinary session carries nothing extra.

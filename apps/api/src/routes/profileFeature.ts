@@ -14,6 +14,7 @@ import { ConcurrencyGate, SlidingWindowRateLimiter } from '../application/limits
 import type { BillFingerprinter, BillingRecordRepository, FieldCipher, FxRateProvider, LivingPhaseRepository, PdfTextExtractor, PortfolioValueReader, ProfileRepository } from '../application/ports';
 import { ENCRYPTION_NOT_CONFIGURED, type ApiErrorResponse, type CalendarDate } from '../contracts';
 import { calendarDateOf } from '../domain/calendarDate';
+import { log } from '../lib/logger';
 import { AesGcmFieldCipher, loadFieldCipherKey } from '../infrastructure/aesGcmFieldCipher';
 import { BcraOfficialRateSource } from '../infrastructure/fx/bcraOfficialRates';
 import { FrankfurterFxRateProvider } from '../infrastructure/fx/frankfurterFxRates';
@@ -159,7 +160,7 @@ export function mountProfileFeature(
     };
   } catch (error) {
     if (env.NODE_ENV === 'production') throw error;
-    console.warn(`⚠️  ${(error as Error).message}\n   Profile and living-phase routes answer 503 until it is set.`);
+    log.warn('profile_encryption_unavailable', { reason: (error as Error).message });
     app.use('/api', encryptionUnavailableRouter());
     return { benchmarkRefresher: null };
   }

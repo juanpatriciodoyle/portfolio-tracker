@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type { AuthUser, UserRepository } from '../application/ports';
 import type { NewUserDefaults } from '../domain/newUser';
+import { log } from '../lib/logger';
 
 const asAuthUser = ({ id, country, passkeyCredentialId }: { id: string; country: string; passkeyCredentialId: string | null }): AuthUser => ({
   id,
@@ -19,7 +20,7 @@ export class PrismaUserRepository implements UserRepository {
 
   async create(userHash: string, defaults: NewUserDefaults): Promise<AuthUser> {
     const user = await this.db.user.create({ data: { userHash, ...defaults } });
-    console.log(`🔒 Anonymous pseudonymous user account created in DB (Hash: ${userHash.slice(0, 10)}...)`);
+    log.info('account_created');
     return asAuthUser(user);
   }
 

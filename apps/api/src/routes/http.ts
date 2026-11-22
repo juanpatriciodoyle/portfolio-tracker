@@ -5,6 +5,7 @@ import { DUPLICATE_BILLING_RECORD, INTERNAL_ERROR_MESSAGE, INVALID_REQUEST_MESSA
 import type { ApiErrorResponse, DuplicateBillingRecordErrorResponse, PhaseOverlapErrorResponse, ValidationErrorResponse } from '../contracts';
 import { DuplicateBillingRecordError, InsufficientHoldingsError, InvalidBillingRecordError, InvalidLivingPhaseError, InvalidProfileError, PhaseOverlapError } from '../domain/errors';
 import { verifyToken, type AuthenticatedRequest } from '../lib/auth';
+import { errorName, log } from '../lib/logger';
 
 /** A request body, query or parameter that does not match its contract. Carries paths and rules, never values. */
 export class RequestValidationError extends Error {
@@ -100,7 +101,7 @@ export function respondWithError(error: unknown, res: Response): void {
     res.status(422).json({ error: error.message } satisfies ApiErrorResponse);
   } else {
     // Only the kind of failure is logged: never request bodies, never decrypted data.
-    console.error('Unexpected error in profile feature:', error instanceof Error ? error.name : 'unknown');
+    log.error('unexpected_error', { error: errorName(error) });
     res.status(500).json({ error: INTERNAL_ERROR_MESSAGE } satisfies ApiErrorResponse);
   }
 }

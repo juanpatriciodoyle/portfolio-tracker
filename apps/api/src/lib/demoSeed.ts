@@ -1,5 +1,6 @@
 import { db } from './db';
 import { hashUserIdentity } from './privacy';
+import { log } from './logger';
 import { syncCountryInflationHistory } from './inflationService';
 
 import { DEMO_USER_EMAIL } from '../domain/demoAccount';
@@ -68,7 +69,7 @@ export async function ensureDemoUserWithData() {
     return user;
   }
 
-  console.log('Seeding rich demo transactions and portfolio positions for demo user...');
+  log.info('demo_seed_started');
 
   // Ensure inflation rates are synced
   await syncCountryInflationHistory('Spain');
@@ -746,6 +747,6 @@ export async function ensureDemoUserWithData() {
     data: { cashBalance: 24500.0 },
   });
 
-  console.log('✅ Demo portfolio successfully seeded with multi-year transactions and holdings.');
+  log.info('demo_seed_finished');
   return user;
 }

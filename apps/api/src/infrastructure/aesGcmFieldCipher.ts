@@ -28,11 +28,14 @@ const MISSING_KEY =
 const INVALID_KEY =
   'PROFILE_ENCRYPTION_KEY must be 32 random bytes encoded as base64 (generate one with `openssl rand -base64 32`)';
 
+/** 32 random bytes as base64. The one definition of a valid master key, also used when the server starts. */
+export const PROFILE_ENCRYPTION_KEY_PATTERN = /^[A-Za-z0-9+/]{43}=$/;
+
 const environmentSchema = z.object({
   PROFILE_ENCRYPTION_KEY: z
     .string({ error: MISSING_KEY })
     .min(1, MISSING_KEY)
-    .regex(/^[A-Za-z0-9+/]{43}=$/, INVALID_KEY),
+    .regex(PROFILE_ENCRYPTION_KEY_PATTERN, INVALID_KEY),
 });
 
 /** Reads the master key from the environment. There is deliberately no default: a guessable key protects nothing. */

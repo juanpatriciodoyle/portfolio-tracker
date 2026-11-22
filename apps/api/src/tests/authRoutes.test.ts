@@ -12,6 +12,7 @@ import { createMarketRouter } from '../routes/market';
 import { InMemoryUserRepository } from './support/inMemoryUsers';
 
 interface Options {
+  allowRegistration?: boolean;
   users?: UserRepository;
   verifyGoogle?: (accessToken: string) => Promise<VerifiedGoogleIdentity>;
   passkeys?: Partial<PasskeyAuthenticator>;
@@ -21,7 +22,7 @@ interface Options {
 
 const ana: VerifiedGoogleIdentity = { email: 'ana@example.com', name: 'Ana', googleId: 'g-1', avatarUrl: 'https://img/a.png' };
 
-function buildAuth({ users = new InMemoryUserRepository(), verifyGoogle, passkeys, attemptsAllowed = 1000, issued = [] }: Options = {}) {
+function buildAuth({ allowRegistration = true, users = new InMemoryUserRepository(), verifyGoogle, passkeys, attemptsAllowed = 1000, issued = [] }: Options = {}) {
   const service = new AuthService({
     users,
     googleIdentities: { verify: verifyGoogle ?? (async () => ana) },
@@ -32,6 +33,7 @@ function buildAuth({ users = new InMemoryUserRepository(), verifyGoogle, passkey
     },
     hashIdentity: (raw) => `hash:${raw}`,
     admins: new AdminIdentities([], (raw) => `hash:${raw}`),
+    allowRegistration,
     now: () => new Date('2026-11-22T10:30:00.000Z'),
     issueToken: (userId) => {
       issued.push(userId);
@@ -356,5 +358,28 @@ describe('GET /api/market/search', () => {
     expect(response.body).toEqual({
       error: 'Ticker search is unavailable right now. Try again in a moment, or type the symbol yourself.',
     });
+  });
+});
+
+describe('closed registration', () => {
+  it('answers a Google sign-in for a new person with 403 and a plain message', async () => {
+    const response = await request(buildAuth({ allowRegistration: false })).post('/api/auth/google').send({ accessToken: 'token' });
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: 'New accounts are closed right now. Ask the owner of this app for access.' });
+  });
+
+  it('answers a passkey for a new email with 403, on both steps', async () => {
+    const app = buildAuth({ allowRegistration: false });
+
+    const options = await request(app).post('/api/auth/passkey/generate-options').send({ email: 'new@example.test' });
+    const verify = await request(app).post('/api/auth/passkey/verify').send({
+      email: 'new@example.test',
+      credential: { id: 'a', rawId: 'a', type: 'public-key', response: {} },
+    });
+
+    expect(options.status).toBe(403);
+    expect(verify.status).toBe(403);
+    expect(verify.body.error).toMatch(/closed/);
   });
 });

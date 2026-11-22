@@ -13,12 +13,18 @@ import { hashUserIdentity } from '../lib/privacy';
 import { PasskeyChallenges } from './passkeyChallenges';
 
 const RP_NAME = 'Portfolio Tracker';
-const RP_ID = process.env.RP_ID || 'localhost';
-const ORIGIN = process.env.ORIGIN || 'http://localhost:5173';
+
+/** Where the passkey belongs: the site's domain and the exact address the browser shows. */
+export interface PasskeySite {
+  readonly rpId: string;
+  readonly origin: string;
+}
 
 // Challenges wait here for the prompt's answer: five minutes, once.
 const challenges = new PasskeyChallenges(Date.now);
 
+/** The passkey adapter the sign-in service uses, for one site. */
+export function createPasskeyAuthenticator({ rpId: RP_ID, origin: ORIGIN }: PasskeySite): PasskeyAuthenticator {
 async function getPasskeyOptions(email: string): Promise<PasskeyChallenge> {
   const userHash = hashUserIdentity(email);
   let user = await db.user.findUnique({ where: { userHash } });
@@ -131,8 +137,8 @@ async function verifyPasskeyCredential(email: string, credentialResponse: Passke
   }
 }
 
-/** The passkey adapter the sign-in service uses. */
-export const passkeyAuthenticator: PasskeyAuthenticator = {
+return {
   challengeFor: getPasskeyOptions,
   verify: verifyPasskeyCredential,
 };
+}

@@ -33,6 +33,7 @@ const SIGN_IN_MESSAGES = {
   GOOGLE_NOT_CONFIGURED: 'Google sign-in is not set up on this server. Use a passkey.',
   PASSKEY_NEEDS_SIGN_IN: 'This account was created with Google. Sign in with Google first.',
   PASSKEY_NOT_FOR_ADMIN: 'This account signs in with Google only.',
+  REGISTRATION_CLOSED: 'New accounts are closed right now. Ask the owner of this app for access.',
 } as const;
 
 export type SignInRejection = keyof typeof SIGN_IN_MESSAGES;

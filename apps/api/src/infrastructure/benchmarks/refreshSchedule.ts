@@ -1,3 +1,5 @@
+import { errorName, log } from '../../lib/logger';
+
 const FIRST_RUN_DELAY_MS = 60_000;
 const INTERVAL_MS = 24 * 3_600_000;
 
@@ -7,7 +9,7 @@ const INTERVAL_MS = 24 * 3_600_000;
  */
 export function scheduleBenchmarkRefresh(refresher: { run(): Promise<unknown> }): () => void {
   const run = () => {
-    refresher.run().catch((error: unknown) => console.error('Benchmark refresh failed:', error instanceof Error ? error.name : 'unknown'));
+    refresher.run().catch((error: unknown) => log.error('benchmark_refresh_failed', { error: errorName(error) }));
   };
   const first = setTimeout(run, FIRST_RUN_DELAY_MS);
   const daily = setInterval(run, INTERVAL_MS);

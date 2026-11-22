@@ -1,0 +1,132 @@
+# Portfolio Tracker for one small always-on machine (a Raspberry Pi 4/5 with 4 GB is enough for a few people).
+#
+#   docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+#
+# Only the web container is reachable from outside, on 127.0.0.1:8080 unless WEB_BIND says otherwise. How that port
+# reaches the internet (a tunnel, a reverse proxy) is a separate choice. The database has no port at all, and its
+# network cannot reach the internet.
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }   # a Pi's SD card should not fill up with logs
+
+x-hardened: &hardened
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  logging: *logging
+
+services:
+  db:
+    <<: *hardened
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres_admin
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?set POSTGRES_ADMIN_PASSWORD in .env.production}
+      POSTGRES_DB: postgres
+      APP_DB_USER: portfolio_app
+      APP_DB_NAME: portfolio
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env.production}
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]   # what the postgres entrypoint needs, and nothing more
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init-app-role.sh:/docker-entrypoint-initdb.d/10-app-role.sh:ro
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres_admin -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    mem_limit: 768m
+    pids_limit: 200
+
+  migrate:
+    <<: *hardened
+    build: ./apps/api
+    image: portfolio-api:latest
+    restart: "no"
+    command: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://portfolio_app:${APP_DB_PASSWORD}@db:5432/portfolio?schema=public
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [data]
+    read_only: true
+    tmpfs: [/tmp]
+    mem_limit: 512m
+
+  api:
+    <<: *hardened
+    build: ./apps/api
+    image: portfolio-api:latest
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgresql://portfolio_app:${APP_DB_PASSWORD}@db:5432/portfolio?schema=public
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env.production}
+      USER_HASH_SALT: ${USER_HASH_SALT:?set USER_HASH_SALT in .env.production}
+      PROFILE_ENCRYPTION_KEY: ${PROFILE_ENCRYPTION_KEY:?set PROFILE_ENCRYPTION_KEY in .env.production}
+      RP_ID: ${RP_ID:?set RP_ID in .env.production}
+      ORIGIN: ${ORIGIN:?set ORIGIN in .env.production}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      ENABLE_DEMO: ${ENABLE_DEMO:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    networks: [data, edge]   # data: the database. edge: the web container, and the way out to Google and the market-data sites
+    read_only: true
+    tmpfs: [/tmp]
+    mem_limit: 512m
+    pids_limit: 200
+
+  web:
+    <<: *hardened
+    build:
+      context: ./apps/web
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    image: portfolio-web:latest
+    restart: unless-stopped
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:8080"
+    depends_on:
+      api: { condition: service_healthy }
+    networks: [edge]
+    read_only: true
+    tmpfs: [/tmp]
+    mem_limit: 128m
+    pids_limit: 100
+
+  backup:
+    <<: *hardened
+    build: ./infrastructure/backup
+    image: portfolio-backup:latest
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGUSER: portfolio_app
+      PGPASSWORD: ${APP_DB_PASSWORD}
+      PGDATABASE: portfolio
+      BACKUP_AGE_PUBLIC_KEY: ${BACKUP_AGE_PUBLIC_KEY:?set BACKUP_AGE_PUBLIC_KEY in .env.production (the PUBLIC key; see CLAUDE.md)}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    networks: [data]
+    read_only: true
+    tmpfs: ["/tmp:size=256m,mode=1777"]   # the plain dump lives in memory only, never on disk
+    mem_limit: 256m
+
+networks:
+  data:
+    internal: true   # no route to the internet: the database cannot call out, and nothing outside can call in
+  edge: {}
+
+volumes:
+  db_data: {}

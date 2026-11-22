@@ -11,6 +11,9 @@ import SecondSalaryCard from '../SecondSalaryCard';
 import TransactionForm from '../TransactionForm';
 
 vi.mock('@react-oauth/google', () => ({ useGoogleLogin: () => vi.fn() }));
+// This server has the sneak peek, and this deployment has Google sign-in.
+vi.mock('../../hooks/useAppConfig', () => ({ useAppConfig: () => ({ demoEnabled: true }) }));
+vi.mock('../../lib/googleConfig', () => ({ GOOGLE_CLIENT_ID: 'test-client', isGoogleSignInConfigured: () => true }));
 vi.mock('@simplewebauthn/browser', () => ({ startRegistration: vi.fn(), startAuthentication: vi.fn() }));
 
 const ok = { ok: true as const, value: undefined };

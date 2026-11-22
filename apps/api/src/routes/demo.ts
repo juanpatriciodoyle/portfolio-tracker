@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { INTERNAL_ERROR_MESSAGE } from '../contracts';
 import type { ApiErrorResponse } from '../contracts';
 import { generateToken } from '../lib/auth';
+import { errorName, log } from '../lib/logger';
 import { requireUser, userIdOf } from './http';
 
 const GUEST_NAME = 'Joe';
@@ -41,7 +42,7 @@ export function createDemoRouter(workspace: DemoWorkspace): Router {
         },
       });
     } catch (error) {
-      console.error('Guest sign-in failed:', error instanceof Error ? error.name : 'unknown');
+      log.error('guest_sign_in_failed', { error: errorName(error) });
       res.status(500).json({ error: DEMO_FAILED } satisfies ApiErrorResponse);
     }
   });
@@ -56,10 +57,19 @@ export function createDemoRouter(workspace: DemoWorkspace): Router {
       await workspace.restore();
       res.status(204).end();
     } catch (error) {
-      console.error('Guest reset failed:', error instanceof Error ? error.name : 'unknown');
+      log.error('guest_reset_failed', { error: errorName(error) });
       res.status(500).json({ error: INTERNAL_ERROR_MESSAGE } satisfies ApiErrorResponse);
     }
   });
 
+  return router;
+}
+
+/** With the sneak peek switched off, its addresses do not exist: no guest session can be asked for. */
+export function createDisabledDemoRouter(): Router {
+  const router = Router();
+  router.use('/auth/demo', (_req, res) => {
+    res.status(404).json({ error: 'Not found.' } satisfies ApiErrorResponse);
+  });
   return router;
 }
