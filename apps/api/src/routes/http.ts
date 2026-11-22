@@ -1,6 +1,6 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { z } from 'zod';
-import { DocumentRejectedError, ResourceNotFoundError } from '../application/errors';
+import { DocumentRejectedError, ForbiddenError, ResourceNotFoundError } from '../application/errors';
 import { DUPLICATE_BILLING_RECORD, INTERNAL_ERROR_MESSAGE, INVALID_REQUEST_MESSAGE } from '../contracts';
 import type { ApiErrorResponse, DuplicateBillingRecordErrorResponse, PhaseOverlapErrorResponse, ValidationErrorResponse } from '../contracts';
 import { DuplicateBillingRecordError, InsufficientHoldingsError, InvalidBillingRecordError, InvalidLivingPhaseError, InvalidProfileError, PhaseOverlapError } from '../domain/errors';
@@ -44,6 +44,7 @@ export function requireUser(req: Request, res: Response, next: NextFunction): vo
   }
 
   (req as AuthenticatedRequest).userId = decoded.userId;
+  (req as AuthenticatedRequest).admin = decoded.admin;
   next();
 }
 
@@ -74,6 +75,8 @@ const DOCUMENT_STATUS: Record<DocumentRejectedError['code'], number> = {
 export function respondWithError(error: unknown, res: Response): void {
   if (error instanceof RequestValidationError) {
     res.status(400).json({ error: INVALID_REQUEST_MESSAGE, issues: error.issues } satisfies ValidationErrorResponse);
+  } else if (error instanceof ForbiddenError) {
+    res.status(403).json({ error: error.message } satisfies ApiErrorResponse);
   } else if (error instanceof ResourceNotFoundError) {
     res.status(404).json({ error: error.message } satisfies ApiErrorResponse);
   } else if (error instanceof PhaseOverlapError) {

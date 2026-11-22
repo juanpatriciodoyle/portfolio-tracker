@@ -26,6 +26,22 @@ export class InMemoryUserRepository implements UserRepository {
     return user;
   }
 
+  private readonly signedInAt = new Map<string, Date>();
+
+  async recordLogin(userId: string, at: Date): Promise<void> {
+    this.signedInAt.set(userId, at);
+  }
+
+  async identityHashOf(userId: string): Promise<string | null> {
+    for (const [userHash, user] of this.byHash) if (user.id === userId) return userHash;
+    return null;
+  }
+
+  /** Assert: when the account last signed in, if it did. */
+  lastLoginOf(userId: string): Date | null {
+    return this.signedInAt.get(userId) ?? null;
+  }
+
   get size(): number {
     return this.byHash.size;
   }

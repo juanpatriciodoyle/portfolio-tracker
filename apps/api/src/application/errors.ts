@@ -32,6 +32,7 @@ const SIGN_IN_MESSAGES = {
   GOOGLE_TOKEN_UNVERIFIED: 'Google could not confirm your sign-in. Try signing in again.',
   GOOGLE_NOT_CONFIGURED: 'Google sign-in is not set up on this server. Use a passkey.',
   PASSKEY_NEEDS_SIGN_IN: 'This account was created with Google. Sign in with Google first.',
+  PASSKEY_NOT_FOR_ADMIN: 'This account signs in with Google only.',
 } as const;
 
 export type SignInRejection = keyof typeof SIGN_IN_MESSAGES;
@@ -49,5 +50,13 @@ export class GoogleNotConfiguredError extends Error {
   constructor() {
     super('GOOGLE_CLIENT_ID is not set');
     this.name = 'GoogleNotConfiguredError';
+  }
+}
+
+/** The person is signed in but this is not theirs to see. */
+export class ForbiddenError extends Error {
+  constructor() {
+    super('Only the administrator can see this.');
+    this.name = 'ForbiddenError';
   }
 }

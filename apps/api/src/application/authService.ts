@@ -1,6 +1,7 @@
 import { NEW_USER_DEFAULTS } from '../domain/newUser';
 import { GoogleNotConfiguredError, SignInRejectedError } from './errors';
 import type {
+  AdminDirectory,
   AuthUser,
   IdentityHasher,
   IdentityVerifier,
@@ -18,6 +19,8 @@ export interface AuthServiceDeps {
   readonly passkeys: PasskeyAuthenticator;
   readonly hashIdentity: IdentityHasher;
   readonly issueToken: SessionTokenIssuer;
+  readonly admins: AdminDirectory;
+  readonly now: () => Date;
 }
 
 export interface SignedInUser {
@@ -26,6 +29,8 @@ export interface SignedInUser {
   readonly name: string;
   readonly avatarUrl?: string;
   readonly country: string;
+  /** Only ever true after Google confirmed the administrator's email; the web app uses it to show the Analytics tab. */
+  readonly isAdmin: boolean;
 }
 
 export interface SignIn {
@@ -50,25 +55,30 @@ export class AuthService {
   private readonly passkeys: PasskeyAuthenticator;
   private readonly hashIdentity: IdentityHasher;
   private readonly issueToken: SessionTokenIssuer;
+  private readonly admins: AdminDirectory;
+  private readonly now: () => Date;
 
-  constructor({ users, googleIdentities, passkeys, hashIdentity, issueToken }: AuthServiceDeps) {
+  constructor({ users, googleIdentities, passkeys, hashIdentity, issueToken, admins, now }: AuthServiceDeps) {
     this.users = users;
     this.googleIdentities = googleIdentities;
     this.passkeys = passkeys;
     this.hashIdentity = hashIdentity;
     this.issueToken = issueToken;
+    this.admins = admins;
+    this.now = now;
   }
 
   /** Only what Google confirms for the token counts: nothing the browser says about who the person is. */
   async signInWithGoogle(accessToken: string): Promise<SignIn> {
     const identity = await this.confirmedIdentity(accessToken);
     const account = await this.accountFor(identity.email);
+    const isAdmin = this.admins.isAdmin(this.hashIdentity(identity.email));
 
     return this.signedIn(account, {
       email: identity.email,
       name: identity.name || NO_NAME_PLACEHOLDER,
       avatarUrl: identity.avatarUrl,
-    });
+    }, isAdmin);
   }
 
   async passkeyChallenge(email: string): Promise<PasskeyChallenge> {
@@ -89,10 +99,13 @@ export class AuthService {
 
   /**
    * An email is not proof of who is asking, so a passkey may only create an account or open one that already has
-   * a passkey. An account made another way (Google) must be opened that way first.
+   * a passkey. An account made another way (Google) must be opened that way first, and the administrator's identity
+   * is never opened with a passkey at all: registering one would only need their email address.
    */
   private async refuseTakeover(email: string): Promise<void> {
-    const existing = await this.users.findByIdentityHash(this.hashIdentity(email));
+    const userHash = this.hashIdentity(email);
+    if (this.admins.isAdmin(userHash)) throw new SignInRejectedError('PASSKEY_NOT_FOR_ADMIN');
+    const existing = await this.users.findByIdentityHash(userHash);
     if (existing && !existing.hasPasskey) throw new SignInRejectedError('PASSKEY_NEEDS_SIGN_IN');
   }
 
@@ -104,10 +117,11 @@ export class AuthService {
     }
   }
 
-  private signedIn(account: AuthUser, shown: Pick<SignedInUser, 'email' | 'name' | 'avatarUrl'>): SignIn {
+  private async signedIn(account: AuthUser, shown: Pick<SignedInUser, 'email' | 'name' | 'avatarUrl'>, isAdmin = false): Promise<SignIn> {
+    await this.users.recordLogin(account.id, this.now());
     return {
-      token: this.issueToken(account.id),
-      user: { id: account.id, ...shown, country: account.country },
+      token: this.issueToken(account.id, { admin: isAdmin }),
+      user: { id: account.id, ...shown, country: account.country, isAdmin },
     };
   }
 }

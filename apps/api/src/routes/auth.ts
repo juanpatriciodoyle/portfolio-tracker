@@ -20,6 +20,7 @@ const REJECTION_STATUS: Record<SignInRejection, number> = {
   GOOGLE_TOKEN_UNVERIFIED: 401,
   GOOGLE_NOT_CONFIGURED: 503,
   PASSKEY_NEEDS_SIGN_IN: 403,
+  PASSKEY_NOT_FOR_ADMIN: 403,
 };
 
 const passkeyEmailBody = z.object({ email: z.string().min(1) });

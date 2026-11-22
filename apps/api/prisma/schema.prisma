@@ -62,6 +62,8 @@ model User {
   passkeyCredentialId String?         @unique
   passkeyPublicKey    String?
   passkeyCounter      Int             @default(0)
+  /// The last real sign-in (never the demo guest). Null for accounts that have not signed in since this was added.
+  lastLoginAt         DateTime?
   cashBalance         Float           @default(0.0)
   country             String          @default("Spain")
   baseCurrency        String          @default("EUR")
@@ -74,6 +76,8 @@ model User {
   profile             UserProfile?
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
+
+  @@index([lastLoginAt])
 }
 
 model Position {

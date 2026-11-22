@@ -1,5 +1,6 @@
 import express from 'express';
 import request from 'supertest';
+import { AdminIdentities } from '../application/adminIdentities';
 import { AuthService } from '../application/authService';
 import { MarketSearchService } from '../application/marketSearchService';
 import { GoogleNotConfiguredError } from '../application/errors';
@@ -30,6 +31,8 @@ function buildAuth({ users = new InMemoryUserRepository(), verifyGoogle, passkey
       ...passkeys,
     },
     hashIdentity: (raw) => `hash:${raw}`,
+    admins: new AdminIdentities([], (raw) => `hash:${raw}`),
+    now: () => new Date('2026-11-22T10:30:00.000Z'),
     issueToken: (userId) => {
       issued.push(userId);
       return `token-for-${userId}`;
@@ -54,7 +57,7 @@ describe('POST /api/auth/google', () => {
     expect(response.body).toEqual({
       success: true,
       token: 'token-for-user-1',
-      user: { id: 'user-1', email: 'ana@example.com', name: 'Ana', avatarUrl: 'https://img/a.png', country: 'Spain' },
+      user: { id: 'user-1', email: 'ana@example.com', name: 'Ana', avatarUrl: 'https://img/a.png', country: 'Spain', isAdmin: false },
     });
   });
 
@@ -193,7 +196,7 @@ describe('POST /api/auth/passkey/verify', () => {
     expect(response.body).toEqual({
       success: true,
       token: 'token-for-user-passkey',
-      user: { id: 'user-passkey', email: 'juan@portfolio.local', name: 'Juan', country: 'Spain' },
+      user: { id: 'user-passkey', email: 'juan@portfolio.local', name: 'Juan', country: 'Spain', isAdmin: false },
     });
   });
 

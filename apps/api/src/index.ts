@@ -8,11 +8,15 @@ import { hashUserIdentity } from './lib/privacy';
 import { assertJwtSecretConfigured, generateToken } from './lib/auth';
 import { tickerSearch } from './lib/financialFetcher';
 import { ensureDemoUserWithData, isDemoUserId, resetDemoUser } from './lib/demoSeed';
+import { AdminIdentities, parseAdminEmails } from './application/adminIdentities';
 import { AuthService } from './application/authService';
+import { UsageAnalyticsService } from './application/usageAnalyticsService';
 import { SlidingWindowRateLimiter } from './application/limits';
 import { MarketSearchService } from './application/marketSearchService';
 import { GoogleIdentityVerifier } from './infrastructure/googleIdentityVerifier';
+import { PrismaUsageStatistics } from './infrastructure/prismaUsageStatistics';
 import { PrismaUserRepository } from './infrastructure/prismaUserRepository';
+import { createAdminAnalyticsRouter } from './routes/adminAnalytics';
 import { passkeyAuthenticator } from './infrastructure/simpleWebAuthnPasskeys';
 import { createAuthRouter } from './routes/auth';
 import { createDemoRouter } from './routes/demo';
@@ -33,17 +37,26 @@ const { benchmarkRefresher } = mountProfileFeature(app, { env: process.env, pris
 // The original portfolio endpoints; every one acts for the bearer-token holder only.
 app.use('/api', createPortfolioRouter(createPrismaPortfolioDeps(db)));
 
+// The administrator is whoever Google confirms to own an email listed in ADMIN_EMAILS; nobody else, and never through a passkey.
+const admins = new AdminIdentities(parseAdminEmails(process.env.ADMIN_EMAILS), hashUserIdentity);
+const users = new PrismaUserRepository(db);
+
 // Passwordless sign-in (Google and passkeys): no password, and no email, is ever stored.
 const auth = new AuthService({
-  users: new PrismaUserRepository(db),
+  users,
   // Without GOOGLE_CLIENT_ID the server still starts (passkeys and the demo work) but refuses every Google sign-in.
   googleIdentities: new GoogleIdentityVerifier(new OAuth2Client(), process.env.GOOGLE_CLIENT_ID),
   passkeys: passkeyAuthenticator,
   hashIdentity: hashUserIdentity,
   issueToken: generateToken,
+  admins,
+  now: () => new Date(),
 });
 const signInAttempts = new SlidingWindowRateLimiter({ limit: 20, windowMs: 10 * 60 * 1000, now: Date.now });
 app.use('/api', createAuthRouter(auth, { limiter: signInAttempts }));
+
+// How many customers use the app: the administrator only.
+app.use('/api', createAdminAnalyticsRouter(new UsageAnalyticsService({ users, admins, statistics: new PrismaUsageStatistics(db), now: () => new Date() })));
 
 // Autocomplete of the instrument being logged.
 app.use('/api', createMarketRouter(new MarketSearchService({ tickers: tickerSearch })));

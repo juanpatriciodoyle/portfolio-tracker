@@ -22,4 +22,13 @@ export class PrismaUserRepository implements UserRepository {
     console.log(`🔒 Anonymous pseudonymous user account created in DB (Hash: ${userHash.slice(0, 10)}...)`);
     return asAuthUser(user);
   }
+
+  async recordLogin(userId: string, at: Date): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { lastLoginAt: at } });
+  }
+
+  async identityHashOf(userId: string): Promise<string | null> {
+    const user = await this.db.user.findUnique({ where: { id: userId }, select: { userHash: true } });
+    return user?.userHash ?? null;
+  }
 }

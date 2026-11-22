@@ -204,6 +204,21 @@ export interface AuthUser {
 export interface UserRepository {
   findByIdentityHash(userHash: string): Promise<AuthUser | null>;
   create(userHash: string, defaults: NewUserDefaults): Promise<AuthUser>;
+  /** Command: the account signed in at `at`. */
+  recordLogin(userId: string, at: Date): Promise<void>;
+  /** The hash an account is stored under, or null when there is no such account. */
+  identityHashOf(userId: string): Promise<string | null>;
+}
+
+/** Who administers the app, known only by the hash of their email. */
+export interface AdminDirectory {
+  isAdmin(userHash: string): boolean;
+}
+
+/** Port: how many people use the app. The demo guest is not a customer. */
+export interface UsageStatistics {
+  countCustomers(): Promise<number>;
+  countCustomersSignedInSince(since: Date): Promise<number>;
 }
 
 /** What Google confirmed about a person. The email is one Google itself has verified. */
@@ -226,7 +241,11 @@ export interface IdentityVerifier {
 export type IdentityHasher = (rawIdentity: string) => string;
 
 /** Port: signs the session a person carries after signing in. */
-export type SessionTokenIssuer = (userId: string) => string;
+/** What a session says about its holder besides who they are. */
+export interface SessionClaims {
+  readonly admin?: boolean;
+}
+export type SessionTokenIssuer = (userId: string, claims?: SessionClaims) => string;
 
 /** What the browser returns from the passkey prompt. Its structure is checked by the authenticator, not by the core. */
 export type PasskeyCredential = Readonly<Record<string, unknown>>;
