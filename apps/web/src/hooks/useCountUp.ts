@@ -1,0 +1,32 @@
+import { useEffect, useRef, useState } from 'react';
+import { countUpDurationMs, tweenValue } from '../lib/easing';
+import { prefersReducedMotion } from '../lib/prefersReducedMotion';
+
+/**
+ * The figure on screen while it settles toward `target`: from 0 on arrival, from wherever it stood when the
+ * target changes (a new period, the inflation toggle). With reduced motion it is simply the target.
+ */
+export function useCountUp(target: number): number {
+  const reduced = prefersReducedMotion();
+  const [shown, setShown] = useState(0);
+  const latest = useRef(0);
+
+  useEffect(() => {
+    if (reduced || latest.current === target) return;
+    const from = latest.current;
+    const duration = countUpDurationMs(from);
+    const startedAt = performance.now();
+    let frame = 0;
+
+    const step = (now: number) => {
+      const progress = (now - startedAt) / duration;
+      latest.current = tweenValue(from, target, progress);
+      setShown(latest.current);
+      if (progress < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [target, reduced]);
+
+  return reduced ? target : shown;
+}

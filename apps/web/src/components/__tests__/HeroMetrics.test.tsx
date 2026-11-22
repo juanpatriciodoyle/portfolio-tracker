@@ -1,7 +1,10 @@
 import '@testing-library/jest-dom';
-import { render, screen, within } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
 import HeroMetrics, { type HeroFigures } from '../HeroMetrics';
+
+// The figures count up in the browser; here they are simply their final value.
+vi.mock('../../lib/prefersReducedMotion', () => ({ prefersReducedMotion: () => true }));
 
 const figures: HeroFigures = {
   netWorth: 559342.51,
@@ -31,86 +34,137 @@ const props = {
   country: 'Spain',
 };
 
-const card = (title: RegExp | string) => screen.getByRole('group', { name: title });
-
-describe('HeroMetrics: three cards', () => {
-  it('shows exactly three cards: Net worth, Open positions gain and Total return', () => {
+describe('HeroMetrics: one answer to "how am I doing?"', () => {
+  it('leads with the total value and says what it is', () => {
     render(<HeroMetrics {...props} />);
-    expect(screen.getAllByRole('group')).toHaveLength(3);
-    expect(screen.queryByText('Fees paid')).not.toBeInTheDocument();
-    expect(screen.queryByText(/Gain since you started/)).not.toBeInTheDocument();
+    expect(screen.getByText('Total value')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '€559,342.51' })).toBeInTheDocument();
   });
 
-  it('Net worth: total, then what is invested and the cash', () => {
+  it('has no more than one big figure and one gain: the three-card layout is gone', () => {
     render(<HeroMetrics {...props} />);
-    const net = card('Net worth');
-    expect(within(net).getByText('€559,342.51')).toBeInTheDocument();
-    expect(within(net).getByText('Invested: €494,842.51 · Cash: €64,500.00')).toBeInTheDocument();
+    expect(screen.queryByText('Open positions gain')).not.toBeInTheDocument();
+    expect(screen.queryByText('Total return')).not.toBeInTheDocument();
+    expect(screen.queryByText('Net worth')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('group')).toHaveLength(0);
   });
 
-  it('Open positions gain: the gain with its percentage, then cost and worth today', () => {
+  it('says what it has earned, with the percentage and the period in plain words', () => {
     render(<HeroMetrics {...props} />);
-    const open = card('Open positions gain');
-    expect(within(open).getByText('+€154,392.51')).toBeInTheDocument();
-    expect(within(open).getByText('+45.35%')).toBeInTheDocument();
-    expect(within(open).getByText('Cost basis €340,450.00 · Worth €494,842.51 today')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '+€199,171.51' })).toBeInTheDocument();
+    expect(screen.getByText('(+70.25%)')).toBeInTheDocument();
+    expect(screen.getByText('since you started')).toBeInTheDocument();
   });
 
-  it('Total return on "All": the net total with the sold and open split on one line', () => {
+  it('splits the total into what is invested and what is cash', () => {
     render(<HeroMetrics {...props} />);
-    const total = card('Total return');
-    expect(within(total).getByText('+€199,171.51')).toBeInTheDocument();
-    expect(within(total).getByText('+70.25%')).toBeInTheDocument();
-    expect(within(total).getByText('Sold +€44,900.00 · Open +€154,392.51')).toBeInTheDocument();
+    expect(screen.getByText('Invested').nextSibling).toHaveTextContent('€494,842.51');
+    expect(screen.getByText('Cash').nextSibling).toHaveTextContent('€64,500.00');
   });
 
-  it('keeps dividends and fees in a hover note, not on the card', () => {
-    render(<HeroMetrics {...props} figures={{ ...figures, dividends: 100 }} />);
-    const split = screen.getByText('Sold +€44,900.00 · Open +€154,392.51');
-    expect(split).toHaveAttribute('title', 'Also counted: dividends +€100.00 · fees -€121.00');
+  it('marks a loss as negative', () => {
+    render(<HeroMetrics {...props} figures={{ ...figures, totalGain: -1200, totalGainPercent: -3.5 }} />);
+    expect(screen.getByRole('img', { name: '-€1,200.00' }).closest('.hero__gain')).toHaveClass('is-negative');
+    expect(screen.getByText('(-3.50%)')).toBeInTheDocument();
+  });
+});
+
+describe('HeroMetrics: how this adds up', () => {
+  it('starts folded and hidden from the keyboard', () => {
+    render(<HeroMetrics {...props} />);
+    const toggle = screen.getByRole('button', { name: /how this adds up/i });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById(toggle.getAttribute('aria-controls')!)).toHaveAttribute('inert');
   });
 
-  it('names the window and shows its gain for any other period', () => {
+  it('opens to the parts of the gain, each with its meaning, adding up to the total', () => {
+    render(<HeroMetrics {...props} />);
+    const toggle = screen.getByRole('button', { name: /how this adds up/i });
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const panel = document.getElementById(toggle.getAttribute('aria-controls')!)!;
+    expect(panel).not.toHaveAttribute('inert');
+    const rows = Array.from(panel.querySelectorAll('li')).map((row) => [
+      row.querySelector('.hero__part-name')!.firstChild!.textContent,
+      row.querySelector('.hero__part-amount')!.textContent,
+    ]);
+    expect(rows).toEqual([
+      ['Still invested', '+€154,392.51'],
+      ['Sold', '+€44,900.00'],
+      ['Fees', '-€121.00'],
+      ['Total gain', '+€199,171.51'],
+    ]);
+    expect(panel).toHaveTextContent('It only becomes yours when you sell');
+  });
+
+  it('is not offered for a window, whose gain comes from the value history', () => {
     render(<HeroMetrics {...props} period="YTD" periodGain={117670.76} periodPercent={41.51} />);
-    const ytd = card('YTD return');
-    expect(within(ytd).getByText('+€117,670.76')).toBeInTheDocument();
-    expect(within(ytd).getByText('+41.51%')).toBeInTheDocument();
-    expect(within(ytd).getByText('1 Jan – 11 Nov 2026')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /how this adds up/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('HeroMetrics: periods', () => {
+  it('shows the gain of the window, names it in words and shows its dates', () => {
+    render(<HeroMetrics {...props} period="YTD" periodGain={117670.76} periodPercent={41.51} />);
+    expect(screen.getByRole('img', { name: '+€117,670.76' })).toBeInTheDocument();
+    expect(screen.getByText('(+41.51%)')).toBeInTheDocument();
+    expect(screen.getByText('this year')).toBeInTheDocument();
+    expect(screen.getByText('1 Jan – 11 Nov 2026')).toBeInTheDocument();
   });
 
-  it('with inflation on, adjusts the open and total figures and says so in the title', () => {
-    render(<HeroMetrics {...props} isRealInflationMode figures={{ ...figures, totalGain: 117670.76, totalGainPercent: 41.51 }} />);
-    expect(card('Open positions gain · after inflation')).toHaveTextContent('+€100,000.00');
-    const total = card('Total return · after inflation');
-    expect(total).toHaveTextContent('+€117,670.76');
-    expect(total).toHaveTextContent('+41.51%');
-    expect(within(total).getByText('Sold +€20,000.00 · Open +€100,000.00')).toBeInTheDocument();
-  });
-
-  it('leaves a window as it is when inflation is on, with nothing added to its dates', () => {
-    render(<HeroMetrics {...props} period="1Y" periodGain={10} periodPercent={1} isRealInflationMode />);
-    expect(within(card('1Y return')).getByText('1 Jan – 11 Nov 2026')).toBeInTheDocument();
-    expect(card('1Y return')).not.toHaveTextContent(/before inflation/i);
-  });
-
-  it('shows the net worth in today\'s purchasing power when inflation is on, and the nominal one under it', () => {
-    render(<HeroMetrics {...props} isRealInflationMode />);
-    const net = card('Net worth · after inflation');
-    expect(within(net).getByText('€480,000.00')).toBeInTheDocument();
-    expect(within(net).getByText('Before inflation: €559,342.51')).toBeInTheDocument();
-  });
-
-  it('flags missing live prices on the open positions card', () => {
-    render(<HeroMetrics {...props} figures={{ ...figures, pricesAvailable: false }} />);
-    expect(within(card('Open positions gain')).getByText('Cost basis €340,450.00 · Live prices unavailable')).toBeInTheDocument();
-  });
-
-  it('gives every card the same structure so the figures line up', () => {
+  it('does not repeat the dates when the period is everything', () => {
     render(<HeroMetrics {...props} />);
-    for (const group of screen.getAllByRole('group')) {
-      expect(group.querySelectorAll('.hero-card__title')).toHaveLength(1);
-      expect(group.querySelectorAll('.hero-card__figure')).toHaveLength(1);
-      expect(group.querySelectorAll('.hero-card__subtitle')).toHaveLength(1);
-    }
+    expect(screen.queryByText('1 Jan – 11 Nov 2026')).not.toBeInTheDocument();
+  });
+});
+
+describe('HeroMetrics: inflation', () => {
+  it('shows the total in today\'s purchasing power and the nominal one under it', () => {
+    render(<HeroMetrics {...props} isRealInflationMode figures={{ ...figures, totalGain: 117670.76, totalGainPercent: 41.51 }} />);
+    expect(screen.getByText('Total value, after inflation')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '€480,000.00' })).toBeInTheDocument();
+    expect(screen.getByText('Before inflation: €559,342.51')).toBeInTheDocument();
+    expect(screen.getByText('since you started, after inflation')).toBeInTheDocument();
+  });
+
+  it('drops the invested and cash split, which would not add up to the adjusted total', () => {
+    render(<HeroMetrics {...props} isRealInflationMode />);
+    expect(screen.queryByText('Invested')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cash')).not.toBeInTheDocument();
+  });
+
+  it('leaves a window as it is, with nothing about inflation added', () => {
+    render(<HeroMetrics {...props} period="1Y" periodGain={10} periodPercent={1} isRealInflationMode />);
+    expect(screen.getByText('in the past year')).toBeInTheDocument();
+  });
+});
+
+describe('HeroMetrics: states', () => {
+  it('says so when live prices are missing', () => {
+    render(<HeroMetrics {...props} figures={{ ...figures, pricesAvailable: false }} />);
+    expect(screen.getByText(/live prices are unavailable/i)).toBeInTheDocument();
+  });
+
+  it('holds its place while the first answer is on its way', () => {
+    render(<HeroMetrics {...props} loading />);
+    expect(screen.getByRole('region', { name: 'Your portfolio' })).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
+  it('invites a first transaction on an empty account instead of showing zeros as results', () => {
+    const empty = { ...figures, netWorth: 0, realNetWorth: 0, cashBalance: 0, openMarketValue: 0, openCostBasis: 0, totalGain: 0, totalGainPercent: 0, openProfit: 0, soldProfit: 0, totalFees: 0 };
+    render(<HeroMetrics {...props} figures={empty} />);
+    expect(screen.getByText('Nothing here yet')).toBeInTheDocument();
+    expect(screen.queryByText('since you started')).not.toBeInTheDocument();
+  });
+
+  it('puts the period picker under the figures it changes', () => {
+    render(
+      <HeroMetrics {...props}>
+        <nav aria-label="Reporting period" />
+      </HeroMetrics>,
+    );
+    expect(screen.getByRole('navigation', { name: 'Reporting period' })).toBeInTheDocument();
   });
 });

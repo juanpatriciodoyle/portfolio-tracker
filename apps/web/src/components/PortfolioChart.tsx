@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { returnForPeriod, periodPhrase } from '../lib/returnForPeriod';
+import { easeOutExpo } from '../lib/easing';
+import { prefersReducedMotion } from '../lib/prefersReducedMotion';
 import {
   type ChartDataPoint,
   type ReportingPeriod,
@@ -44,15 +44,11 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
     return filterDataByPeriod(data, period, customRange);
   }, [data, period, customRange]);
 
-  // What the header shows: today's value, and what the selected period gained or lost.
-  const currentValue = filteredData.length ? filteredData[filteredData.length - 1].portfolio_value_in_reporting_currency : 0;
-  const periodChange = useMemo(() => returnForPeriod(data, period, customRange), [data, period, customRange]);
-  const isPositive = periodChange.gain >= 0;
-  const signedMoney = (amount: number) => `${amount > 0 ? '+' : ''}${formatCurrency(amount, currency)}`;
-
   // Canvas & Interaction state
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  /** How much of the series is drawn, 0 to 1: the line writes itself in from the left. */
+  const revealRef = useRef(1);
   const [hoverPoint, setHoverPoint] = useState<{
     point: ChartDataPoint;
     x: number;
@@ -243,7 +239,13 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
       ctx.restore();
     };
 
-    // Draw active series based on mode
+    // Draw active series based on mode, uncovered from the left while the chart reveals itself
+    ctx.save();
+    if (revealRef.current < 1) {
+      ctx.beginPath();
+      ctx.rect(padding.left - 4, 0, chartW * revealRef.current + 8, height);
+      ctx.clip();
+    }
     if (chartMode === 'value') {
       // 1. Net Contributions (Cashflow)
       if (visibleDatasets.cashflow) {
@@ -295,6 +297,8 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
         );
       }
     }
+
+    ctx.restore();
 
     // Draw X-axis date ticks
     if (filteredData.length === 1) {
@@ -375,6 +379,35 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, [drawChart]);
 
+  // The chart writes itself in when its data arrives and when the period or the view changes.
+  const drawRef = useRef(drawChart);
+  useEffect(() => {
+    drawRef.current = drawChart;
+  }, [drawChart]);
+
+  const hasSeries = filteredData.length > 1;
+  useEffect(() => {
+    if (!hasSeries || prefersReducedMotion()) {
+      revealRef.current = 1;
+      return;
+    }
+    const startedAt = performance.now();
+    const duration = 1100;
+    let frame = 0;
+    const step = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      revealRef.current = easeOutExpo(progress);
+      drawRef.current();
+      if (progress < 1) frame = requestAnimationFrame(step);
+    };
+    revealRef.current = 0;
+    frame = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(frame);
+      revealRef.current = 1;
+    };
+  }, [hasSeries, period, customRange, chartMode]);
+
   // Handle pointer tracking for tooltip
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const container = containerRef.current;
@@ -409,24 +442,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
       <div className="dashboard-panel-spacious value-overview">
         {/* Top Header Summary */}
         <div className="value-overview__top">
-          <div className="value-overview__summary">
-            <div className="currency value-overview__amount">
-              {formatCurrency(currentValue, currency)}
-            </div>
-
-            <div className="value-overview__return value-overview__return--portfolio">
-              {isPositive ? (
-                <ArrowUpRight size={20} className="lucide lucide-arrow-up-right dashboard-return-icon value-overview__return--positive" aria-hidden="true" />
-              ) : (
-                <ArrowDownRight size={20} className="lucide lucide-arrow-down-right dashboard-return-icon value-overview__return--negative" aria-hidden="true" />
-              )}
-              <span className={isPositive ? 'value-overview__return--positive' : 'value-overview__return--negative'}>
-                {signedMoney(periodChange.gain)}
-                <span className="return-sub-amount"> ({periodChange.percent > 0 ? '+' : ''}{periodChange.percent.toFixed(2)}%)</span>
-              </span>
-              <span className="value-overview__return-period">{periodPhrase(period)}</span>
-            </div>
-          </div>
+          <h2 className="dashboard-panel-title">Growth</h2>
 
           {/* Mode Switcher Segmented Control */}
           <div className="value-overview__controls">

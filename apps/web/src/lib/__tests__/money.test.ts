@@ -10,6 +10,7 @@ import {
   formatSignedMinor,
   minorToInputString,
   parseMajorToMinor,
+  splitCents,
 } from '../money';
 
 describe('currencyExponent', () => {
@@ -161,5 +162,21 @@ describe('calendar dates', () => {
 
   it('lets the caller word the open end differently', () => {
     expect(formatPhaseRange('2027-03-01', null, 'en-US', 'open')).toBe('Mar 2027 – open');
+  });
+});
+
+describe('splitCents', () => {
+  it.each([
+    ['€468,414.03', { whole: '€468,414', cents: '.03' }],
+    ['€1.234,56', { whole: '€1.234', cents: ',56' }],
+    ['-€88,171.00', { whole: '-€88,171', cents: '.00' }],
+    ['+€4,900.50', { whole: '+€4,900', cents: '.50' }],
+  ])('splits "%s" into the whole part and the cents', (text, expected) => {
+    expect(splitCents(text)).toEqual(expected);
+  });
+
+  it('leaves a figure with no cents whole', () => {
+    expect(splitCents('€468,414')).toEqual({ whole: '€468,414', cents: '' });
+    expect(splitCents('€1,234')).toEqual({ whole: '€1,234', cents: '' });
   });
 });

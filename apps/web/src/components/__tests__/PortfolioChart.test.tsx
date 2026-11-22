@@ -136,11 +136,12 @@ describe('ReportingPeriodBar Component', () => {
 });
 
 describe('PortfolioChart Component', () => {
-  it('should render chart header amount, percentage return, and controls with real live data', () => {
+  it('should render its title and controls, and leave the headline figures to the hero', () => {
     render(<PortfolioChart data={testHistoryData} period="All" currency="EUR" />);
 
-    expect(screen.getByText(/€14,000.00/)).toBeInTheDocument();
-    expect(screen.getByText(/%/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Growth' })).toBeInTheDocument();
+    expect(screen.queryByText(/€14,000.00/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/since you started/)).not.toBeInTheDocument();
 
     // Mode buttons
     expect(screen.getByRole('button', { name: 'Value' })).toBeInTheDocument();
@@ -178,64 +179,4 @@ describe('PortfolioChart Component', () => {
     expect(benchmarkLegend).toHaveClass('portfolio-chart-legend-item--muted');
   });
 
-  it('should render €0.00 and 0.00% when user has a fresh account with 0 net worth', () => {
-    const zeroData: ChartDataPoint[] = [
-      {
-        date_time: new Date().toISOString(),
-        portfolio_value_in_reporting_currency: 0,
-        cumulative_cost_in_reporting_currency: 0,
-        cashflow_in_reporting_currency: 0,
-        benchmark_value_in_reporting_currency: 0,
-        cumulative_time_weighted_return_rate: 0,
-        cumulative_benchmark_time_weighted_return_rate: 0,
-      },
-    ];
-
-    render(<PortfolioChart data={zeroData} period="All" currency="EUR" />);
-
-    expect(screen.getAllByText('€0.00').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('(0.00%)')).toBeInTheDocument();
-    expect(screen.getByText('since you started')).toBeInTheDocument();
-  });
-
-  it('should render exact live figures when user has real logged transactions', () => {
-    const liveUserData: ChartDataPoint[] = [
-      {
-        date_time: '2024-01-10T00:00:00.000Z',
-        portfolio_value_in_reporting_currency: 5000.0,
-        cumulative_cost_in_reporting_currency: 5000.0,
-        cashflow_in_reporting_currency: 5000.0,
-        benchmark_value_in_reporting_currency: 5000.0,
-        cumulative_time_weighted_return_rate: 0,
-        cumulative_benchmark_time_weighted_return_rate: 0,
-      },
-      {
-        date_time: '2024-06-15T00:00:00.000Z',
-        portfolio_value_in_reporting_currency: 6200.0,
-        cumulative_cost_in_reporting_currency: 5000.0,
-        cashflow_in_reporting_currency: 0,
-        benchmark_value_in_reporting_currency: 5250.0,
-        cumulative_time_weighted_return_rate: 0.24,
-        cumulative_benchmark_time_weighted_return_rate: 0.05,
-      },
-    ];
-
-    render(<PortfolioChart data={liveUserData} period="All" currency="EUR" />);
-
-    expect(screen.getByText('€6,200.00')).toBeInTheDocument();
-    expect(screen.getByText('(+24.00%)')).toBeInTheDocument();
-    expect(screen.getByText(/\+€1,200\.00/)).toBeInTheDocument();
-  });
-
-  it('shows what the selected period gained, not the whole history', () => {
-    const history: ChartDataPoint[] = [
-      { date_time: '2024-01-10T00:00:00.000Z', portfolio_value_in_reporting_currency: 5000, cumulative_cost_in_reporting_currency: 5000, cashflow_in_reporting_currency: 5000, benchmark_value_in_reporting_currency: 5000, cumulative_time_weighted_return_rate: 0, cumulative_benchmark_time_weighted_return_rate: 0 },
-      { date_time: '2024-06-15T00:00:00.000Z', portfolio_value_in_reporting_currency: 6000, cumulative_cost_in_reporting_currency: 5000, cashflow_in_reporting_currency: 0, benchmark_value_in_reporting_currency: 5000, cumulative_time_weighted_return_rate: 0.2, cumulative_benchmark_time_weighted_return_rate: 0 },
-      { date_time: '2024-07-10T00:00:00.000Z', portfolio_value_in_reporting_currency: 6100, cumulative_cost_in_reporting_currency: 5000, cashflow_in_reporting_currency: 0, benchmark_value_in_reporting_currency: 5000, cumulative_time_weighted_return_rate: 0.22, cumulative_benchmark_time_weighted_return_rate: 0 },
-    ];
-    render(<PortfolioChart data={history} period="1M" currency="EUR" />);
-    // The value was 5,000 on 10 June (the last point before the window) and is 6,100 now.
-    expect(screen.getByText(/\+€1,100\.00/)).toBeInTheDocument();
-    expect(screen.getByText('in the past month')).toBeInTheDocument();
-  });
 });

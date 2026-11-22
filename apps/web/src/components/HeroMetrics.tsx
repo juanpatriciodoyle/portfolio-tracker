@@ -1,31 +1,11 @@
-import React, { useId } from 'react';
+import React, { useId, useState, type ReactNode } from 'react';
+import { ArrowDownRight, ArrowUpRight, ChevronDown } from 'lucide-react';
 import { formatCurrency, type ReportingPeriod } from '../data/sampleChartData';
-import { periodReturnTitle } from '../lib/returnForPeriod';
+import { useCountUp } from '../hooks/useCountUp';
+import { heroSummary, type GainPart, type HeroFigures } from '../lib/heroSummary';
+import { splitCents } from '../lib/money';
 
-export interface HeroFigures {
-  netWorth: number;
-  /** What the net worth is worth in today's purchasing power: each deposit eroded since the day it went in. */
-  realNetWorth: number;
-  cashBalance: number;
-  /** What the open positions are worth today. */
-  openMarketValue: number;
-  /** What the open positions cost. */
-  openCostBasis: number;
-  /** Gain or loss on what is still held (not sold yet). */
-  openProfit: number;
-  /** The same, after the inflation lost while each asset was held. */
-  realOpenProfit: number;
-  /** Profit already locked in by selling, and the same after inflation. */
-  soldProfit: number;
-  realSoldProfit: number;
-  dividends: number;
-  totalFees: number;
-  /** Everything gained or lost since the start (after inflation while that toggle is on). */
-  totalGain: number;
-  totalGainPercent: number;
-  /** False when a market price was unavailable, so a held asset is shown at what it cost. */
-  pricesAvailable: boolean;
-}
+export type { HeroFigures };
 
 interface HeroMetricsProps {
   figures: HeroFigures;
@@ -37,90 +17,171 @@ interface HeroMetricsProps {
   currency: string;
   isRealInflationMode: boolean;
   country: string;
+  /** True until the first answer from the server: the hero holds its place instead of showing zeros as results. */
+  loading?: boolean;
+  /** The period picker: it sits under the figures it changes. */
+  children?: ReactNode;
 }
 
-const signed = (amount: number, currency: string) => `${amount > 0 ? '+' : ''}${formatCurrency(amount, currency)}`;
-const signedPercent = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(2)}%`;
-const tone = (amount: number) => (amount >= 0 ? 'metric-tile__value--positive' : 'metric-tile__value--negative');
+const toneClass = (amount: number) => (amount >= 0 ? 'is-positive' : 'is-negative');
+const withSign = (amount: number, text: string) => (amount > 0 ? `+${text}` : text);
 
-interface CardProps {
-  title: string;
-  figure: string;
-  percent?: string;
-  /** Positive or negative colouring of the figure; omitted for a neutral figure. */
-  amount?: number;
-  subtitle: string;
-  subtitleHint?: string;
-  warning?: boolean;
+interface MoneyProps {
+  amount: number;
+  currency: string;
+  signed?: boolean;
+  /** Draw the cents smaller and quieter: the whole amount is what the eye should read. */
+  quietCents?: boolean;
 }
 
-/** Title, figure and one subtitle line in fixed rows: the figures of every card sit on the same line. */
-function HeroCard({ title, figure, percent, amount, subtitle, subtitleHint, warning }: CardProps) {
-  const titleId = useId();
+/** An amount that settles into place. Assistive technology reads the final figure, never the ones on the way. */
+function Money({ amount, currency, signed = false, quietCents = false }: MoneyProps) {
+  const shown = useCountUp(amount);
+  const format = (value: number) => {
+    const text = formatCurrency(value, currency);
+    return signed ? withSign(value, text) : text;
+  };
+  const { whole, cents } = quietCents ? splitCents(format(shown)) : { whole: format(shown), cents: '' };
+
   return (
-    <div className="metric-tile hero-card" role="group" aria-labelledby={titleId}>
-      <span className="metric-tile__label hero-card__title" id={titleId}>
-        {title}
-      </span>
-      <span className="hero-card__figure">
-        <span className={`hero-card__amount${amount === undefined ? '' : ` ${tone(amount)}`}`}>{figure}</span>
-        {percent && <span className={`hero-card__percent${amount === undefined ? '' : ` ${tone(amount)}`}`}>{percent}</span>}
-      </span>
-      <span
-        className={`hero-card__subtitle${warning ? ' hero-card__subtitle--warning' : ''}`}
-        title={subtitleHint}
-        tabIndex={subtitleHint ? 0 : undefined}
-      >
-        {subtitle}
-      </span>
+    <span role="img" aria-label={format(amount)}>
+      {whole}
+      {cents && <span className="hero__cents">{cents}</span>}
+    </span>
+  );
+}
+
+function GainBreakdown({ parts, total, currency }: { parts: GainPart[]; total: number; currency: string }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const money = (amount: number) => withSign(amount, formatCurrency(amount, currency));
+
+  return (
+    <div className="hero__explain hero__enter" style={{ '--i': 3 } as React.CSSProperties}>
+      <button type="button" className="hero__toggle" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((value) => !value)}>
+        How this adds up
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      <div id={panelId} className="hero__breakdown" data-open={open} inert={!open}>
+        <div className="hero__breakdown-inner">
+          <ul className="hero__parts">
+            {parts.map((part) => (
+              <li key={part.key} className="hero__part">
+                <span className="hero__part-name">
+                  {part.label}
+                  <small>{part.meaning}</small>
+                </span>
+                <span className={`hero__part-amount ${toneClass(part.amount)}`}>{money(part.amount)}</span>
+              </li>
+            ))}
+            <li className="hero__part hero__part--total">
+              <span className="hero__part-name">Total gain</span>
+              <span className={`hero__part-amount ${toneClass(total)}`}>{money(total)}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
 
-/** The three headline cards: what you have, what you hold gained, and what you made in the period. */
-export const HeroMetrics: React.FC<HeroMetricsProps> = ({ figures, period, periodGain, periodPercent, periodWindow, currency, isRealInflationMode, country }) => {
+function HeroSkeleton() {
+  return (
+    <div className="hero__skeleton" aria-hidden="true">
+      <span className="hero__skeleton-line hero__skeleton-line--label" />
+      <span className="hero__skeleton-line hero__skeleton-line--amount" />
+      <span className="hero__skeleton-line hero__skeleton-line--gain" />
+    </div>
+  );
+}
+
+/**
+ * The home screen's answer to "how am I doing?": what everything is worth, then what it has earned.
+ * One figure leads; the rest is one quiet line and one fold-out that adds the gain up.
+ */
+export const HeroMetrics: React.FC<HeroMetricsProps> = ({
+  figures,
+  period,
+  periodGain,
+  periodPercent,
+  periodWindow,
+  currency,
+  isRealInflationMode,
+  country,
+  loading = false,
+  children,
+}) => {
+  const summary = heroSummary({ figures, period, periodGain, periodPercent, isRealInflationMode });
   const money = (amount: number) => formatCurrency(amount, currency);
-  const afterInflation = isRealInflationMode ? ' · after inflation' : '';
+  const { totalValue, gain } = summary;
+  const percentShown = useCountUp(gain.percent);
+  const GainIcon = gain.amount >= 0 ? ArrowUpRight : ArrowDownRight;
 
-  const openProfit = isRealInflationMode ? figures.realOpenProfit : figures.openProfit;
-  const soldProfit = isRealInflationMode ? figures.realSoldProfit : figures.soldProfit;
-  const openPercent = figures.openCostBasis > 0 ? (openProfit / figures.openCostBasis) * 100 : 0;
+  const body = () => {
+    if (loading) return <HeroSkeleton />;
+    if (summary.isEmpty) {
+      return (
+        <div className="hero__empty hero__enter">
+          <p className="hero__label">Total value</p>
+          <p className="hero__empty-title">Nothing here yet</p>
+          <p className="hero__note">Log your first transaction and your total value appears here.</p>
+        </div>
+      );
+    }
+    return (
+      <>
+        <div className="hero__value">
+          <p className="hero__label hero__enter" style={{ '--i': 0 } as React.CSSProperties}>
+            {totalValue.title}
+          </p>
+          <p className="hero__amount hero__enter" style={{ '--i': 0 } as React.CSSProperties}>
+            <Money amount={totalValue.amount} currency={currency} quietCents />
+          </p>
+        </div>
 
-  const wholeHistory = period === 'All';
-  const returnFigure = wholeHistory ? figures.totalGain : periodGain;
-  const returnPercent = wholeHistory ? figures.totalGainPercent : periodPercent;
-  // A window comes from the value history, which has no inflation figures: it is always shown as it is.
-  const returnTitle = periodReturnTitle(period) + (wholeHistory ? afterInflation : '');
+        <p className={`hero__gain hero__enter ${toneClass(gain.amount)}`} style={{ '--i': 1 } as React.CSSProperties}>
+          <GainIcon size={20} aria-hidden="true" />
+          <Money amount={gain.amount} currency={currency} signed />
+          <span className="hero__gain-percent">({withSign(gain.percent, `${percentShown.toFixed(2)}%`)})</span>
+          <span className="hero__gain-phrase">{gain.phrase}</span>
+        </p>
+
+        <div className="hero__context hero__enter" style={{ '--i': 2 } as React.CSSProperties}>
+          {totalValue.beforeInflation === null ? (
+            <dl className="hero__split">
+              <div>
+                <dt>Invested</dt>
+                <dd>{money(summary.invested)}</dd>
+              </div>
+              <div>
+                <dt>Cash</dt>
+                <dd>{money(summary.cash)}</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="hero__note" title={`Adjusted for ${country} inflation`}>
+              Before inflation: {money(totalValue.beforeInflation)}
+            </p>
+          )}
+          {period !== 'All' && <p className="hero__note">{periodWindow}</p>}
+          {!summary.pricesAvailable && (
+            <p className="hero__note hero__note--warning">Live prices are unavailable, so what you hold is shown at what it cost.</p>
+          )}
+        </div>
+
+        {summary.gainParts && <GainBreakdown parts={summary.gainParts} total={gain.amount} currency={currency} />}
+      </>
+    );
+  };
 
   return (
-    <section className="hero-metrics" aria-label="Key figures" title={isRealInflationMode ? `Adjusted for ${country} inflation` : undefined}>
-      <HeroCard
-        title={`Net worth${afterInflation}`}
-        figure={money(isRealInflationMode ? figures.realNetWorth : figures.netWorth)}
-        subtitle={
-          isRealInflationMode
-            ? `Before inflation: ${money(figures.netWorth)}`
-            : `Invested: ${money(figures.openMarketValue)} · Cash: ${money(figures.cashBalance)}`
-        }
-      />
-
-      <HeroCard
-        title={`Open positions gain${afterInflation}`}
-        figure={signed(openProfit, currency)}
-        percent={signedPercent(openPercent)}
-        amount={openProfit}
-        subtitle={figures.pricesAvailable ? `Cost basis ${money(figures.openCostBasis)} · Worth ${money(figures.openMarketValue)} today` : `Cost basis ${money(figures.openCostBasis)} · Live prices unavailable`}
-        warning={!figures.pricesAvailable}
-      />
-
-      <HeroCard
-        title={returnTitle}
-        figure={signed(returnFigure, currency)}
-        percent={signedPercent(returnPercent)}
-        amount={returnFigure}
-        subtitle={wholeHistory ? `Sold ${signed(soldProfit, currency)} · Open ${signed(openProfit, currency)}` : periodWindow}
-        subtitleHint={wholeHistory ? `Also counted: dividends ${signed(figures.dividends, currency)} · fees ${figures.totalFees > 0 ? '-' : ''}${money(figures.totalFees)}` : undefined}
-      />
+    <section className="hero" aria-label="Your portfolio" aria-busy={loading}>
+      {body()}
+      {children && (
+        <div className="hero__controls hero__enter" style={{ '--i': 4 } as React.CSSProperties}>
+          {children}
+        </div>
+      )}
     </section>
   );
 };

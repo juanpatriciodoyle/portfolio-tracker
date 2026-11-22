@@ -140,3 +140,9 @@ export function formatPhaseRange(
   const end = formatMonthYear(endDate, locale);
   return start === end ? start : `${start} – ${end}`;
 }
+
+/** A formatted amount cut into its whole part and its cents ("€468,414" + ".03"), so the cents can be drawn quieter. */
+export function splitCents(formatted: string): { whole: string; cents: string } {
+  const match = /^(.*?)([.,]\d{2})$/.exec(formatted);
+  return match ? { whole: match[1], cents: match[2] } : { whole: formatted, cents: '' };
+}

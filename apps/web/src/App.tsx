@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, LogOut } from 'lucide-react';
 import TransactionForm from './components/TransactionForm';
 import Modal from './components/Modal';
 import LoginModal from './components/LoginModal';
-import ProfileAvatar from './components/ProfileAvatar';
+import AppHeader from './components/AppHeader';
+import Reveal from './components/Reveal';
 import InflationSettingsModal from './components/InflationSettingsModal';
 import TransactionHistoryTable from './components/TransactionHistoryTable';
 import ReportingPeriodBar from './components/ReportingPeriodBar';
@@ -20,6 +20,7 @@ import { authorizedFetch, readAuthToken } from './lib/authorizedFetch';
 import { endGuestSession } from './lib/guestSession';
 import { clearAllDrafts } from './lib/stepDraft';
 import { returnForPeriod } from './lib/returnForPeriod';
+import { greetingFor } from './lib/greeting';
 import { describePeriodWindow } from './lib/periodWindow';
 import { filterDataByPeriod } from './data/sampleChartData';
 
@@ -79,6 +80,8 @@ function App() {
   const [isInflationModalOpen, setIsInflationModalOpen] = useState(false);
   const [isRealInflationMode, setIsRealInflationMode] = useState(false);
   const [tableKey, setTableKey] = useState(0);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [greeting] = useState(() => greetingFor(new Date().getHours()));
 
   const [period, setPeriod] = useState<ReportingPeriod>('All');
   const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
@@ -149,6 +152,8 @@ function App() {
       }
     } catch (err) {
       console.error('Failed to fetch portfolio data:', err);
+    } finally {
+      setHasLoaded(true);
     }
   };
 
@@ -216,118 +221,25 @@ function App() {
   const activeRoiPercent = isRealInflationMode ? stats.realRoiPercent : stats.allTimeRoiPercent;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: 'var(--bg-canvas)' }}>
-      {/* Header Navigation */}
-      <header className="app-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.5px', color: 'var(--text-heading)' }}>Portfolio Tracker</span>
-        </div>
+    <div className="app-shell">
+      <AppHeader
+        isRealInflationMode={isRealInflationMode}
+        onToggleInflation={() => setIsRealInflationMode((on) => !on)}
+        country={stats.country}
+        onOpenCountry={() => setIsInflationModalOpen(true)}
+        onLogTransaction={() => setIsLogOpen(true)}
+        onOpenProfile={() => navigate(PROFILE_PATH)}
+        onSignOut={handleLogout}
+      />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          {/* Single Press Button for Inflation Adjustment */}
-          <button
-            onClick={() => setIsRealInflationMode(!isRealInflationMode)}
-            style={{
-              border: isRealInflationMode ? '1px solid var(--text-heading)' : '1px solid var(--border-subtle-color)',
-              borderRadius: '8px',
-              padding: '8px 14px',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              backgroundColor: isRealInflationMode ? 'var(--border-subtle-color)' : 'var(--bg-input)',
-              color: isRealInflationMode ? 'var(--text-primary)' : 'var(--text-secondary)',
-            }}
-          >
-            <span>{isRealInflationMode ? 'Inflation Adjusted 🛡️' : 'Adjust for Inflation? 🎈'}</span>
-          </button>
+      <main className="home">
+        <div className="home__inner">
+          <div className="home__lead">
+          <h1 className="home__greeting">
+            {greeting}, {getGreetingName()}
+          </h1>
 
-          {/* Resident Country Selector */}
-          <button
-            onClick={() => setIsInflationModalOpen(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              backgroundColor: 'var(--bg-input)',
-              border: '1px solid var(--border-subtle-color)',
-              borderRadius: '8px',
-              padding: '8px 12px',
-              fontSize: '13px',
-              color: 'var(--text-heading)',
-              cursor: 'pointer',
-            }}
-          >
-            <span>🇪🇸 {stats.country}</span>
-          </button>
-
-          {/* Primary Log Transaction Button (Energetic Blue) */}
-          <button
-            onClick={() => setIsLogOpen(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              backgroundColor: 'var(--accent-primary)',
-              color: 'var(--text-primary)',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '9px 16px',
-              fontSize: '14px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              boxShadow: '0 4px 14px var(--accent-blue-glow)',
-            }}
-          >
-            <Plus size={16} /> Log Transaction
-          </button>
-
-          {/* Profile & living phases */}
-          <ProfileAvatar onOpen={() => navigate(PROFILE_PATH)} />
-
-          {/* Logout */}
-          <button
-            onClick={handleLogout}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '36px',
-              height: '36px',
-              backgroundColor: 'var(--bg-input)',
-              border: '1px solid var(--border-subtle-color)',
-              borderRadius: '8px',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-            }}
-          >
-            <LogOut size={16} />
-          </button>
-        </div>
-      </header>
-
-      {/* Main Dashboard Body */}
-      <main style={{ flex: 1, padding: '32px 40px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div style={{ maxWidth: '1200px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-            <h1 style={{ fontSize: '26px', fontWeight: 700, margin: 0, letterSpacing: '-0.5px', color: '#F4F4F5' }}>
-              How's your day going, {getGreetingName()}? 👋🏼
-            </h1>
-
-            {/* Reporting Period Rail Toolbar */}
-            <ReportingPeriodBar
-              activePeriod={period}
-              onPeriodChange={(p, range) => {
-                setPeriod(p);
-                if (range) setCustomRange(range);
-              }}
-              customRange={customRange}
-            />
-          </div>
-
-          {/* Every headline figure in one panel */}
+          {/* What you have and what it has earned: one place, then the period that changes it */}
           <HeroMetrics
             figures={{
               netWorth: stats.netWorth,
@@ -352,7 +264,18 @@ function App() {
             currency={stats.baseCurrency || 'EUR'}
             isRealInflationMode={isRealInflationMode}
             country={stats.country}
-          />
+            loading={!hasLoaded}
+          >
+            <ReportingPeriodBar
+              activePeriod={period}
+              onPeriodChange={(p, range) => {
+                setPeriod(p);
+                if (range) setCustomRange(range);
+              }}
+              customRange={customRange}
+            />
+          </HeroMetrics>
+          </div>
 
           {/* Interactive Multi-Mode Portfolio Chart */}
           <PortfolioChart
@@ -380,19 +303,23 @@ function App() {
           />
 
           {/* Portfolio Allocation Breakdown (Donut Chart & Interactive Legend) */}
-          <AllocationBreakdown
-            breakdowns={stats.breakdowns}
-            positions={stats.positions}
-            cashBalance={stats.cashBalance}
-            netWorth={stats.netWorth}
-            currency={stats.baseCurrency || 'EUR'}
-          />
+          <Reveal>
+            <AllocationBreakdown
+              breakdowns={stats.breakdowns}
+              positions={stats.positions}
+              cashBalance={stats.cashBalance}
+              netWorth={stats.netWorth}
+              currency={stats.baseCurrency || 'EUR'}
+            />
+          </Reveal>
 
           {/* Performance Breakdown (Bar Chart & Monthly Heatmap) */}
-          <PerformanceBreakdown
-            currency={stats.baseCurrency || 'EUR'}
-            userId={user?.id}
-          />
+          <Reveal>
+            <PerformanceBreakdown
+              currency={stats.baseCurrency || 'EUR'}
+              userId={user?.id}
+            />
+          </Reveal>
 
           {/* Transaction History Log Table */}
           <TransactionHistoryTable key={tableKey} userId={user?.id} />
