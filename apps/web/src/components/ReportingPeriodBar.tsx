@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import type { ReportingPeriod, DateRange } from '../data/sampleChartData';
 import { Calendar, X } from 'lucide-react';
+import type { MessageKey } from '../i18n/catalogs';
+import { useTranslation } from '../i18n/useTranslation';
 
 interface ReportingPeriodBarProps {
   activePeriod: ReportingPeriod;
@@ -8,16 +10,16 @@ interface ReportingPeriodBarProps {
   customRange?: DateRange;
 }
 
-const PERIODS: { key: ReportingPeriod; label: string; tooltip: string }[] = [
-  { key: 'All', label: 'All', tooltip: 'All historical time' },
-  { key: 'YTD', label: 'YTD', tooltip: 'Year to date (Jan 1 - today)' },
-  { key: '1Y', label: '1Y', tooltip: 'Past 365 days' },
-  { key: 'MTD', label: 'MTD', tooltip: 'Month to date' },
-  { key: '1M', label: '1M', tooltip: 'Past 30 days' },
-  { key: '1W', label: '1W', tooltip: 'Past 7 days' },
-  { key: '1D', label: '1D', tooltip: 'Yesterday / 1 Day' },
-  { key: 'Last year', label: 'Last year', tooltip: 'Full previous calendar year' },
-  { key: 'Last month', label: 'Last month', tooltip: 'Full previous calendar month' },
+const PERIODS: { key: ReportingPeriod; label: MessageKey; tooltip: MessageKey }[] = [
+  { key: 'All', label: 'period.all', tooltip: 'period.tip.all' },
+  { key: 'YTD', label: 'period.ytd', tooltip: 'period.tip.ytd' },
+  { key: '1Y', label: 'period.1y', tooltip: 'period.tip.1y' },
+  { key: 'MTD', label: 'period.mtd', tooltip: 'period.tip.mtd' },
+  { key: '1M', label: 'period.1m', tooltip: 'period.tip.1m' },
+  { key: '1W', label: 'period.1w', tooltip: 'period.tip.1w' },
+  { key: '1D', label: 'period.1d', tooltip: 'period.tip.1d' },
+  { key: 'Last year', label: 'period.lastYear', tooltip: 'period.tip.lastYear' },
+  { key: 'Last month', label: 'period.lastMonth', tooltip: 'period.tip.lastMonth' },
 ];
 
 export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
@@ -25,6 +27,7 @@ export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
   onPeriodChange,
   customRange,
 }) => {
+  const { t } = useTranslation();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [fromDate, setFromDate] = useState(customRange?.fromDate || '2020-01-01');
   const [toDate, setToDate] = useState(customRange?.toDate || new Date().toISOString().split('T')[0]);
@@ -33,11 +36,11 @@ export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
   const handleApplyCustom = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fromDate || !toDate) {
-      setErrorMessage('Please select both from and to dates.');
+      setErrorMessage(t('period.errorBoth'));
       return;
     }
     if (new Date(fromDate) > new Date(toDate)) {
-      setErrorMessage('From date cannot be after to date.');
+      setErrorMessage(t('period.errorOrder'));
       return;
     }
 
@@ -49,19 +52,19 @@ export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
   return (
     <div className="reporting-period-container">
       <div className="reporting-period-rail">
-        <nav className="segmented-control-rail" aria-label="Reporting period">
+        <nav className="segmented-control-rail" aria-label={t('period.label')}>
           {PERIODS.map((p) => {
             const isActive = activePeriod === p.key;
             return (
               <button
                 key={p.key}
                 type="button"
-                title={p.tooltip}
+                title={t(p.tooltip)}
                 onClick={() => onPeriodChange(p.key)}
                 className={`segmented-control-pill ${isActive ? 'segmented-control-pill--active' : ''}`}
                 aria-pressed={isActive}
               >
-                {p.label}
+                {t(p.label)}
               </button>
             );
           })}
@@ -69,13 +72,13 @@ export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
           <button
             type="button"
             id="open-custom-reporting-period-modal"
-            title="Custom date range"
+            title={t('period.tip.custom')}
             onClick={() => setIsModalOpen(true)}
             className={`segmented-control-pill ${activePeriod === 'Custom' ? 'segmented-control-pill--active' : ''}`}
             aria-pressed={activePeriod === 'Custom'}
           >
             <Calendar size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-            Custom
+            {t('period.custom')}
             {activePeriod === 'Custom' && customRange ? ` (${customRange.fromDate} → ${customRange.toDate})` : ''}
           </button>
         </nav>
@@ -86,12 +89,12 @@ export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
         <div className="modal-backdrop" onClick={() => setIsModalOpen(false)}>
           <div className="modal-content custom-period-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">Custom Reporting Period</h3>
+              <h3 className="modal-title">{t('period.customTitle')}</h3>
               <button
                 type="button"
                 className="modal-close-btn"
                 onClick={() => setIsModalOpen(false)}
-                aria-label="Close"
+                aria-label={t('common.close')}
               >
                 <X size={18} />
               </button>
@@ -102,7 +105,7 @@ export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
                 <div className="form-row-dates">
                   <div className="form-group">
                     <label htmlFor="custom-from-date" className="form-label">
-                      From
+                      {t('period.from')}
                     </label>
                     <input
                       type="date"
@@ -119,7 +122,7 @@ export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
 
                   <div className="form-group">
                     <label htmlFor="custom-to-date" className="form-label">
-                      To
+                      {t('period.to')}
                     </label>
                     <input
                       type="date"
@@ -144,14 +147,14 @@ export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
 
               <div className="modal-footer">
                 <button type="submit" className="btn-primary-apply">
-                  Apply Period
+                  {t('period.apply')}
                 </button>
                 <button
                   type="button"
                   className="btn-secondary-cancel"
                   onClick={() => setIsModalOpen(false)}
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               </div>
             </form>

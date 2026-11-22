@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { useId, useState, type FormEvent } from 'react';
 import type { BillingRecordDto, CreateBillingRecordRequest, LivingPhaseDto } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
@@ -29,6 +30,7 @@ function routeBill(phases: readonly LivingPhaseDto[], periodStart: string, today
 
 /** Add, or correct, one expense that actually arrived: who sent it, what it cost, and what it covers. */
 export default function BillEditor({ phaseId, currency, phases, context, initial, onSubmit, onCancel }: BillEditorProps) {
+  const { t } = useTranslation();
   const id = useId();
   const [form, setForm] = useState<BillForm>(() => (initial ? billFormFrom(initial) : emptyBillForm()));
   const [errors, setErrors] = useState<BillErrors>({});
@@ -38,10 +40,10 @@ export default function BillEditor({ phaseId, currency, phases, context, initial
     event.preventDefault();
     const target = phases ? routeBill(phases, form.periodStart, context.today) : { phaseId, currency };
     if (target === null) {
-      setErrors({ periodStart: 'No living phase covers that day. Pick a day you lived somewhere.' });
+      setErrors({ periodStart: t('bill.errNoPhase') });
       return;
     }
-    const result = validateBill(form, target.phaseId, target.currency);
+    const result = validateBill(form, target.phaseId, target.currency, t);
     if (!result.ok) {
       setErrors(result.errors);
       return;
@@ -55,7 +57,7 @@ export default function BillEditor({ phaseId, currency, phases, context, initial
   };
 
   return (
-    <form className="cost-editor bill-editor" onSubmit={handleSubmit} noValidate aria-label={initial ? 'Edit bill' : 'Add an expense'}>
+    <form className="cost-editor bill-editor" onSubmit={handleSubmit} noValidate aria-label={initial ? t('bill.edit') : t('bill.addExpense')}>
       <BillFields id={id} form={form} update={(change) => setForm(change)} context={context} errors={errors} />
 
       {errors.form && (
@@ -66,10 +68,10 @@ export default function BillEditor({ phaseId, currency, phases, context, initial
 
       <div className="cost-editor__actions">
         <button type="submit" className="btn-primary-apply" disabled={saving} aria-busy={saving}>
-          {saving ? 'Saving…' : initial ? 'Save changes' : 'Add expense'}
+          {saving ? t('fixedCost.saving') : initial ? t('fixedCost.save') : t('bill.saveExpense')}
         </button>
         <button type="button" className="btn-secondary-cancel" onClick={onCancel}>
-          Cancel
+          {t('common.cancel')}
         </button>
       </div>
     </form>

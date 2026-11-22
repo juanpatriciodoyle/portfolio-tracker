@@ -1,3 +1,5 @@
+import { intlLocale } from '../i18n/locale';
+import { useTranslation } from '../i18n/useTranslation';
 import { useId, useState, type FormEvent } from 'react';
 import type { SecondSalaryResponse } from '../contracts';
 import type { MutationResult } from '../lib/apiErrors';
@@ -16,8 +18,10 @@ interface SecondSalaryCardProps {
 
 /** What the portfolio pays each month, and how close that is to the amount the person chose to aim at. */
 export default function SecondSalaryCard({ secondSalary, onSaveTarget }: SecondSalaryCardProps) {
+  const words = useTranslation();
+  const { t, locale } = words;
   const id = useId();
-  const view = describeSecondSalary(secondSalary);
+  const view = describeSecondSalary(secondSalary, intlLocale(locale), t);
   const [editing, setEditing] = useState(false);
   const [typed, setTyped] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +35,7 @@ export default function SecondSalaryCard({ secondSalary, onSaveTarget }: SecondS
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const result = validateTargetForm(typed, secondSalary.currency);
+    const result = validateTargetForm(typed, secondSalary.currency, t);
     if (!result.ok) {
       setError(result.error);
       return;
@@ -39,15 +43,15 @@ export default function SecondSalaryCard({ secondSalary, onSaveTarget }: SecondS
     await run(async () => {
       const saved = await onSaveTarget(result.monthlyMinor);
       if (saved.ok) setEditing(false);
-      else setError(describeFailure(saved.failure));
+      else setError(describeFailure(saved.failure, [], words));
     });
   };
 
   const form = (
-    <form className="second-salary-card__form" onSubmit={submit} noValidate aria-label="Second salary target">
+    <form className="second-salary-card__form" onSubmit={submit} noValidate aria-label={t('secondSalary.form')}>
       <div className="form-group">
         <label className="form-label" htmlFor={`${id}-target`}>
-          Monthly target ({secondSalary.currency})
+          {t('secondSalary.monthlyTarget', { currency: secondSalary.currency })}
         </label>
         <input
           id={`${id}-target`}
@@ -55,7 +59,7 @@ export default function SecondSalaryCard({ secondSalary, onSaveTarget }: SecondS
           inputMode="decimal"
           autoComplete="off"
           autoFocus
-          placeholder="2500"
+          placeholder={t('secondSalary.placeholder')}
           value={typed}
           onChange={(event) => setTyped(keepDecimal(event.target.value))}
           aria-invalid={error !== null || undefined}
@@ -69,10 +73,10 @@ export default function SecondSalaryCard({ secondSalary, onSaveTarget }: SecondS
       </div>
       <div className="second-salary-card__actions">
         <button type="button" className="btn-secondary-cancel" onClick={() => setEditing(false)}>
-          Cancel
+          {t('common.cancel')}
         </button>
         <button type="submit" className="btn-primary-apply" disabled={busy} aria-busy={busy}>
-          {busy ? 'Saving…' : 'Save target'}
+          {busy ? t('wizard.saving') : t('secondSalary.saveTarget')}
         </button>
       </div>
     </form>
@@ -82,11 +86,11 @@ export default function SecondSalaryCard({ secondSalary, onSaveTarget }: SecondS
     <section className="second-salary-card" aria-labelledby={`${id}-title`}>
       <div className="second-salary-card__top">
         <h2 className="second-salary-card__title" id={`${id}-title`}>
-          Second Salary
+          {t('secondSalary.title')}
         </h2>
         {view.target && !editing && (
           <button type="button" className="profile-text-button" onClick={open}>
-            Edit target
+            {t('secondSalary.editTarget')}
           </button>
         )}
       </div>
@@ -94,9 +98,9 @@ export default function SecondSalaryCard({ secondSalary, onSaveTarget }: SecondS
 
       {view.target === null && !editing && (
         <div className="second-salary-card__empty">
-          <p className="second-salary-card__income">Your portfolio pays {view.income}</p>
+          <p className="second-salary-card__income">{t('secondSalary.pays', { income: view.income })}</p>
           <button type="button" className="btn-primary-apply" onClick={open}>
-            Set your target
+            {t('secondSalary.setTarget')}
           </button>
         </div>
       )}
@@ -106,7 +110,7 @@ export default function SecondSalaryCard({ secondSalary, onSaveTarget }: SecondS
       {view.target && !editing && (
         <>
           <p className="second-salary-card__income">
-            <strong>{view.income}</strong> <span className="second-salary-card__of">of {view.target.label}</span>
+            <strong>{view.income}</strong> <span className="second-salary-card__of">{t('secondSalary.of', { label: view.target.label })}</span>
           </p>
           <div
             className="second-salary-card__track"

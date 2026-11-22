@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 import type { CreateFixedCostRequest, LivingPhaseDto, ProfileData } from '../../contracts';
@@ -70,12 +71,13 @@ export default function OnboardingWizard({
   onFinished,
   onClose,
 }: OnboardingWizardProps) {
+  const { t } = useTranslation();
   const includesPhase = phases.length === 0;
   const stepIds = useMemo<OnboardingStep[]>(
     () => [...PROFILE_STEPS, ...(includesPhase ? (['place', 'dates', 'money', 'bills'] as const) : [])],
     [includesPhase]
   );
-  const steps = stepIds.map((id) => ({ id, label: isProfileStep(id) ? ONBOARDING_STEP_COPY[id].label : PHASE_STEP_COPY[id].label }));
+  const steps = stepIds.map((id) => ({ id, label: t(isProfileStep(id) ? ONBOARDING_STEP_COPY[id].label : PHASE_STEP_COPY[id].label) }));
 
   const { values, setValues, step, setStep, resumedAtStep, discard } = useStepDraft(
     'onboarding',
@@ -180,15 +182,15 @@ export default function OnboardingWizard({
 
   return (
     <WizardModal
-      title="Tell us about yourself"
+      title={t('profile.tellUs')}
       steps={steps}
       stepIndex={step}
-      heading={copy.heading}
+      heading={t(copy.heading)}
       resumed={resumedAtStep === step}
       error={formError}
       busy={saving}
       hideNext={addingBill}
-      finishLabel="Finish"
+      finishLabel={t('onboarding.finish')}
       onBack={() => setStep(step - 1)}
       onNext={next}
       onClose={onClose}

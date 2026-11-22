@@ -1685,6 +1685,44 @@ input, textarea { caret-color: var(--accent-blue-light); }
   border-color: var(--border-subtle-color);
   color: var(--text-primary);
 }
+.language-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 4px 0 12px;
+  border: 1px solid var(--border-card-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.language-select:hover {
+  background-color: var(--bg-input);
+  border-color: var(--border-subtle-color);
+  color: var(--text-primary);
+}
+.language-select:focus-within {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+.language-select .language-select__control {
+  height: 100%;
+  padding: 0 26px 0 0 !important;
+  background-color: transparent;
+  background-position: right 6px center;
+  border: 0;
+  outline: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.language-select__control option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+}
+
 .header-primary {
   display: inline-flex;
   align-items: center;
@@ -1910,7 +1948,7 @@ input, textarea { caret-color: var(--accent-blue-light); }
 @media (max-width: 720px) {
   .app-header { padding: 12px 16px; }
   .app-header__brand { display: none; }
-  .app-header__actions { width: 100%; justify-content: flex-end; gap: 8px; }
+  .app-header__actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
   .home { padding: 28px 16px 72px; }
   :root { --space-section: 40px; }
   .hero__split { gap: 28px; }
@@ -1918,6 +1956,9 @@ input, textarea { caret-color: var(--accent-blue-light); }
 @media (max-width: 520px) {
   .header-primary { padding: 0 10px; }
   .header-primary__label { display: none; }
+  /* The language shows as its icon alone; the real select lies over it, invisible, so a tap still opens the list. */
+  .language-select { position: relative; width: 36px; padding: 0; justify-content: center; }
+  .language-select .language-select__control { position: absolute; inset: 0; width: 100%; padding: 0 !important; opacity: 0; }
 }
 
 /* Less motion: things still appear and respond, they just stop travelling */

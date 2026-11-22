@@ -17,6 +17,7 @@ import {
   type VendorHistoryEntry,
 } from '../../contracts';
 import { minorToInputString, parseMajorToMinor } from '../../lib/money';
+import { currentTranslator, type Translate } from '../../i18n/translate';
 import { BILLING_CADENCE_PHRASES } from './labels';
 
 /** What the "Add an expense" form holds while it is being filled in. */
@@ -127,16 +128,16 @@ export function withVendor(form: BillForm, vendor: string, context: BillFormCont
 }
 
 /** Checks the form like a person would, then lets the shared contract have the last word. */
-export function validateBill(form: BillForm, phaseId: string, currency: string): BillResult {
+export function validateBill(form: BillForm, phaseId: string, currency: string, t: Translate = currentTranslator()): BillResult {
   const errors: BillErrors = {};
   const amountMinor = parseMajorToMinor(form.amount, currency);
 
-  if (form.category === null) errors.category = 'Pick what this bill is for.';
-  if (form.vendor.trim() === '') errors.vendor = 'Who sent this bill?';
-  if (amountMinor === null) errors.amount = 'Enter an amount such as 96 or 96.50.';
-  if (form.periodStart === '') errors.periodStart = 'Pick the first day the bill covers.';
-  if (form.periodEnd === '') errors.periodEnd = 'Pick the last day the bill covers.';
-  if (form.cadence === null) errors.cadence = 'Pick how often this bill comes.';
+  if (form.category === null) errors.category = t('bill.errCategory');
+  if (form.vendor.trim() === '') errors.vendor = t('bill.errVendor');
+  if (amountMinor === null) errors.amount = t('bill.errAmount');
+  if (form.periodStart === '') errors.periodStart = t('bill.errPeriodStart');
+  if (form.periodEnd === '') errors.periodEnd = t('bill.errPeriodEnd');
+  if (form.cadence === null) errors.cadence = t('bill.errCadence');
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   if (isDate(form.periodStart) && isDate(form.periodEnd) && form.periodEnd >= form.periodStart && form.cadence !== null) {
@@ -144,7 +145,7 @@ export function validateBill(form: BillForm, phaseId: string, currency: string):
       return {
         ok: false,
         errors: {
-          periodEnd: `A bill that comes ${BILLING_CADENCE_PHRASES[form.cadence]} can cover at most ${maxPeriodDays(form.cadence)} days. Pick a longer cadence or shorten the dates.`,
+          periodEnd: t('bill.errTooLong', { cadence: t(BILLING_CADENCE_PHRASES[form.cadence]), days: maxPeriodDays(form.cadence) ?? '' }),
         },
       };
     }
@@ -163,11 +164,11 @@ export function validateBill(form: BillForm, phaseId: string, currency: string):
 
   for (const issue of parsed.error.issues) {
     const field = issue.path[0];
-    if (field === 'periodEnd') errors.periodEnd = 'The bill cannot end before it starts.';
-    else if (field === 'periodStart') errors.periodStart = 'Enter a real date.';
-    else if (field === 'vendor') errors.vendor = 'Keep the name under 80 characters.';
-    else if (field === 'amountMinor') errors.amount = 'That amount is too large.';
-    else errors.form = 'Check the details and try again.';
+    if (field === 'periodEnd') errors.periodEnd = t('bill.errEndBeforeStart');
+    else if (field === 'periodStart') errors.periodStart = t('bill.errRealDate');
+    else if (field === 'vendor') errors.vendor = t('bill.errVendorLength');
+    else if (field === 'amountMinor') errors.amount = t('form.amountTooLarge');
+    else errors.form = t('form.checkDetails');
   }
   return { ok: false, errors };
 }

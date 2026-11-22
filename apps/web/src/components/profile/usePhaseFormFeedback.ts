@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { useMemo, useState } from 'react';
 import {
   PHASE_STEP_FIELDS,
@@ -15,9 +16,10 @@ const STEP_IDS = Object.keys(PHASE_STEP_FIELDS) as PhaseStepId[];
  * cannot be right, checkmarks for answers that pass, and whatever the server said about a field.
  */
 export function usePhaseFormFeedback(form: PhaseFormState, today: string) {
+  const { t } = useTranslation();
   const [tried, setTried] = useState<ReadonlySet<PhaseStepId>>(new Set());
   const [serverErrors, setServerErrors] = useState<PhaseFieldErrors>({});
-  const feedback = useMemo(() => phaseFeedback(form, today, tried), [form, today, tried]);
+  const feedback = useMemo(() => phaseFeedback(form, today, tried, t), [form, today, tried, t]);
 
   return {
     errorOf: (field: keyof PhaseFormState) => serverErrors[field] ?? feedback.errorOf(field),
@@ -25,7 +27,7 @@ export function usePhaseFormFeedback(form: PhaseFormState, today: string) {
     /** Marks a step as tried, so its empty fields start asking, and says what is still wrong with it. */
     tryStep: (step: PhaseStepId): PhaseFieldErrors => {
       setTried((previous) => new Set(previous).add(step));
-      return phaseStepErrors(form, today, step);
+      return phaseStepErrors(form, today, step, t);
     },
     tryEverything: () => setTried(new Set(STEP_IDS)),
     showServerErrors: setServerErrors,

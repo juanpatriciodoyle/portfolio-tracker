@@ -1,23 +1,24 @@
+import type { MessageKey } from '../../i18n/catalogs';
 import type { PhaseStepId } from './phaseForm';
 
 export type PhaseFlowStepId = PhaseStepId | 'bills';
 
 /** What each step of the phase flow asks, in words. */
-export const PHASE_STEP_COPY: Record<PhaseFlowStepId, { label: string; heading: string }> = {
+export const PHASE_STEP_COPY: Record<PhaseFlowStepId, { label: MessageKey; heading: MessageKey }> = {
   place: {
-    label: 'Where',
-    heading: 'Where do you live?',
+    label: 'phaseStep.place.label',
+    heading: 'phaseStep.place.heading',
   },
   dates: {
-    label: 'When',
-    heading: 'When were you there?',
+    label: 'phaseStep.dates.label',
+    heading: 'phaseStep.dates.heading',
   },
   money: {
-    label: 'Money',
-    heading: 'What came in each month?',
+    label: 'phaseStep.money.label',
+    heading: 'phaseStep.money.heading',
   },
   bills: {
-    label: 'Bills',
-    heading: 'What do you pay every month?',
+    label: 'phaseStep.bills.label',
+    heading: 'phaseStep.bills.heading',
   },
 };

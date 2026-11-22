@@ -1,8 +1,9 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { clampDateYear, keepDecimal } from '../../lib/inputFilters';
 import type { BillErrors, BillField, BillForm, BillFormContext } from './billForm';
 import { withCadence, withCategory, withPeriod, withVendor } from './billForm';
 import CategoryChips from './CategoryChips';
-import { BILLING_CADENCE_OPTIONS } from './labels';
+import { billingCadenceOptions } from './labels';
 import SegmentedChoice from './SegmentedChoice';
 
 interface BillFieldsProps {
@@ -19,6 +20,7 @@ interface BillFieldsProps {
 
 /** The fields of an expense: what it is for, who sent it, what it cost, what it covers and how often it comes. */
 export default function BillFields({ id, form, update, context, errors, blanks = [] }: BillFieldsProps) {
+  const { t } = useTranslation();
   const describedBy = (field: BillField) => (errors[field] ? `${id}-${field}-error` : undefined);
   const fieldError = (field: BillField) =>
     errors[field] && (
@@ -34,14 +36,14 @@ export default function BillFields({ id, form, update, context, errors, blanks =
     <>
       <div className="form-group">
         <label className="form-label" htmlFor={`${id}-vendor`}>
-          Who sent it?
+          {t('bill.vendor')}
         </label>
         <input
           id={`${id}-vendor`}
           className={inputClass('vendor', form.vendor.trim() !== '')}
           autoComplete="off"
           maxLength={80}
-          placeholder="Company / Provider"
+          placeholder={t('form.companyPlaceholder')}
           value={form.vendor}
           onChange={(event) => update((current) => withVendor(current, event.target.value, context))}
           aria-invalid={errors.vendor !== undefined || undefined}
@@ -54,7 +56,7 @@ export default function BillFields({ id, form, update, context, errors, blanks =
         name={`${id}-category`}
         value={form.category}
         onChange={(category) => update((current) => withCategory(current, category))}
-        legend="What is the bill for?"
+        legend={t('bill.for')}
         invalid={errors.category !== undefined}
         errorId={describedBy('category')}
         unread={unread('category', form.category !== null)}
@@ -63,14 +65,14 @@ export default function BillFields({ id, form, update, context, errors, blanks =
 
       <div className="form-group">
         <label className="form-label" htmlFor={`${id}-amount`}>
-          Total on the bill
+          {t('bill.total')}
         </label>
         <input
           id={`${id}-amount`}
           className={inputClass('amount', form.amount.trim() !== '')}
           inputMode="decimal"
           autoComplete="off"
-          placeholder="96.50"
+          placeholder={t('bill.totalPlaceholder')}
           value={form.amount}
           onChange={(event) => update((current) => ({ ...current, amount: keepDecimal(event.target.value) }))}
           aria-invalid={errors.amount !== undefined || undefined}
@@ -81,8 +83,8 @@ export default function BillFields({ id, form, update, context, errors, blanks =
 
       <SegmentedChoice
         name={`${id}-cadence`}
-        legend="How often does this bill come?"
-        options={BILLING_CADENCE_OPTIONS}
+        legend={t('bill.howOften')}
+        options={billingCadenceOptions(t)}
         value={form.cadence}
         onChange={(cadence) => update((current) => withCadence(current, cadence, context))}
         unread={unread('cadence', form.cadence !== null)}
@@ -92,7 +94,7 @@ export default function BillFields({ id, form, update, context, errors, blanks =
       <div className="cost-editor__row">
         <div className="form-group">
           <label className="form-label" htmlFor={`${id}-periodStart`}>
-            Covers from
+            {t('bill.coversFrom')}
           </label>
           <input
             id={`${id}-periodStart`}
@@ -107,7 +109,7 @@ export default function BillFields({ id, form, update, context, errors, blanks =
         </div>
         <div className="form-group">
           <label className="form-label" htmlFor={`${id}-periodEnd`}>
-            Until
+            {t('bill.until')}
           </label>
           <input
             id={`${id}-periodEnd`}

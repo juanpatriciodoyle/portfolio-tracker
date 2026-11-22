@@ -4,6 +4,9 @@ import {
   displayLocale,
   formatCalendarDate,
   formatCount,
+  formatFixed,
+  formatUpTo,
+  monthNames,
   formatMinor,
   formatMonthYear,
   formatPercent,
@@ -195,5 +198,44 @@ describe('formatCount', () => {
 
   it('shows zero as zero', () => {
     expect(formatCount(0, 'en-US')).toBe('0');
+  });
+});
+
+describe('formatFixed, formatUpTo and monthNames follow the language', () => {
+  it('writes a fixed number of decimals', () => {
+    expect(formatFixed(1234.5, 2, 'en-US')).toBe('1,234.50');
+    expect(formatFixed(1234.5, 2, 'es-AR')).toBe('1.234,50');
+    expect(formatFixed(0.05, 1, 'es-AR')).toBe('0,1');
+  });
+
+  it('writes at most some decimals, never trailing zeros', () => {
+    expect(formatUpTo(12.5, 2, 'en-US')).toBe('12.5');
+    expect(formatUpTo(0.123456789, 6, 'es-AR')).toBe('0,123457');
+    expect(formatUpTo(3, 2, 'es-AR')).toBe('3');
+  });
+
+  it('names the months in the language', () => {
+    expect(monthNames('short', 'en-US')).toHaveLength(12);
+    expect(monthNames('short', 'en-US')[0]).toBe('Jan');
+    expect(monthNames('long', 'en-US')[11]).toBe('December');
+    expect(monthNames('long', 'es-AR')[0]).toBe('enero');
+    expect(monthNames('long', 'es-AR')[11]).toBe('diciembre');
+  });
+});
+
+describe('currency signs in Argentine Spanish', () => {
+  it('writes the sign people write, where the language only knows the code', () => {
+    expect(formatMinor(90000, 'EUR', 'es-AR')).toMatch(/^€\s900$/);
+    expect(formatMinor(123450, 'GBP', 'es-AR')).toMatch(/^£\s1\.234,50$/);
+  });
+
+  it('keeps US$ for dollars and $ for pesos, never confusing the two', () => {
+    expect(formatMinor(100000, 'USD', 'es-AR')).toMatch(/^US\$\s1\.000$/);
+    expect(formatMinor(100000, 'ARS', 'es-AR')).toMatch(/^\$\s1\.000$/);
+  });
+
+  it('leaves English as it was', () => {
+    expect(formatMinor(90000, 'EUR', 'en-US')).toBe('€900');
+    expect(formatSignedMinor(15000, 'EUR', 'en-US')).toBe('+€150');
   });
 });

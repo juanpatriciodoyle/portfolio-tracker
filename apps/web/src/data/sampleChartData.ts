@@ -1,3 +1,5 @@
+import { displayLocale } from '../lib/money';
+
 export interface ChartDataPoint {
   date_time: string; // ISO or formatted date string
   portfolio_value_in_reporting_currency: number;
@@ -125,11 +127,11 @@ export function filterDataByPeriod(
 /**
  * Format currency with locale standard
  */
-export function formatCurrency(value: number, currency = 'EUR', decimals = 2): string {
+export function formatCurrency(value: number, currency = 'EUR', decimals = 2, locale: string = displayLocale()): string {
   const symbol = currency === 'EUR' ? '€' : currency === 'USD' ? '$' : '£';
   const isNegative = value < 0;
   const absVal = Math.abs(value);
-  const formatted = absVal.toLocaleString(undefined, {
+  const formatted = absVal.toLocaleString(locale, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
@@ -139,7 +141,8 @@ export function formatCurrency(value: number, currency = 'EUR', decimals = 2): s
 /**
  * Format percentage string
  */
-export function formatPercent(value: number, includeSign = true): string {
+export function formatPercent(value: number, includeSign = true, locale: string = displayLocale()): string {
   const sign = includeSign && value > 0 ? '+' : '';
-  return `${sign}${value.toFixed(2)}%`;
+  const digits = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false }).format(value);
+  return `${sign}${digits}%`;
 }

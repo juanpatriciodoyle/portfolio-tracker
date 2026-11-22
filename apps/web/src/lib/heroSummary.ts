@@ -1,4 +1,6 @@
 import type { ReportingPeriod } from '../data/sampleChartData';
+import type { MessageKey } from '../i18n/catalogs';
+import { translateEnglish, type Translate } from '../i18n/translate';
 import { periodPhrase } from './returnForPeriod';
 
 export interface HeroFigures {
@@ -63,48 +65,53 @@ export interface HeroSummary {
 
 const toCents = (amount: number) => Math.round(amount * 100) / 100;
 
-const MEANINGS: Record<GainPartKey, { label: string; meaning: string }> = {
-  held: { label: 'Still invested', meaning: 'What the things you still own have gained. It only becomes yours when you sell.' },
-  sold: { label: 'Sold', meaning: 'Profit you already locked in by selling.' },
-  dividends: { label: 'Dividends', meaning: 'Money companies paid out to you.' },
-  fees: { label: 'Fees', meaning: 'What buying and selling cost you.' },
-  dividendsAndFees: { label: 'Dividends and fees', meaning: 'Payouts received minus what trading cost, adjusted for inflation.' },
+const MEANINGS: Record<GainPartKey, { label: MessageKey; meaning: MessageKey }> = {
+  held: { label: 'hero.part.held', meaning: 'hero.part.held.meaning' },
+  sold: { label: 'hero.part.sold', meaning: 'hero.part.sold.meaning' },
+  dividends: { label: 'hero.part.dividends', meaning: 'hero.part.dividends.meaning' },
+  fees: { label: 'hero.part.fees', meaning: 'hero.part.fees.meaning' },
+  dividendsAndFees: { label: 'hero.part.dividendsAndFees', meaning: 'hero.part.dividendsAndFees.meaning' },
 };
 
-const part = (key: GainPartKey, amount: number): GainPart => ({ key, ...MEANINGS[key], amount });
+const part = (key: GainPartKey, amount: number, t: Translate): GainPart => ({
+  key,
+  label: t(MEANINGS[key].label),
+  meaning: t(MEANINGS[key].meaning),
+  amount,
+});
 
 /** The ledger of the gain. Whatever the split, its lines always add up to the total gain shown above it. */
-function gainParts({ figures, isRealInflationMode }: HeroSummaryInput): GainPart[] {
+function gainParts({ figures, isRealInflationMode }: HeroSummaryInput, t: Translate): GainPart[] {
   const held = isRealInflationMode ? figures.realOpenProfit : figures.openProfit;
   const sold = isRealInflationMode ? figures.realSoldProfit : figures.soldProfit;
-  const parts = [part('held', held), part('sold', sold)];
+  const parts = [part('held', held, t), part('sold', sold, t)];
 
   if (isRealInflationMode) {
-    parts.push(part('dividendsAndFees', toCents(figures.totalGain - held - sold)));
+    parts.push(part('dividendsAndFees', toCents(figures.totalGain - held - sold), t));
   } else {
-    parts.push(part('dividends', figures.dividends), part('fees', -figures.totalFees));
+    parts.push(part('dividends', figures.dividends, t), part('fees', -figures.totalFees, t));
   }
   return parts.filter((line) => line.amount !== 0);
 }
 
 /** What the home screen says, decided once: the layer that draws it only formats and animates. */
-export function heroSummary(input: HeroSummaryInput): HeroSummary {
+export function heroSummary(input: HeroSummaryInput, t: Translate = translateEnglish): HeroSummary {
   const { figures, period, periodGain, periodPercent, isRealInflationMode } = input;
   const wholeHistory = period === 'All';
 
-  const phrase = periodPhrase(period) + (wholeHistory && isRealInflationMode ? ', after inflation' : '');
+  const phrase = periodPhrase(period, t) + (wholeHistory && isRealInflationMode ? t('hero.afterInflation') : '');
 
   return {
     isEmpty: figures.netWorth === 0 && figures.openCostBasis === 0 && figures.cashBalance === 0,
     totalValue: isRealInflationMode
-      ? { title: 'Total value, after inflation', amount: figures.realNetWorth, beforeInflation: figures.netWorth }
-      : { title: 'Total value', amount: figures.netWorth, beforeInflation: null },
+      ? { title: t('hero.totalValueAfterInflation'), amount: figures.realNetWorth, beforeInflation: figures.netWorth }
+      : { title: t('hero.totalValue'), amount: figures.netWorth, beforeInflation: null },
     invested: figures.openMarketValue,
     cash: figures.cashBalance,
     gain: wholeHistory
-      ? { label: 'Total profit', amount: figures.totalGain, percent: figures.totalGainPercent, phrase }
-      : { label: 'Profit', amount: periodGain, percent: periodPercent, phrase },
-    gainParts: wholeHistory ? gainParts(input) : null,
+      ? { label: t('hero.totalProfit'), amount: figures.totalGain, percent: figures.totalGainPercent, phrase }
+      : { label: t('hero.profit'), amount: periodGain, percent: periodPercent, phrase },
+    gainParts: wholeHistory ? gainParts(input, t) : null,
     gainSplit: wholeHistory
       ? isRealInflationMode
         ? { stillInvested: figures.realOpenProfit, sold: figures.realSoldProfit }

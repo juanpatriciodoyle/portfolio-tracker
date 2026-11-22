@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_STANDING, makePhaseBenchmark } from '../../../test/benchmarkFixtures';
 import type { StandingDto } from '../../../contracts';
 import { BENCHMARK_GAPS } from '../../../contracts';
+import { translateEnglish as t, translatorFor } from '../../../i18n/translate';
 import { describePhaseBenchmark, describeRefreshedAt, GAP_REASONS } from '../describeBenchmarks';
 
 const nameOf = (id: string) => ({ p0: 'Buenos Aires' })[id];
@@ -185,7 +186,7 @@ describe('positioning', () => {
 
 describe('gaps', () => {
   it('has a plain reason for every possible gap', () => {
-    for (const gap of BENCHMARK_GAPS) expect(GAP_REASONS[gap].length).toBeGreaterThan(10);
+    for (const gap of BENCHMARK_GAPS) expect(t(GAP_REASONS[gap]).length).toBeGreaterThan(10);
   });
 
   it('reports a phase with nothing to compare, and why', () => {
@@ -193,14 +194,14 @@ describe('gaps', () => {
 
     expect(view.hasComparison).toBe(false);
     expect(view.income).toBeNull();
-    expect(view.gaps).toEqual([GAP_REASONS.NO_INCOME]);
+    expect(view.gaps).toEqual([t(GAP_REASONS.NO_INCOME)]);
   });
 
   it('keeps the comparisons it has next to the reasons for the ones it lacks', () => {
     const view = describeIt({ purchasingPower: null, gaps: ['NO_PURCHASING_POWER'] });
 
     expect(view.hasComparison).toBe(true);
-    expect(view.gaps).toEqual([GAP_REASONS.NO_PURCHASING_POWER]);
+    expect(view.gaps).toEqual([t(GAP_REASONS.NO_PURCHASING_POWER)]);
   });
 });
 
@@ -211,10 +212,16 @@ describe('describeRefreshedAt', () => {
     expect(describeRefreshedAt('garbage')).toBeNull();
   });
 
-  it('names countries in English even when the browser speaks Spanish', () => {
-    const view = describePhaseBenchmark(makePhaseBenchmark({ countryCode: 'ES' }), nameOf, 'es-ES');
-    const text = [view.country, ...view.positioning.badges.map((b) => b.text), ...view.positioning.insights].join(' | ');
-    expect(text).toContain('Spain');
-    expect(text).not.toContain('España');
+  it('names the countries in the language of the sentences around them', () => {
+    const english = describePhaseBenchmark(makePhaseBenchmark({ countryCode: 'ES' }), nameOf, 'en-US', t);
+    const englishText = [english.country, ...english.positioning.badges.map((b) => b.text), ...english.positioning.insights].join(' | ');
+    expect(englishText).toContain('Spain');
+    expect(englishText).not.toContain('España');
+
+    const spanish = describePhaseBenchmark(makePhaseBenchmark({ countryCode: 'ES' }), nameOf, 'es-AR', translatorFor('es-AR'));
+    const spanishText = [spanish.country, ...spanish.positioning.badges.map((b) => b.text), ...spanish.positioning.insights].join(' | ');
+    expect(spanishText).toContain('España');
+    expect(spanishText).toContain('Top 11% en España');
+    expect(spanishText).not.toMatch(/\b(Housing|income)\b/);
   });
 });

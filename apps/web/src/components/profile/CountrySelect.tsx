@@ -1,3 +1,5 @@
+import { intlLocale } from '../../i18n/locale';
+import { useTranslation } from '../../i18n/useTranslation';
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { buildCountryIndex, searchCountries } from '../../lib/countrySearch';
@@ -35,7 +37,8 @@ export default function CountrySelect({
   invalid = false,
   describedBy,
 }: CountrySelectProps) {
-  const index = useMemo(() => buildCountryIndex(), []);
+  const { t, locale } = useTranslation();
+  const index = useMemo(() => buildCountryIndex([intlLocale(locale), 'en', 'es']), [locale]);
   /** What has been typed since the field was entered; null while it just shows the chosen country. */
   const [query, setQuery] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -177,10 +180,10 @@ export default function CountrySelect({
       />
       <ChevronDown className="combobox__chevron" size={16} aria-hidden="true" />
       {open && (
-        <ul ref={listRef} className="combobox__list" id={listboxId} role="listbox" aria-label="Countries" onMouseDown={(event) => event.preventDefault()}>
+        <ul ref={listRef} className="combobox__list" id={listboxId} role="listbox" aria-label={t('country.list')} onMouseDown={(event) => event.preventDefault()}>
           {results.length === 0 && (
             <li className="combobox__empty" role="presentation">
-              No country matches “{query}”.
+              {t('country.none', { query: query ?? '' })}
             </li>
           )}
           {results.map((entry, position) => (

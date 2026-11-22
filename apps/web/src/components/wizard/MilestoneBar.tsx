@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react';
+import { useTranslation } from '../../i18n/useTranslation';
 
 export interface WizardStepInfo {
   id: string;
@@ -14,6 +15,7 @@ interface MilestoneBarProps {
 
 /** How far along a guided flow is: a bar that fills as each milestone is reached. */
 export default function MilestoneBar({ steps, current }: MilestoneBarProps) {
+  const { t } = useTranslation();
   const lastIndex = Math.max(steps.length - 1, 1);
   const filled = Math.min(current, lastIndex) / lastIndex;
 
@@ -24,7 +26,7 @@ export default function MilestoneBar({ steps, current }: MilestoneBarProps) {
       aria-valuemin={1}
       aria-valuemax={steps.length}
       aria-valuenow={current + 1}
-      aria-valuetext={`Step ${current + 1} of ${steps.length}: ${steps[current]?.label ?? ''}`}
+      aria-valuetext={t('wizard.stepOf', { step: current + 1, total: steps.length, label: steps[current]?.label ?? '' })}
     >
       <div className="milestones__track" aria-hidden="true">
         <div className="milestones__fill" style={{ width: `${filled * 100}%` }} />

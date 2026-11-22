@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from './i18n/useTranslation';
 import TransactionForm from './components/TransactionForm';
 import Modal from './components/Modal';
 import LoginModal from './components/LoginModal';
@@ -33,6 +34,7 @@ interface User {
 }
 
 function App() {
+  const { t, locale } = useTranslation();
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('auth_user');
     return saved ? JSON.parse(saved) : null;
@@ -44,7 +46,7 @@ function App() {
   const [isInflationModalOpen, setIsInflationModalOpen] = useState(false);
   const [isRealInflationMode, setIsRealInflationMode] = useState(false);
   const [tableKey, setTableKey] = useState(0);
-  const [greeting] = useState(() => greetingFor(new Date().getHours()));
+  const [hour] = useState(() => new Date().getHours());
 
   const [period, setPeriod] = useState<ReportingPeriod>('All');
   const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
@@ -128,7 +130,7 @@ function App() {
   }
 
   const periodChange = returnForPeriod(chartData, period, customRange);
-  const periodWindow = describePeriodWindow(filterDataByPeriod(chartData, period, customRange));
+  const periodWindow = describePeriodWindow(filterDataByPeriod(chartData, period, customRange), locale);
 
   // Active ROI and Profit Euros based on toggle state
   const activeProfitEuros = isRealInflationMode ? stats.realProfitEuros : stats.totalProfit;
@@ -150,7 +152,7 @@ function App() {
         <div className="home__inner">
           <div className="home__lead">
           <h1 className="home__greeting">
-            {greeting}, {getGreetingName()}
+            {greetingFor(hour, t)}, {getGreetingName()}
           </h1>
 
           {/* What you have and what it has earned: one place, then the period that changes it */}
@@ -243,7 +245,7 @@ function App() {
 
       {/* Centered dialog for logging a transaction */}
       {isLogOpen && (
-        <Modal label="Log Transaction" onClose={() => setIsLogOpen(false)}>
+        <Modal label={t('header.logTransaction')} onClose={() => setIsLogOpen(false)}>
           <TransactionForm onSuccess={handleTransactionSuccess} positions={stats.positions} />
         </Modal>
       )}

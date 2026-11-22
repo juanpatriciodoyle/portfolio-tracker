@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { CalendarX, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useId, useState } from 'react';
 import { incomeGaps, type IncomeEndReason, type IncomeStreamDto, type LivingPhaseDto, type UpdateLivingPhaseRequest } from '../../contracts';
@@ -7,7 +8,7 @@ import { clampDateYear } from '../../lib/inputFilters';
 import { formatCalendarDate, formatMinor } from '../../lib/money';
 import { describeFailure } from './failureMessage';
 import IncomeStreamEditor from './IncomeStreamEditor';
-import { END_REASON_OPTIONS, describeIncomeEnd, describeIncomeStream, endJob, groupIncome, reopenJob, type IncomeRow } from './incomeForm';
+import { endReasonOptions, describeIncomeEnd, describeIncomeStream, endJob, groupIncome, reopenJob, type IncomeRow } from './incomeForm';
 import SegmentedChoice from './SegmentedChoice';
 
 interface IncomeSectionProps {
@@ -26,6 +27,8 @@ const byStart = (a: IncomeStreamDto, b: IncomeStreamDto) =>
 
 /** Every job and source of income during a home. Each is its own line: end one and the others carry on. */
 export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: IncomeSectionProps) {
+  const words = useTranslation();
+  const { t } = words;
   const id = useId();
   const [editing, setEditing] = useState<Editing>(null);
   const [ending, setEnding] = useState<Ending>(null);
@@ -54,15 +57,15 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
   const replaceAt = (index: number, stream: IncomeStreamDto) => streams.map((existing, position) => (position === index ? stream : existing));
 
   const submit = (stream: IncomeStreamDto) =>
-    editing?.mode === 'edit' ? save(replaceAt(editing.index, stream), 'Income updated') : save([...streams, stream], 'Income added');
+    editing?.mode === 'edit' ? save(replaceAt(editing.index, stream), t('income.updated')) : save([...streams, stream], t('income.added'));
 
   const remove = (index: number) =>
     runIncomeAction(async () => {
       const result = await save(
         streams.filter((_, position) => position !== index),
-        'Income removed'
+        t('income.removed')
       );
-      if (!result.ok) setRemoveError(describeFailure(result.failure));
+      if (!result.ok) setRemoveError(describeFailure(result.failure, [], words));
     });
 
   const startEnding = (index: number) => {
@@ -77,26 +80,26 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
 
   const confirmEnding = async () => {
     if (ending === null) return;
-    const result = endJob(streams[ending.index], ending.lastDay, ending.reason, phase);
+    const result = endJob(streams[ending.index], ending.lastDay, ending.reason, phase, t);
     if (!result.ok) {
       setEnding({ ...ending, error: result.error });
       return;
     }
     await runIncomeAction(async () => {
-      const saved = await save(replaceAt(ending.index, result.stream), 'Job ended');
-      if (!saved.ok) setEnding({ ...ending, error: describeFailure(saved.failure) });
+      const saved = await save(replaceAt(ending.index, result.stream), t('income.jobEnded'));
+      if (!saved.ok) setEnding({ ...ending, error: describeFailure(saved.failure, [], words) });
     });
   };
 
   const bringBack = (index: number) =>
     runIncomeAction(async () => {
-      const result = await save(replaceAt(index, reopenJob(streams[index])), 'Job is paying again');
-      if (!result.ok) setRemoveError(describeFailure(result.failure));
+      const result = await save(replaceAt(index, reopenJob(streams[index])), t('income.payingAgain'));
+      if (!result.ok) setRemoveError(describeFailure(result.failure, [], words));
     });
 
   const renderRow = ({ stream, index }: IncomeRow, isEnded: boolean) => {
-    const when = describeIncomeStream(stream);
-    const endNote = describeIncomeEnd(stream);
+    const when = describeIncomeStream(stream, undefined, t);
+    const endNote = describeIncomeEnd(stream, undefined, t);
     const name = `${stream.label} ${when}`;
     const oneTime = stream.kind === 'ONE_TIME';
     return (
@@ -113,34 +116,34 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
               </span>
             </div>
             <span className="cost-row__amount">
-              {formatMinor(stream.amountMinor, phase.currency)} <span className="cost-row__cadence">{oneTime ? 'once' : 'every month'}</span>
+              {formatMinor(stream.amountMinor, phase.currency)} <span className="cost-row__cadence">{oneTime ? t('income.once') : t('label.cadencePhrase.MONTHLY')}</span>
             </span>
             {confirmingIndex === index ? (
-              <div className="confirm-inline" role="group" aria-label={`Confirm removing ${name}`}>
-                <span>Remove this income?</span>
+              <div className="confirm-inline" role="group" aria-label={t('ledger.confirmRemoving', { name })}>
+                <span>{t('income.removeQuestion')}</span>
                 <button type="button" className="profile-danger-button" disabled={incomeBusy} aria-busy={incomeBusy} onClick={() => remove(index)}>
-                  Remove
+                  {t('ledger.remove')}
                 </button>
                 <button type="button" className="profile-text-button" onClick={() => setConfirmingIndex(null)}>
-                  Keep
+                  {t('ledger.keep')}
                 </button>
               </div>
             ) : (
               <div className="cost-row__actions">
                 {!oneTime && !isEnded && stream.endDate === null && (
-                  <button type="button" className="profile-icon-button" aria-label={`End job ${name}`} title="End job" onClick={() => startEnding(index)}>
+                  <button type="button" className="profile-icon-button" aria-label={t('income.endJobNamed', { name })} title={t('income.endJob')} onClick={() => startEnding(index)}>
                     <CalendarX size={14} aria-hidden="true" />
                   </button>
                 )}
                 {isEnded && (
-                  <button type="button" className="profile-icon-button" aria-label={`Bring back ${name}`} title="Bring back" disabled={incomeBusy} aria-busy={incomeBusy} onClick={() => bringBack(index)}>
+                  <button type="button" className="profile-icon-button" aria-label={t('income.bringBackNamed', { name })} title={t('income.bringBack')} disabled={incomeBusy} aria-busy={incomeBusy} onClick={() => bringBack(index)}>
                     <RotateCcw size={14} aria-hidden="true" />
                   </button>
                 )}
                 <button
                   type="button"
                   className="profile-icon-button"
-                  aria-label={`Edit ${name}`}
+                  aria-label={t('ledger.edit', { name })}
                   onClick={() => {
                     setEditing({ mode: 'edit', index });
                     setConfirmingIndex(null);
@@ -149,16 +152,16 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
                 >
                   <Pencil size={14} aria-hidden="true" />
                 </button>
-                <button type="button" className="profile-icon-button" aria-label={`Remove ${name}`} onClick={() => setConfirmingIndex(index)}>
+                <button type="button" className="profile-icon-button" aria-label={t('ledger.removeItem', { name })} onClick={() => setConfirmingIndex(index)}>
                   <Trash2 size={14} aria-hidden="true" />
                 </button>
               </div>
             )}
             {ending?.index === index && (
-              <div className="income-row__ending" role="group" aria-label={`End ${stream.label}`}>
+              <div className="income-row__ending" role="group" aria-label={t('income.endLabel', { label: stream.label })}>
                 <div className="form-group">
                   <label className="form-label" htmlFor={`${id}-last-day`}>
-                    Last day paid
+                    {t('income.lastDayPaid')}
                   </label>
                   <input
                     id={`${id}-last-day`}
@@ -171,8 +174,8 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
                 </div>
                 <SegmentedChoice
                   name={`${id}-end-reason`}
-                  legend="What happened?"
-                  options={END_REASON_OPTIONS}
+                  legend={t('income.whatHappened')}
+                  options={endReasonOptions(t)}
                   value={ending.reason === '' ? null : ending.reason}
                   onChange={(reason) => setEnding({ ...ending, reason })}
                 />
@@ -183,10 +186,10 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
                 )}
                 <div className="cost-editor__actions">
                   <button type="button" className="btn-primary-apply" disabled={incomeBusy} aria-busy={incomeBusy} onClick={confirmEnding}>
-                    End job
+                    {t('income.endJob')}
                   </button>
                   <button type="button" className="btn-secondary-cancel" onClick={() => setEnding(null)}>
-                    Cancel
+                    {t('common.cancel')}
                   </button>
                 </div>
               </div>
@@ -211,24 +214,24 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
     <section aria-labelledby={`${id}-income`}>
       <div className="phase-details__heading-row">
         <h4 className="phase-details__heading" id={`${id}-income`}>
-          Income
+          {t('income.heading')}
         </h4>
         {editing === null && (
           <button type="button" className="profile-text-button" onClick={() => setEditing({ mode: 'add' })}>
-            <Plus size={14} aria-hidden="true" /> Add job or income
+            <Plus size={14} aria-hidden="true" /> {t('income.addJob')}
           </button>
         )}
       </div>
 
       {gaps.map((gap) => (
         <p key={gap.from} className="income-gap" data-gap={gap.from}>
-          {gap.to === null ? `No income since ${formatCalendarDate(gap.from)}` : `No income from ${formatCalendarDate(gap.from)} to ${formatCalendarDate(gap.to)}`}
+          {gap.to === null ? t('income.gapSince', { date: formatCalendarDate(gap.from) }) : t('income.gapBetween', { from: formatCalendarDate(gap.from), to: formatCalendarDate(gap.to) })}
         </p>
       ))}
 
-      {group('Paying now', groups.paying)}
-      {group('Ended', groups.ended, true)}
-      {group('One-time deposits', groups.oneTime)}
+      {group(t('income.group.paying'), groups.paying)}
+      {group(t('income.group.ended'), groups.ended, true)}
+      {group(t('income.group.oneTime'), groups.oneTime)}
 
       {editing?.mode === 'add' && <IncomeStreamEditor phase={phase} onSubmit={submit} onCancel={() => setEditing(null)} />}
 

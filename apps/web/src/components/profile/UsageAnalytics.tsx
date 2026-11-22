@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { ACTIVE_CUSTOMER_MONTHS, type UsageAnalyticsResponse } from '../../contracts';
 import { useCountUp } from '../../hooks/useCountUp';
 import { useSubmitOnce } from '../../hooks/useSubmitOnce';
@@ -38,17 +39,18 @@ function Skeleton() {
 
 /** How many customers there are and how many of them have signed in lately. What the admin sees in the Analytics tab. */
 export default function UsageAnalytics({ status, message, analytics, onRetry }: UsageAnalyticsProps) {
+  const { t } = useTranslation();
   const { run, pending } = useSubmitOnce();
   const failed = status !== 'ready' && status !== 'loading';
 
   return (
-    <section className="usage-analytics" aria-label="Customers" aria-busy={status === 'loading'}>
+    <section className="usage-analytics" aria-label={t('analytics.label')} aria-busy={status === 'loading'}>
       {failed && (
         <div className="profile-banner profile-banner--error" role="alert">
-          <p>{message ?? 'Something went wrong.'}</p>
+          <p>{message ?? t('profile.errorFallback')}</p>
           {status === 'error' && (
             <button type="button" className="btn-secondary-cancel profile-banner__action" disabled={pending} aria-busy={pending} onClick={() => void run(async () => onRetry())}>
-              Try again
+              {t('common.tryAgain')}
             </button>
           )}
         </div>
@@ -57,28 +59,28 @@ export default function UsageAnalytics({ status, message, analytics, onRetry }: 
       {analytics === null ? (
         !failed && <Skeleton />
       ) : analytics.registered === 0 ? (
-        <p className="usage-analytics__empty">No customers yet</p>
+        <p className="usage-analytics__empty">{t('analytics.none')}</p>
       ) : (
         <>
           <div className="hero__figures">
             <div className="hero__figure usage-analytics__figure">
-              <p className="hero__label">Customers</p>
+              <p className="hero__label">{t('analytics.label')}</p>
               <p className="hero__amount">
                 <Count value={analytics.registered} />
               </p>
             </div>
             <div className="hero__figure usage-analytics__figure">
-              <p className="hero__label">Active customers</p>
+              <p className="hero__label">{t('analytics.active')}</p>
               <p className="hero__amount">
                 <Count value={analytics.active} />
               </p>
-              <p className="hero__meta">{formatPercent(analytics.activePercent / 100, displayLocale(), 1)} of customers</p>
+              <p className="hero__meta">{t('analytics.percent', { percent: formatPercent(analytics.activePercent / 100, displayLocale(), 1) })}</p>
               <p className="hero__meta">
-                Signed in since {formatCalendarDate(analytics.activeSince)} (the last {ACTIVE_CUSTOMER_MONTHS} months)
+                {t('analytics.since', { date: formatCalendarDate(analytics.activeSince), months: ACTIVE_CUSTOMER_MONTHS })}
               </p>
             </div>
           </div>
-          <p className="hero__note">As of {formatCalendarDate(analytics.asOf)}</p>
+          <p className="hero__note">{t('analytics.asOf', { date: formatCalendarDate(analytics.asOf) })}</p>
         </>
       )}
     </section>

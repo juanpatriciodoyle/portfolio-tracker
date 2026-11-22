@@ -1,4 +1,5 @@
 import { Minus, Plus } from 'lucide-react';
+import { useTranslation } from '../../i18n/useTranslation';
 
 interface StepperProps {
   id: string;
@@ -11,6 +12,8 @@ interface StepperProps {
 
 /** A small plus/minus control for whole numbers with a short range. */
 export default function Stepper({ id, label, value, min, max, onChange }: StepperProps) {
+  const { t, locale } = useTranslation();
+  const lowered = label.toLocaleLowerCase(locale);
   return (
     <div className="form-group">
       <span className="form-label" id={`${id}-label`}>
@@ -20,7 +23,7 @@ export default function Stepper({ id, label, value, min, max, onChange }: Steppe
         <button
           type="button"
           className="profile-icon-button"
-          aria-label={`Decrease ${label.toLowerCase()}`}
+          aria-label={t('stepper.decrease', { label: lowered })}
           onClick={() => onChange(value - 1)}
           disabled={value <= min}
         >
@@ -32,7 +35,7 @@ export default function Stepper({ id, label, value, min, max, onChange }: Steppe
         <button
           type="button"
           className="profile-icon-button"
-          aria-label={`Increase ${label.toLowerCase()}`}
+          aria-label={t('stepper.increase', { label: lowered })}
           onClick={() => onChange(value + 1)}
           disabled={value >= max}
         >

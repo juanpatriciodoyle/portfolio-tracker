@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from '../i18n/useTranslation';
 import './wizard/dialog.css';
 
 interface ModalProps {
@@ -18,6 +19,7 @@ const FOCUSABLE =
 /** A dialog in the middle of the screen: Escape or the backdrop closes it, and Tab stays inside it. */
 export default function Modal({ label, onClose, wide = false, children }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -60,7 +62,7 @@ export default function Modal({ label, onClose, wide = false, children }: ModalP
       }}
     >
       <div ref={panel} className={`dialog${wide ? ' dialog--wide' : ''}`} role="dialog" aria-modal="true" aria-label={label} onKeyDown={handleKeyDown}>
-        <button type="button" className="dialog__close" aria-label="Close" onClick={onClose}>
+        <button type="button" className="dialog__close" aria-label={t('common.close')} onClick={onClose}>
           <X size={18} aria-hidden="true" />
         </button>
         {children}

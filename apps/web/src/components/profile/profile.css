@@ -58,6 +58,10 @@
   z-index: 10;
 }
 
+.profile-page__header .language-select {
+  margin-left: auto;
+}
+
 .profile-page__title {
   margin: 0;
   font-size: 18px;

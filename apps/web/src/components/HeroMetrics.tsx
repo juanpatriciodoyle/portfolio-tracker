@@ -1,7 +1,9 @@
 import React, { useId, useState, type ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { formatCurrency, type ReportingPeriod } from '../data/sampleChartData';
+import { formatCurrency, formatPercent, type ReportingPeriod } from '../data/sampleChartData';
 import { useCountUp } from '../hooks/useCountUp';
+import { dataLabel } from '../i18n/dataLabels';
+import { useTranslation } from '../i18n/useTranslation';
 import { heroSummary, type GainPart, type HeroFigures } from '../lib/heroSummary';
 import { splitCents } from '../lib/money';
 
@@ -58,6 +60,7 @@ function Money({ amount, currency, signed = false, quietCents = false, settled =
 }
 
 function GainBreakdown({ parts, total, currency }: { parts: GainPart[]; total: number; currency: string }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const money = (amount: number) => withSign(amount, formatCurrency(amount, currency));
@@ -65,7 +68,7 @@ function GainBreakdown({ parts, total, currency }: { parts: GainPart[]; total: n
   return (
     <div className="hero__explain hero__enter" style={stagger(3)}>
       <button type="button" className="hero__toggle" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((value) => !value)}>
-        How this adds up
+        {t('hero.howItAddsUp')}
         <ChevronDown size={14} aria-hidden="true" />
       </button>
       <div id={panelId} className="hero__breakdown" data-open={open} inert={!open}>
@@ -81,7 +84,7 @@ function GainBreakdown({ parts, total, currency }: { parts: GainPart[]; total: n
               </li>
             ))}
             <li className="hero__part hero__part--total">
-              <span className="hero__part-name">Total profit</span>
+              <span className="hero__part-name">{t('hero.totalProfit')}</span>
               <span className={`hero__part-amount ${toneClass(total)}`}>{money(total)}</span>
             </li>
           </ul>
@@ -122,7 +125,8 @@ export const HeroMetrics: React.FC<HeroMetricsProps> = ({
   settled = false,
   children,
 }) => {
-  const summary = heroSummary({ figures, period, periodGain, periodPercent, isRealInflationMode });
+  const { t } = useTranslation();
+  const summary = heroSummary({ figures, period, periodGain, periodPercent, isRealInflationMode }, t);
   const money = (amount: number) => formatCurrency(amount, currency);
   const signedMoney = (amount: number) => withSign(amount, money(amount));
   const { totalValue, gain } = summary;
@@ -133,9 +137,9 @@ export const HeroMetrics: React.FC<HeroMetricsProps> = ({
     if (summary.isEmpty) {
       return (
         <div className="hero__empty hero__enter">
-          <p className="hero__label">Total value</p>
-          <p className="hero__empty-title">Nothing here yet</p>
-          <p className="hero__note">Log your first transaction and your total value appears here.</p>
+          <p className="hero__label">{t('hero.totalValue')}</p>
+          <p className="hero__empty-title">{t('hero.empty.title')}</p>
+          <p className="hero__note">{t('hero.empty.note')}</p>
         </div>
       );
     }
@@ -147,17 +151,17 @@ export const HeroMetrics: React.FC<HeroMetricsProps> = ({
             <p className="hero__amount">
               <Money amount={totalValue.amount} currency={currency} quietCents settled={settled} />
             </p>
-            <p className="hero__meta" title={totalValue.beforeInflation === null ? undefined : `Adjusted for ${country} inflation`}>
-              {totalValue.beforeInflation === null ? 'What you own today' : `Before inflation: ${money(totalValue.beforeInflation)}`}
+            <p className="hero__meta" title={totalValue.beforeInflation === null ? undefined : t('hero.adjustedFor', { country: dataLabel(t, 'country', country) })}>
+              {totalValue.beforeInflation === null ? t('hero.whatYouOwn') : t('hero.beforeInflation', { amount: money(totalValue.beforeInflation) })}
             </p>
             {totalValue.beforeInflation === null ? (
               <dl className="hero__split">
                 <div>
-                  <dt>Invested</dt>
+                  <dt>{t('hero.invested')}</dt>
                   <dd>{money(summary.invested)}</dd>
                 </div>
                 <div>
-                  <dt>Cash</dt>
+                  <dt>{t('hero.cash')}</dt>
                   <dd>{money(summary.cash)}</dd>
                 </div>
               </dl>
@@ -172,18 +176,18 @@ export const HeroMetrics: React.FC<HeroMetricsProps> = ({
               <Money amount={gain.amount} currency={currency} signed quietCents settled={settled} />
             </p>
             <p className="hero__meta">
-              <span className="hero__percent">{withSign(gain.percent, `${percentShown.toFixed(2)}%`)}</span> {gain.phrase}
+              <span className="hero__percent">{withSign(gain.percent, formatPercent(percentShown, false))}</span> {gain.phrase}
             </p>
             {summary.gainSplit ? (
               <dl className="hero__split">
                 <div>
-                  <dt>Still invested</dt>
+                  <dt>{t('hero.stillInvested')}</dt>
                   <dd className={toneClass(summary.gainSplit.stillInvested)}>{signedMoney(summary.gainSplit.stillInvested)}</dd>
                 </div>
                 <div>
-                  <dt>Already sold</dt>
+                  <dt>{t('hero.alreadySold')}</dt>
                   <dd className={summary.gainSplit.sold === 0 ? undefined : toneClass(summary.gainSplit.sold)}>
-                    {summary.gainSplit.sold === 0 ? 'None yet' : signedMoney(summary.gainSplit.sold)}
+                    {summary.gainSplit.sold === 0 ? t('hero.noneYet') : signedMoney(summary.gainSplit.sold)}
                   </dd>
                 </div>
               </dl>
@@ -197,7 +201,7 @@ export const HeroMetrics: React.FC<HeroMetricsProps> = ({
           <div className="hero__context hero__enter" style={stagger(2)}>
             {period !== 'All' && <p className="hero__note">{periodWindow}</p>}
             {!summary.pricesAvailable && (
-              <p className="hero__note hero__note--warning">Live prices are unavailable, so what you hold is shown at what it cost.</p>
+              <p className="hero__note hero__note--warning">{t('hero.pricesUnavailable')}</p>
             )}
           </div>
         )}
@@ -208,7 +212,7 @@ export const HeroMetrics: React.FC<HeroMetricsProps> = ({
   };
 
   return (
-    <section className="hero" aria-label="Your portfolio" aria-busy={loading}>
+    <section className="hero" aria-label={t('hero.section')} aria-busy={loading}>
       {body()}
       {children && (
         <div className="hero__controls hero__enter" style={stagger(4)}>

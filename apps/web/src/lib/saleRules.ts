@@ -1,3 +1,5 @@
+import { translateEnglish, type Translate } from '../i18n/translate';
+
 export interface SellablePosition {
   symbol: string;
   name: string;
@@ -18,13 +20,13 @@ export function formatUnits(units: number): string {
 }
 
 /** A sale is a number above zero that does not exceed what is held. */
-export function checkSaleQuantity(text: string, available: number): SaleQuantityCheck {
+export function checkSaleQuantity(text: string, available: number, t: Translate = translateEnglish): SaleQuantityCheck {
   const quantity = Number(text);
   if (text.trim() === '' || !Number.isFinite(quantity) || quantity <= 0) {
-    return { ok: false, message: 'Enter how many units you sold.' };
+    return { ok: false, message: t('sale.enterUnits') };
   }
   if (quantity > available + DUST) {
-    return { ok: false, message: `You only hold ${formatUnits(available)} ${available === 1 ? 'unit' : 'units'}.` };
+    return { ok: false, message: t('sale.onlyHold', { units: formatUnits(available), count: available }) };
   }
   return { ok: true, quantity: Math.min(quantity, available) };
 }

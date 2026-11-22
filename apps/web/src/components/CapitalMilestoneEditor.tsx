@@ -1,3 +1,4 @@
+import { useTranslation } from '../i18n/useTranslation';
 import { useId, useState, type FormEvent } from 'react';
 import { CAPITAL_MILESTONE_CATEGORIES, type CapitalMilestone } from '../contracts';
 import type { MutationResult } from '../lib/apiErrors';
@@ -20,6 +21,8 @@ interface CapitalMilestoneEditorProps {
 
 /** Set up, adjust or remove a goal: its name, its target and how much of the target must be held as capital. */
 export default function CapitalMilestoneEditor({ initial, id, currency, onDelete, onSave, onClose }: CapitalMilestoneEditorProps) {
+  const words = useTranslation();
+  const { t } = words;
   const fieldId = useId();
   const [form, setForm] = useState(initial);
   const [errors, setErrors] = useState<MilestoneErrors & { form?: string }>({});
@@ -30,12 +33,12 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
     run(async () => {
       const result = await action();
       if (result.ok) onClose();
-      else setErrors({ form: describeFailure(result.failure) });
+      else setErrors({ form: describeFailure(result.failure, [], words) });
     });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const result = validateMilestoneForm(form, currency, id);
+    const result = validateMilestoneForm(form, currency, id, t);
     if (!result.ok) {
       setErrors(result.errors);
       return;
@@ -56,12 +59,12 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
     );
 
   return (
-    <Modal label={onDelete ? 'Edit milestone' : 'Set a milestone target'} onClose={onClose}>
-      <h2 className="dialog__title">{onDelete ? 'Edit milestone' : 'Set a milestone target'}</h2>
+    <Modal label={onDelete ? t('capital.edit') : t('capital.setTitle')} onClose={onClose}>
+      <h2 className="dialog__title">{onDelete ? t('capital.edit') : t('capital.setTitle')}</h2>
 
-      <form className="cost-editor milestone-editor" onSubmit={handleSubmit} noValidate aria-label="Milestone">
+      <form className="cost-editor milestone-editor" onSubmit={handleSubmit} noValidate aria-label={t('capital.form')}>
         <fieldset className="profile-segmented">
-          <legend className="form-label">Kind of goal</legend>
+          <legend className="form-label">{t('capital.kind')}</legend>
           <div className="income-reasons">
             {CAPITAL_MILESTONE_CATEGORIES.map((category) => (
               <button
@@ -69,9 +72,9 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
                 type="button"
                 className={`profile-toggle-button${form.category === category ? ' is-on' : ''}`}
                 aria-pressed={form.category === category}
-                onClick={() => setForm((current) => withCategory(current, category))}
+                onClick={() => setForm((current) => withCategory(current, category, t))}
               >
-                {CATEGORY_LABELS[category]}
+                {t(CATEGORY_LABELS[category])}
               </button>
             ))}
           </div>
@@ -79,7 +82,7 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
 
         <div className="form-group">
           <label className="form-label" htmlFor={`${fieldId}-title`}>
-            Name
+            {t('capital.name')}
           </label>
           <input
             id={`${fieldId}-title`}
@@ -96,14 +99,14 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
         <div className="cost-editor__row">
           <div className="form-group">
             <label className="form-label" htmlFor={`${fieldId}-amount`}>
-              Target amount
+              {t('capital.target')}
             </label>
             <input
               id={`${fieldId}-amount`}
               className="form-input"
               inputMode="decimal"
               autoComplete="off"
-              placeholder="350000"
+              placeholder={t('capital.targetPlaceholder')}
               value={form.amount}
               onChange={setFiltered('amount', keepDecimal)}
               aria-invalid={errors.amount !== undefined || undefined}
@@ -113,7 +116,7 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor={`${fieldId}-percentage`}>
-              Capital required (%)
+              {t('capital.required')}
             </label>
             <input
               id={`${fieldId}-percentage`}
@@ -137,28 +140,28 @@ export default function CapitalMilestoneEditor({ initial, id, currency, onDelete
 
         {onDelete && !confirmingDelete && (
           <button type="button" className="profile-text-button profile-text-button--danger milestone-editor__remove" onClick={() => setConfirmingDelete(true)}>
-            Delete milestone
+            {t('capital.delete')}
           </button>
         )}
 
         {onDelete && confirmingDelete && (
-          <div className="capital-horizon__confirm" role="group" aria-label="Confirm delete">
-            <span>Delete this milestone?</span>
+          <div className="capital-horizon__confirm" role="group" aria-label={t('capital.confirmDelete')}>
+            <span>{t('capital.deleteQuestion')}</span>
             <button type="button" className="profile-text-button profile-text-button--danger" disabled={busy} onClick={() => void finish(onDelete)}>
-              Yes, delete it
+              {t('capital.yesDelete')}
             </button>
             <button type="button" className="profile-text-button" onClick={() => setConfirmingDelete(false)}>
-              Keep it
+              {t('capital.keepIt')}
             </button>
           </div>
         )}
 
         <div className="milestone-editor__footer">
           <button type="button" className="btn-secondary-cancel" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button type="submit" className="btn-primary-apply" disabled={busy} aria-busy={busy}>
-            {busy ? 'Saving…' : 'Save milestone'}
+            {busy ? t('wizard.saving') : t('capital.save')}
           </button>
         </div>
       </form>

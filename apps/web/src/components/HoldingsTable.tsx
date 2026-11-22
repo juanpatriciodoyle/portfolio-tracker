@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Columns3, HelpCircle, X, ChevronUp, ChevronDown, Search } from 'lucide-react';
 import { formatCurrency } from '../data/sampleChartData';
+import { useTranslation } from '../i18n/useTranslation';
+import { formatFixed, formatUpTo } from '../lib/money';
 import { matchesHoldingsQuery } from '../lib/holdingsSearch';
 import { EMPTY_FILTERS, matchesHoldingsFilters, type HoldingsFilters } from '../lib/holdingsFilter';
 import HoldingsFilterMenu from './HoldingsFilterMenu';
@@ -85,6 +87,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
   currency = 'EUR',
   isRealInflationMode = false,
 }) => {
+  const { t } = useTranslation();
   const [sortKey, setSortKey] = useState<SortKey>('allocation');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showClosed, setShowClosed] = useState(false);
@@ -253,7 +256,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
       <div className="dashboard-panel">
         {/* Header */}
         <div className="dashboard-panel-header">
-          <h2 className="dashboard-panel-title">Holdings</h2>
+          <h2 className="dashboard-panel-title">{t('holdings.title')}</h2>
         </div>
 
         {/* One toolbar row: search on the left, filter and columns on the right */}
@@ -263,8 +266,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
             <input
               type="search"
               className="holdings-search__input"
-              placeholder="Search ticker, name or industry"
-              aria-label="Search holdings"
+              placeholder={t('holdings.searchPlaceholder')}
+              aria-label={t('holdings.search')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -278,8 +281,8 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                 type="button"
                 className="dashboard-icon-button"
                 onClick={() => setIsColumnMenuOpen(!isColumnMenuOpen)}
-                aria-label="Customize columns"
-                title="Customize columns"
+                aria-label={t('holdings.customizeColumns')}
+                title={t('holdings.customizeColumns')}
                 aria-expanded={isColumnMenuOpen}
               >
                 <Columns3 size={18} />
@@ -297,7 +300,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       className="table-column-menu__checkbox"
                     />
                     <label htmlFor="col-pos" className="table-column-menu__label">
-                      Position
+                      {t('holdings.col.position')}
                     </label>
                   </li>
                   <li className="table-column-menu__item">
@@ -309,7 +312,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       className="table-column-menu__checkbox"
                     />
                     <label htmlFor="col-netcash" className="table-column-menu__label">
-                      Net cash invested
+                      {t('holdings.col.netCash')}
                     </label>
                   </li>
                   <li className="table-column-menu__item">
@@ -321,7 +324,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       className="table-column-menu__checkbox"
                     />
                     <label htmlFor="col-val" className="table-column-menu__label">
-                      Value
+                      {t('holdings.col.value')}
                     </label>
                   </li>
                   <li className="table-column-menu__item">
@@ -333,7 +336,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       className="table-column-menu__checkbox"
                     />
                     <label htmlFor="col-ret" className="table-column-menu__label">
-                      Holding return (MWR)
+                      {t('holdings.col.return')}
                     </label>
                   </li>
                 </ul>
@@ -357,7 +360,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       role="button"
                       tabIndex={0}
                     >
-                      <span>Security</span>
+                      <span>{t('holdings.col.security')}</span>
                       {renderSortIndicator('security_name')}
                     </div>
                   </th>
@@ -371,7 +374,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                         role="button"
                         tabIndex={0}
                       >
-                        <span>Position</span>
+                        <span>{t('holdings.col.position')}</span>
                         {renderSortIndicator('position')}
                       </div>
                       <div
@@ -380,7 +383,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                         role="button"
                         tabIndex={0}
                       >
-                        <span>Holding period</span>
+                        <span>{t('holdings.col.holdingPeriod')}</span>
                         {renderSortIndicator('holding_period')}
                       </div>
                     </th>
@@ -396,7 +399,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                           role="button"
                           tabIndex={0}
                         >
-                          <span>Net cash invested</span>
+                          <span>{t('holdings.col.netCash')}</span>
                           {renderSortIndicator('net_cash_invested')}
                         </div>
                         <div
@@ -412,22 +415,19 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             }
                             onFocus={() => setActiveTooltip('netCash')}
                             onBlur={() => setActiveTooltip(null)}
-                            aria-label="Learn about Net cash invested"
+                            aria-label={t('holdings.learnNetCash')}
                           >
                             <HelpCircle size={14} />
                           </button>
                           {activeTooltip === 'netCash' && (
                             <div className="metric-tile__popover metric-tile__popover--table" role="tooltip">
                               <div className="metric-tile__popover-header">
-                                <span>Net Cash Invested</span>
+                                <span>{t('holdings.netCashTitle')}</span>
                                 <button type="button" onClick={() => setActiveTooltip(null)}>
                                   <X size={12} />
                                 </button>
                               </div>
-                              <p>
-                                Purchases and other cash invested in the holding minus sales proceeds and other cash
-                                returned, shown in base currency.
-                              </p>
+                              <p>{t('holdings.netCashText')}</p>
                             </div>
                           )}
                         </div>
@@ -438,7 +438,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                         role="button"
                         tabIndex={0}
                       >
-                        <span>per share</span>
+                        <span>{t('holdings.col.perShare')}</span>
                         {renderSortIndicator('net_cash_invested_per_share')}
                       </div>
                     </th>
@@ -453,7 +453,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                         role="button"
                         tabIndex={0}
                       >
-                        <span>Value</span>
+                        <span>{t('holdings.col.value')}</span>
                         {renderSortIndicator('value')}
                       </div>
                       <div
@@ -462,7 +462,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                         role="button"
                         tabIndex={0}
                       >
-                        <span>per share</span>
+                        <span>{t('holdings.col.perShare')}</span>
                         {renderSortIndicator('price_per_share')}
                       </div>
                     </th>
@@ -478,7 +478,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                           role="button"
                           tabIndex={0}
                         >
-                          <span>Holding return (MWR)</span>
+                          <span>{t('holdings.col.return')}</span>
                           {renderSortIndicator('money_weighted_return')}
                         </div>
                         <div
@@ -494,22 +494,19 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             }
                             onFocus={() => setActiveTooltip('mwr')}
                             onBlur={() => setActiveTooltip(null)}
-                            aria-label="Learn about Holding return (MWR)"
+                            aria-label={t('holdings.learnReturn')}
                           >
                             <HelpCircle size={14} />
                           </button>
                           {activeTooltip === 'mwr' && (
                             <div className="metric-tile__popover metric-tile__popover--table" role="tooltip">
                               <div className="metric-tile__popover-header">
-                                <span>Holding Return (MWR)</span>
+                                <span>{t('holdings.returnTitle')}</span>
                                 <button type="button" onClick={() => setActiveTooltip(null)}>
                                   <X size={12} />
                                 </button>
                               </div>
-                              <p>
-                                The return on the capital invested in this holding, accounting for the size and timing of
-                                its recorded transactions via XIRR.
-                              </p>
+                              <p>{t('holdings.returnText')}</p>
                             </div>
                           )}
                         </div>
@@ -520,7 +517,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                         role="button"
                         tabIndex={0}
                       >
-                        <span>Net profit/loss</span>
+                        <span>{t('holdings.col.netProfitLoss')}</span>
                         {renderSortIndicator('net_profit_loss')}
                       </div>
                     </th>
@@ -534,7 +531,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       role="button"
                       tabIndex={0}
                     >
-                      <span>Allocation %</span>
+                      <span>{t('holdings.col.allocation')}</span>
                       {renderSortIndicator('allocation')}
                     </div>
                   </th>
@@ -550,11 +547,12 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                       style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-muted)' }}
                     >
                       {query.trim() ? (
-                        'No holdings match your search.'
+                        t('holdings.noMatch')
                       ) : (
                         <>
-                          No holdings in portfolio yet. Click <strong>Log Transaction</strong> above to record your first
-                          position.
+                          {t('holdings.emptyBefore')}
+                          <strong>{t('header.logTransaction')}</strong>
+                          {t('holdings.emptyAfter')}
                         </>
                       )}
                     </td>
@@ -571,7 +569,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             <div className="dashboard-table-asset__body">
                               <div className="dashboard-table-asset__name">
                                 {row.security_name}
-                                {!row.isOpen && <span className="holding-badge-closed">Closed</span>}
+                                {!row.isOpen && <span className="holding-badge-closed">{t('holdings.closed')}</span>}
                               </div>
                               <div className="dashboard-table-asset__meta">{row.symbol}</div>
                               <div className="dashboard-table-bar" aria-hidden="true">
@@ -590,11 +588,11 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             <div className="dashboard-table__value">
                               {row.isOpen
                                 ? row.position >= 1
-                                  ? row.position.toLocaleString(undefined, { maximumFractionDigits: 2 })
-                                  : row.position.toLocaleString(undefined, { maximumFractionDigits: 6 })
-                                : '0 (Closed)'}
+                                  ? formatUpTo(row.position, 2)
+                                  : formatUpTo(row.position, 6)
+                                : t('holdings.zeroClosed')}
                             </div>
-                            <div className="dashboard-table__subvalue">{row.holding_period} days</div>
+                            <div className="dashboard-table__subvalue">{t('holdings.days', { count: row.holding_period })}</div>
                           </td>
                         )}
 
@@ -607,7 +605,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             <div className="dashboard-table__subvalue">
                               <span className="currency">
                                 {row.isOpen && row.position > 0
-                                  ? `${formatCurrency(row.net_cash_invested_per_share, currency)}/share`
+                                  ? t('holdings.perShare', { amount: formatCurrency(row.net_cash_invested_per_share, currency) })
                                   : '—'}
                               </span>
                             </div>
@@ -623,7 +621,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                             <div className="dashboard-table__subvalue">
                               <span className="currency">
                                 {row.isOpen && row.position > 0
-                                  ? `${formatCurrency(row.price_per_share, currency)}/share`
+                                  ? t('holdings.perShare', { amount: formatCurrency(row.price_per_share, currency) })
                                   : '—'}
                               </span>
                             </div>
@@ -638,8 +636,9 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
                                 isPositive ? 'dashboard-table__cell--positive' : 'dashboard-table__cell--negative'
                               }`}
                             >
-                              {row.money_weighted_return >= 0 ? '+' : ''}
-                              {row.money_weighted_return.toFixed(2)}%/year
+                              {t('holdings.perYear', {
+                                percent: `${row.money_weighted_return >= 0 ? '+' : ''}${formatFixed(row.money_weighted_return, 2)}%`,
+                              })}
                             </div>
                             <div className="dashboard-table__subvalue">
                               <span
@@ -656,7 +655,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
 
                         {/* 6. Allocation % */}
                         <td className="dashboard-table__cell dashboard-table__cell--numeric dashboard-table__cell--muted">
-                          {row.allocation.toFixed(2)}%
+                          {formatFixed(row.allocation, 2)}%
                         </td>
                       </tr>
                     );
@@ -668,7 +667,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
         </div>
 
         {/* Footer actions */}
-        <nav className="dashboard-section-footer" aria-label="Holdings table actions">
+        <nav className="dashboard-section-footer" aria-label={t('holdings.actions')}>
           <div className="dashboard-section-footer__meta" />
           <div className="dashboard-section-footer__actions">
             <button
@@ -676,7 +675,7 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
               className="dashboard-flat-button"
               onClick={() => setShowClosed(!showClosed)}
             >
-              {showClosed ? 'Show open positions only' : 'See both open and closed positions'}
+              {showClosed ? t('holdings.showOpenOnly') : t('holdings.showAll')}
             </button>
           </div>
         </nav>

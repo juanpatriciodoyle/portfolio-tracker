@@ -1,3 +1,5 @@
+import { intlLocale } from '../../i18n/locale';
+import { useTranslation } from '../../i18n/useTranslation';
 import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { HOUSING_TENURES, type CreateFixedCostRequest } from "../../contracts";
@@ -50,7 +52,8 @@ export default function PhaseStepFields({
   carry,
   onAddingBillChange,
 }: PhaseStepFieldsProps) {
-  const currencies = useMemo(() => currencyOptions(), []);
+  const { t, locale } = useTranslation();
+  const currencies = useMemo(() => currencyOptions(intlLocale(locale)), [locale]);
   const [addingBill, setAddingBillState] = useState(false);
   const setAddingBill = (adding: boolean) => {
     setAddingBillState(adding);
@@ -67,7 +70,7 @@ export default function PhaseStepFields({
       <>
         <WizardField
           id={id("countryCode")}
-          label="Country"
+          label={t('phaseFields.country')}
           error={feedback.errorOf("countryCode")}
           valid={feedback.isValid("countryCode")}
         >
@@ -75,14 +78,14 @@ export default function PhaseStepFields({
             id={id("countryCode")}
             value={form.countryCode}
             onChange={(code) => onChange("countryCode", code)}
-            placeholder="Type to search, in English or Spanish"
+            placeholder={t('demographics.typeToSearch')}
             invalid={feedback.errorOf("countryCode") !== undefined}
             describedBy={describedBy("countryCode")}
           />
         </WizardField>
         <WizardField
           id={id("city")}
-          label="City"
+          label={t('phaseFields.city')}
           error={feedback.errorOf("city")}
           valid={feedback.isValid("city")}
         >
@@ -101,7 +104,7 @@ export default function PhaseStepFields({
         </WizardField>
         <WizardField
           id={id("address")}
-          label="Address (optional)"
+          label={t('phaseFields.address')}
           error={feedback.errorOf("address")}
           valid={feedback.isValid("address")}
         >
@@ -125,7 +128,7 @@ export default function PhaseStepFields({
         <div className="wizard__row">
           <WizardField
             id={id("startDate")}
-            label="Moved in"
+            label={t('phaseFields.movedIn')}
             error={feedback.errorOf("startDate")}
             valid={feedback.isValid("startDate")}
           >
@@ -146,7 +149,7 @@ export default function PhaseStepFields({
           </WizardField>
           <WizardField
             id={id("endDate")}
-            label="Moved out"
+            label={t('phaseFields.movedOut')}
             error={feedback.errorOf("endDate")}
             valid={!form.stillLivingHere && feedback.isValid("endDate")}
           >
@@ -175,7 +178,7 @@ export default function PhaseStepFields({
               onChange("stillLivingHere", event.target.checked)
             }
           />
-          Still living here
+          {t('phaseFields.stillLiving')}
         </label>
       </>
     );
@@ -185,7 +188,7 @@ export default function PhaseStepFields({
     return (
       <>
         <div className="wizard__row">
-          <WizardField id={id("currency")} label="Currency">
+          <WizardField id={id("currency")} label={t('phaseFields.currency')}>
             <select
               id={id("currency")}
               className="form-input"
@@ -202,7 +205,7 @@ export default function PhaseStepFields({
           {includeIncome && (
             <WizardField
               id={id("monthlyIncome")}
-              label="Monthly net income (optional)"
+              label={t('phaseFields.income')}
               error={feedback.errorOf("monthlyIncome")}
               valid={feedback.isValid("monthlyIncome")}
             >
@@ -211,7 +214,7 @@ export default function PhaseStepFields({
                 className="form-input"
                 inputMode="decimal"
                 autoComplete="off"
-                placeholder="3,200"
+                placeholder={t('phaseFields.incomePlaceholder')}
                 value={form.monthlyIncome}
                 onChange={(event) =>
                   onChange("monthlyIncome", keepDecimal(event.target.value))
@@ -232,7 +235,7 @@ export default function PhaseStepFields({
             />
           )}
         </div>
-        <WizardField id={id("tenure")} label="Housing">
+        <WizardField id={id("tenure")} label={t('phaseFields.housing')}>
           <select
             id={id("tenure")}
             className="form-input"
@@ -243,7 +246,7 @@ export default function PhaseStepFields({
           >
             {HOUSING_TENURES.map((tenure) => (
               <option key={tenure} value={tenure}>
-                {TENURE_LABELS[tenure]}
+                {t(TENURE_LABELS[tenure])}
               </option>
             ))}
           </select>
@@ -255,14 +258,14 @@ export default function PhaseStepFields({
   return (
     <div className="wizard__stack">
       {costs.length > 0 && (
-        <ul className="wizard-list" aria-label="Bills added">
+        <ul className="wizard-list" aria-label={t('phaseFields.billsAdded')}>
           {costs.map((cost, position) => (
             <li key={position} className="wizard-list__item">
               <span>
-                {cost.label ?? CATEGORY_LABELS[cost.category]}
+                {cost.label ?? t(CATEGORY_LABELS[cost.category])}
                 <span className="wizard-field__hint">
                   {" "}
-                  · {CADENCE_PHRASES[cost.cadence]}
+                  · {t(CADENCE_PHRASES[cost.cadence])}
                 </span>
               </span>
               <span>
@@ -270,7 +273,7 @@ export default function PhaseStepFields({
                 <button
                   type="button"
                   className="profile-icon-button"
-                  aria-label={`Remove ${cost.label ?? CATEGORY_LABELS[cost.category]}`}
+                  aria-label={t('phaseFields.remove', { name: cost.label ?? t(CATEGORY_LABELS[cost.category]) })}
                   onClick={() =>
                     onCostsChange(
                       costs.filter((_, other) => other !== position),
@@ -300,7 +303,7 @@ export default function PhaseStepFields({
           className="profile-text-button"
           onClick={() => setAddingBill(true)}
         >
-          <Plus size={14} aria-hidden="true" /> Add a bill
+          <Plus size={14} aria-hidden="true" /> {t('phaseFields.addBill')}
         </button>
       )}
     </div>

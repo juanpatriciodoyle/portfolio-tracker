@@ -1,17 +1,18 @@
+import type { MessageKey } from '../../i18n/catalogs';
 import type { OnboardingStepId } from './profileDraft';
 
 /** What each step of the first-time flow asks, in words. */
-export const ONBOARDING_STEP_COPY: Record<OnboardingStepId, { label: string; heading: string }> = {
+export const ONBOARDING_STEP_COPY: Record<OnboardingStepId, { label: MessageKey; heading: MessageKey }> = {
   about: {
-    label: 'You',
-    heading: 'What should we call you?',
+    label: 'onboarding.about.label',
+    heading: 'onboarding.about.heading',
   },
   roots: {
-    label: 'Roots',
-    heading: 'Where are you from?',
+    label: 'onboarding.roots.label',
+    heading: 'onboarding.roots.heading',
   },
   life: {
-    label: 'Life',
-    heading: 'How do you live day to day?',
+    label: 'onboarding.life.label',
+    heading: 'onboarding.life.heading',
   },
 };

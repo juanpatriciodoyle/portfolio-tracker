@@ -1,16 +1,18 @@
+import type { MessageKey } from '../i18n/catalogs';
+
 /** The two halves of the profile page. Order here is the order on screen. */
 export const PROFILE_TABS = [
-  { id: 'living', label: 'Living Costs & Career' },
-  { id: 'milestones', label: 'Milestones & Positioning' },
+  { id: 'living', label: 'profile.tab.living' },
+  { id: 'milestones', label: 'profile.tab.milestones' },
 ] as const;
 
 /** The third tab, for the admin only. The server decides who may read what is in it; this only decides who sees the tab. */
-export const ANALYTICS_TAB = { id: 'analytics', label: 'Analytics' } as const;
+export const ANALYTICS_TAB = { id: 'analytics', label: 'profile.tab.analytics' } as const;
 
 export type ProfileTabId = (typeof PROFILE_TABS)[number]['id'] | (typeof ANALYTICS_TAB)['id'];
 
 /** The tabs a person sees, in the order they show. */
-export const profileTabsFor = (isAdmin: boolean): readonly { id: ProfileTabId; label: string }[] =>
+export const profileTabsFor = (isAdmin: boolean): readonly { id: ProfileTabId; label: MessageKey }[] =>
   isAdmin ? [...PROFILE_TABS, ANALYTICS_TAB] : PROFILE_TABS;
 
 const STORAGE_KEY = 'profile-tab';

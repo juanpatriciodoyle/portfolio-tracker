@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { EMPLOYMENT_STATUSES, type EmploymentStatus } from '../../contracts';
 import WizardField from '../wizard/WizardField';
 import CountrySelect from './CountrySelect';
@@ -18,13 +19,14 @@ interface ProfileStepFieldsProps {
 
 /** The questions of one step of "About you". */
 export default function ProfileStepFields({ step, idPrefix, draft, onChange, errorOf, isValid }: ProfileStepFieldsProps) {
+  const { t } = useTranslation();
   const id = (field: keyof ProfileDraft) => `${idPrefix}-${field}`;
   const describedBy = (field: keyof ProfileDraft) => (errorOf(field) ? `${id(field)}-error` : undefined);
 
   if (step === 'about') {
     return (
       <>
-        <WizardField id={id('fullName')} label="Full name" error={errorOf('fullName')} valid={isValid('fullName')}>
+        <WizardField id={id('fullName')} label={t('demographics.fullName')} error={errorOf('fullName')} valid={isValid('fullName')}>
           <input
             id={id('fullName')}
             className="form-input"
@@ -38,7 +40,7 @@ export default function ProfileStepFields({ step, idPrefix, draft, onChange, err
         </WizardField>
         <WizardField
           id={id('birthYear')}
-          label="Year of birth (optional)"
+          label={t('demographics.birthYearOptional')}
           error={errorOf('birthYear')}
           valid={isValid('birthYear')}
         >
@@ -63,7 +65,7 @@ export default function ProfileStepFields({ step, idPrefix, draft, onChange, err
       <>
         <WizardField
           id={id('nationalities')}
-          label="Nationalities (optional)"
+          label={t('demographics.nationalitiesOptional')}
           error={errorOf('nationalities')}
           valid={isValid('nationalities')}
         >
@@ -75,12 +77,12 @@ export default function ProfileStepFields({ step, idPrefix, draft, onChange, err
             describedBy={describedBy('nationalities')}
           />
         </WizardField>
-        <WizardField id={id('taxResidence')} label="Tax residence (optional)" valid={isValid('taxResidence')}>
+        <WizardField id={id('taxResidence')} label={t('demographics.taxResidenceOptional')} valid={isValid('taxResidence')}>
           <CountrySelect
             id={id('taxResidence')}
             value={draft.taxResidence}
             onChange={(code) => onChange('taxResidence', code)}
-            placeholder="Type to search, in English or Spanish"
+            placeholder={t('demographics.typeToSearch')}
           />
         </WizardField>
       </>
@@ -89,17 +91,17 @@ export default function ProfileStepFields({ step, idPrefix, draft, onChange, err
 
   return (
     <>
-      <WizardField id={id('employmentStatus')} label="Work (optional)" valid={isValid('employmentStatus')}>
+      <WizardField id={id('employmentStatus')} label={t('demographics.workOptional')} valid={isValid('employmentStatus')}>
         <select
           id={id('employmentStatus')}
           className="form-input"
           value={draft.employmentStatus}
           onChange={(event) => onChange('employmentStatus', event.target.value as EmploymentStatus | '')}
         >
-          <option value="">Prefer not to say</option>
+          <option value="">{t('demographics.preferNot')}</option>
           {EMPLOYMENT_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {EMPLOYMENT_LABELS[status]}
+              {t(EMPLOYMENT_LABELS[status])}
             </option>
           ))}
         </select>
@@ -107,7 +109,7 @@ export default function ProfileStepFields({ step, idPrefix, draft, onChange, err
       <div className="wizard__row">
         <Stepper
           id={id('householdAdults')}
-          label="Adults in household"
+          label={t('demographics.adultsLabel')}
           value={draft.householdAdults}
           min={1}
           max={10}
@@ -115,7 +117,7 @@ export default function ProfileStepFields({ step, idPrefix, draft, onChange, err
         />
         <Stepper
           id={id('dependentChildren')}
-          label="Dependent children"
+          label={t('demographics.childrenLabel')}
           value={draft.dependentChildren}
           min={0}
           max={15}

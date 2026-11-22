@@ -1,6 +1,8 @@
 import { FIXED_COST_CATEGORIES, type TimelineEntryDto } from '../../contracts';
 import { flagEmoji } from '../../lib/countries';
 import { displayLocale, formatMinor, formatPercent } from '../../lib/money';
+import type { MessageKey } from '../../i18n/catalogs';
+import { currentTranslator, type Translate } from '../../i18n/translate';
 import { CATEGORY_LABELS } from './labels';
 
 /** A row is shown only when the compared homes differ by more than this share of the larger figure. */
@@ -35,7 +37,7 @@ export function relativeSpread(values: readonly number[]): number {
 
 interface Measure {
   key: string;
-  label: string;
+  label: MessageKey;
   /** null: the home has no such figure (a savings rate with no income). */
   valueOf: (entry: TimelineEntryDto) => number | null;
   format: (value: number, currency: string, locale: string) => string;
@@ -44,10 +46,10 @@ interface Measure {
 const money = (value: number, currency: string, locale: string) => formatMinor(value, currency, locale);
 
 const MEASURES: readonly Measure[] = [
-  { key: 'income', label: 'Income', valueOf: (entry) => entry.monthlyIncomeMinor, format: money },
-  { key: 'fixed-costs', label: 'Fixed costs', valueOf: (entry) => entry.monthlyFixedCostsMinor, format: money },
-  { key: 'left-over', label: 'Left over', valueOf: (entry) => entry.savingsCapacityMinor, format: money },
-  { key: 'saved', label: 'Saved', valueOf: (entry) => entry.savingsRate, format: (value, _currency, locale) => formatPercent(value, locale) },
+  { key: 'income', label: 'compare.income', valueOf: (entry) => entry.monthlyIncomeMinor, format: money },
+  { key: 'fixed-costs', label: 'compare.fixedCosts', valueOf: (entry) => entry.monthlyFixedCostsMinor, format: money },
+  { key: 'left-over', label: 'compare.leftOver', valueOf: (entry) => entry.savingsCapacityMinor, format: money },
+  { key: 'saved', label: 'compare.saved', valueOf: (entry) => entry.savingsRate, format: (value, _currency, locale) => formatPercent(value, locale) },
   ...FIXED_COST_CATEGORIES.map(
     (category): Measure => ({
       key: category,
@@ -62,7 +64,7 @@ const MEASURES: readonly Measure[] = [
  * The chosen homes side by side, earliest first, keeping only rows where they differ by more than
  * {@link SIGNIFICANT_DIFFERENCE}. Homes in different currencies are not mixed here: amounts need a rate.
  */
-export function buildComparisonTable(entries: readonly TimelineEntryDto[], locale: string = displayLocale()): ComparisonTable {
+export function buildComparisonTable(entries: readonly TimelineEntryDto[], locale: string = displayLocale(), t: Translate = currentTranslator()): ComparisonTable {
   const ordered = [...entries].sort((a, b) => a.startDate.localeCompare(b.startDate));
   const currencies = [...new Set(ordered.map((entry) => entry.currency))];
   if (currencies.length > 1) return { kind: 'mixed-currencies', currencies };
@@ -80,7 +82,7 @@ export function buildComparisonTable(entries: readonly TimelineEntryDto[], local
     }
     rows.push({
       key: measure.key,
-      label: measure.label,
+      label: t(measure.label),
       cells: values.map((value) => (value === null ? '—' : measure.format(value, currency, locale))),
     });
   }

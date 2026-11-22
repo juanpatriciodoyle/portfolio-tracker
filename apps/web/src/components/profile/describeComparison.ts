@@ -1,5 +1,6 @@
 import type { FixedCostCategory, PhaseComparisonResponse } from '../../contracts';
 import { displayLocale, formatMinor, formatPercent, formatSignedMinor } from '../../lib/money';
+import { currentTranslator, type Translate } from '../../i18n/translate';
 import { CATEGORY_LABELS, RATE_SOURCE_LABELS, RATE_SOURCE_PHRASES } from './labels';
 
 export interface CategoryChange {
@@ -37,13 +38,14 @@ interface DescribeInput {
 /** Turns the server's numbers into plain sentences. Wording only: no maths beyond showing a size. */
 export function describeComparison(
   { fromName, toName, comparison }: DescribeInput,
-  locale: string = displayLocale()
+  locale: string = displayLocale(),
+  t: Translate = currentTranslator()
 ): ComparisonDescription {
   if (!comparison.comparable) {
     const [first, second] = comparison.currencies;
     return {
       kind: 'not-comparable',
-      headline: `These two homes use different currencies (${first} and ${second}) and no exchange rate is available for them right now. Try again a little later.`,
+      headline: t('compare.differentCurrencies', { first, second }),
     };
   }
 
@@ -54,21 +56,21 @@ export function describeComparison(
 
   const headline =
     costDelta === 0
-      ? `Fixed costs are the same in ${toName} and ${fromName}.`
-      : `Fixed costs in ${toName} are ${formatMinor(Math.abs(costDelta), currency, locale)} ${costDelta > 0 ? 'more' : 'less'} per month than in ${fromName}${percent}.`;
+      ? t('compare.same', { to: toName, from: fromName })
+      : t(costDelta > 0 ? 'compare.more' : 'compare.less', { to: toName, from: fromName, amount: formatMinor(Math.abs(costDelta), currency, locale), percent });
 
   const leftOver = comparison.savingsCapacityDeltaMinor;
   const leftOverLine =
     leftOver === 0
       ? null
-      : `You'd have ${formatMinor(Math.abs(leftOver), currency, locale)} ${leftOver > 0 ? 'more' : 'less'} left over each month.`;
+      : t(leftOver > 0 ? 'compare.leftMore' : 'compare.leftLess', { amount: formatMinor(Math.abs(leftOver), currency, locale) });
 
   const categories = comparison.categories
     .filter((entry) => entry.fromMinor !== 0 || entry.toMinor !== 0)
     .map((entry): CategoryChange => {
-      const label = CATEGORY_LABELS[entry.category];
+      const label = t(CATEGORY_LABELS[entry.category]);
       if (entry.deltaMinor === 0) {
-        return { category: entry.category, label, text: `${label}: ${formatMinor(entry.toMinor, currency, locale)} (no change)`, direction: 'same' };
+        return { category: entry.category, label, text: t('compare.noChange', { label, amount: formatMinor(entry.toMinor, currency, locale) }), direction: 'same' };
       }
       return {
         category: entry.category,
@@ -80,22 +82,23 @@ export function describeComparison(
     .sort((a, b) => magnitude(comparison, b.category) - magnitude(comparison, a.category));
 
   const sources = comparison.rateSources ?? [];
-  const rates = sources.map((entry): RateLabel => ({ currency: entry.currency, label: RATE_SOURCE_LABELS[entry.source] }));
-  return { kind: 'comparable', headline, leftOverLine, categories, conversionNote: describeConversion(currency, sources), rates };
+  const rates = sources.map((entry): RateLabel => ({ currency: entry.currency, label: t(RATE_SOURCE_LABELS[entry.source]) }));
+  return { kind: 'comparable', headline, leftOverLine, categories, conversionNote: describeConversion(currency, sources, t), rates };
 }
 
 /** "Amounts shown in ARS, converted at the official rate." Names each currency's rate when they differ. */
 function describeConversion(
   currency: string,
-  sources: readonly { currency: string; source: keyof typeof RATE_SOURCE_PHRASES }[]
+  sources: readonly { currency: string; source: keyof typeof RATE_SOURCE_PHRASES }[],
+  t: Translate
 ): string | null {
   if (sources.length === 0) return null;
-  const distinct = [...new Set(sources.map((entry) => RATE_SOURCE_PHRASES[entry.source]))];
+  const distinct = [...new Set(sources.map((entry) => t(RATE_SOURCE_PHRASES[entry.source])))];
   const used =
     distinct.length === 1
       ? distinct[0]
-      : sources.map((entry) => `${RATE_SOURCE_PHRASES[entry.source]} for ${entry.currency}`).join(' and ');
-  return `Amounts shown in ${currency}, converted at ${used}.`;
+      : sources.map((entry) => t('compare.conversionFor', { rate: t(RATE_SOURCE_PHRASES[entry.source]), currency: entry.currency })).join(t('compare.and'));
+  return t('compare.conversion', { currency, used });
 }
 
 function magnitude(comparison: Extract<PhaseComparisonResponse, { comparable: true }>, category: FixedCostCategory): number {

@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import type { LivingPhaseDto, PhaseStatus, TimelineEntryDto, UpdateFixedCostRequest, UpdateLivingPhaseRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import type { BillingView } from './billingView';
@@ -49,10 +50,11 @@ export default function PhaseTimeline({
   billing,
   announce,
 }: PhaseTimelineProps) {
+  const { t } = useTranslation();
   const entryById = new Map(entries.map((entry) => [entry.phaseId, entry]));
 
   return (
-    <ol className={`phase-timeline${compareIds.length > 0 ? ' is-comparing' : ''}`} aria-label="Living phases">
+    <ol className={`phase-timeline${compareIds.length > 0 ? ' is-comparing' : ''}`} aria-label={t('profile.livingPhases')}>
       {orderPhases(phases, entryById).map((phase) => (
         <li key={phase.id}>
           <LivingPhaseCard

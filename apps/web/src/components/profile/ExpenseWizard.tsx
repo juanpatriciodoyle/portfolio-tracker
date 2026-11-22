@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { useEffect, useState } from 'react';
 import type { CreateBillingRecordRequest, CreateFixedCostRequest, LivingPhaseDto } from '../../contracts';
 import { useDocumentExtraction } from '../../hooks/useDocumentExtraction';
@@ -27,13 +28,6 @@ interface ExpenseWizardProps {
   onClose: () => void;
 }
 
-const START_STEPS = [
-  { id: 'start', label: 'Start' },
-  { id: 'who', label: 'Sender' },
-  { id: 'amount', label: 'Amount' },
-  { id: 'dates', label: 'Days' },
-];
-
 /** A browser-held copy of the file for the preview, released as soon as the wizard moves on. */
 function usePreviewUrl(file: File): string | null {
   const [url, setUrl] = useState<string | null>(null);
@@ -57,6 +51,8 @@ type PdfBillProps = Pick<ExpenseStepsProps, 'phases' | 'context' | 'onSubmitRece
 
 /** One PDF: it is read, then the same questions are asked with its answers filled in and its pages beside them. */
 function PdfBill({ file, phases, context, openedFromPhaseId, title, progress, hasNext, onNext, onSubmitReceipt, onSubmitRate, onClose }: PdfBillProps) {
+  const words = useTranslation();
+  const { t } = words;
   const previewUrl = usePreviewUrl(file);
   const extraction = useDocumentExtraction(file, openedFromPhaseId);
   const result = extraction.result;
@@ -68,7 +64,7 @@ function PdfBill({ file, phases, context, openedFromPhaseId, title, progress, ha
     return (
       <Modal label={title} onClose={onClose}>
         <p className="document-review__notice" role="status">
-          Reading your bill…
+          {t('pdf.reading')}
         </p>
         {progress && <p className="document-review__progress">{progress}</p>}
       </Modal>
@@ -79,19 +75,19 @@ function PdfBill({ file, phases, context, openedFromPhaseId, title, progress, ha
     return (
       <Modal label={title} onClose={onClose}>
         <p className="form-error-text" role="alert">
-          {extraction.failure ? describeDocumentFailure(extraction.failure) : 'We could not read that PDF.'}
+          {extraction.failure ? describeDocumentFailure(extraction.failure, words) : t('pdf.couldNotRead')}
         </p>
         <div className="cost-editor__actions">
           <button type="button" className="btn-primary-apply" onClick={extraction.retry}>
-            Try again
+            {t('common.tryAgain')}
           </button>
           {hasNext && (
             <button type="button" className="btn-secondary-cancel" onClick={onNext}>
-              Skip this one
+              {t('expense.skip')}
             </button>
           )}
           <button type="button" className="btn-secondary-cancel" onClick={onClose}>
-            Close
+            {t('common.close')}
           </button>
         </div>
       </Modal>
@@ -116,24 +112,24 @@ function PdfBill({ file, phases, context, openedFromPhaseId, title, progress, ha
       onSkip={hasNext ? onNext : undefined}
       preview={
         previewUrl ? (
-          <object className="document-review__preview" data={previewUrl} type="application/pdf" aria-label="Preview of your PDF">
-            <p className="document-review__notice">Your browser cannot show this PDF here, but the details can still be read.</p>
+          <object className="document-review__preview" data={previewUrl} type="application/pdf" aria-label={t('pdf.preview')}>
+            <p className="document-review__notice">{t('pdf.noPreview')}</p>
           </object>
         ) : (
-          <p className="document-review__notice">Preparing the preview…</p>
+          <p className="document-review__notice">{t('pdf.preparing')}</p>
         )
       }
       notices={
         <>
           {!textFound && (
             <p className="document-review__notice" role="status">
-              This PDF has no readable text (probably a scan). Fill the details in yourself.
+              {t('pdf.noText')}
             </p>
           )}
           {phases.length > 1 && (
             <div className="form-group">
               <label className="form-label" htmlFor="expense-wizard-phase">
-                Which home is this bill for?
+                {t('pdf.whichHome')}
               </label>
               <select id="expense-wizard-phase" className="form-input" value={phase.id} onChange={(event) => setPhaseId(event.target.value)}>
                 {phases.map((candidate) => (
@@ -146,7 +142,7 @@ function PdfBill({ file, phases, context, openedFromPhaseId, title, progress, ha
           )}
           {currencyDiffers && (
             <p className="document-review__notice is-warning" role="alert">
-              The bill says {draft.currency}, but {phase.name} uses {phase.currency}. Nothing is converted: check the amount, or pick the home that matches.
+              {t('pdf.currencyDiffers', { billCurrency: draft.currency ?? '', phase: phase.name, phaseCurrency: phase.currency })}
             </p>
           )}
         </>
@@ -165,6 +161,7 @@ function PdfBill({ file, phases, context, openedFromPhaseId, title, progress, ha
  * follows from the answers.
  */
 export default function ExpenseWizard({ phases, context, initialFiles = [], openedFromPhaseId, onSubmitReceipt, onSubmitRate, onClose }: ExpenseWizardProps) {
+  const { t } = useTranslation();
   const [files, setFiles] = useState<readonly File[]>(initialFiles);
   const [manual, setManual] = useState(false);
   const [index, setIndex] = useState(0);
@@ -180,8 +177,8 @@ export default function ExpenseWizard({ phases, context, initialFiles = [], open
         phases={phases}
         context={context}
         openedFromPhaseId={openedFromPhaseId ?? fallbackPhase.id}
-        title={files.length > 1 ? 'Add bills from PDFs' : 'Add a bill from a PDF'}
-        progress={files.length > 1 ? `Bill ${index + 1} of ${files.length} · ${file.name}` : undefined}
+        title={files.length > 1 ? t('pdf.titleMany') : t('pdf.titleOne')}
+        progress={files.length > 1 ? t('pdf.progress', { n: index + 1, total: files.length, name: file.name }) : undefined}
         hasNext={hasNext}
         onNext={() => (hasNext ? setIndex(index + 1) : onClose())}
         onSubmitReceipt={onSubmitReceipt}
@@ -209,19 +206,24 @@ export default function ExpenseWizard({ phases, context, initialFiles = [], open
 
   return (
     <WizardModal
-      title="Add an expense"
-      steps={START_STEPS}
+      title={t('bill.addExpense')}
+      steps={[
+        { id: 'start', label: t('expense.step.start') },
+        { id: 'who', label: t('expense.step.who') },
+        { id: 'amount', label: t('expense.step.amount') },
+        { id: 'dates', label: t('expense.step.dates') },
+      ]}
       stepIndex={0}
-      heading="How do you want to add it?"
+      heading={t('expenseWizard.how')}
       hideNext
-      finishLabel="Continue"
+      finishLabel={t('common.continue')}
       onBack={onClose}
       onNext={() => setManual(true)}
       onClose={onClose}
     >
       <PdfPicker large onFiles={setFiles} />
       <button type="button" className="btn-secondary-cancel expense-wizard__manual" onClick={() => setManual(true)}>
-        Enter it manually
+        {t('expenseWizard.manual')}
       </button>
     </WizardModal>
   );

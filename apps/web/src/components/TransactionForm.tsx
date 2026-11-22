@@ -4,6 +4,9 @@ import { DollarSign, ArrowUpRight, ArrowDownLeft, PlusCircle, MinusCircle, Calen
 import { authorizedFetch } from '../lib/authorizedFetch';
 import { useSubmitOnce } from '../hooks/useSubmitOnce';
 import OwnedHoldingPicker from './OwnedHoldingPicker';
+import { dataLabel } from '../i18n/dataLabels';
+import { useTranslation } from '../i18n/useTranslation';
+import { serverMessage } from '../lib/serverMessages';
 import { checkSaleQuantity, formatUnits, type SellablePosition } from '../lib/saleRules';
 
 interface TransactionFormProps {
@@ -20,6 +23,8 @@ interface SearchItem {
 }
 
 export default function TransactionForm({ onSuccess, positions = [] }: TransactionFormProps) {
+  const words = useTranslation();
+  const { t } = words;
   const [type, setType] = useState<'BOUGHT' | 'SOLD' | 'DEPOSIT' | 'WITHDRAWAL'>('BOUGHT');
   const [symbol, setSymbol] = useState('');
   const [name, setName] = useState('');
@@ -43,7 +48,7 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
   const { run, pending: isSubmitting } = useSubmitOnce();
   const [sellingHolding, setSellingHolding] = useState<SellablePosition | null>(null);
   const isSale = type === 'SOLD';
-  const saleCheck = isSale && sellingHolding ? checkSaleQuantity(quantity, sellingHolding.quantity) : null;
+  const saleCheck = isSale && sellingHolding ? checkSaleQuantity(quantity, sellingHolding.quantity, t) : null;
   const cannotConfirm = isSale && (!sellingHolding || !saleCheck?.ok);
 
   const chooseTransactionType = (next: typeof type) => {
@@ -132,12 +137,12 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
     const isCashOp = type === 'DEPOSIT' || type === 'WITHDRAWAL';
     if (isSale && cannotConfirm) return;
     if (!isCashOp && (!symbol || !amount)) {
-      setStatus({ type: 'error', message: 'Please enter Instrument Symbol and Amount.' });
+      setStatus({ type: 'error', message: t('tx.errSymbolAmount') });
       return;
     }
 
     if (isCashOp && !amount) {
-      setStatus({ type: 'error', message: 'Please enter the cash amount.' });
+      setStatus({ type: 'error', message: t('tx.errCash') });
       return;
     }
 
@@ -166,7 +171,7 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
         if (response.ok) {
           setStatus({
             type: 'success',
-            message: `Recorded transaction successfully!`,
+            message: t('tx.recorded'),
           });
           setSymbol('');
           setName('');
@@ -178,10 +183,10 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
             onSuccess();
           }
         } else {
-          setStatus({ type: 'error', message: data.error || 'The transaction was not recorded. Check the details and try again.' });
+          setStatus({ type: 'error', message: serverMessage(data, words, 'tx.notRecorded') });
         }
       } catch (err) {
-        setStatus({ type: 'error', message: 'Could not reach the server, so the transaction was not recorded. Check your connection and try again.' });
+        setStatus({ type: 'error', message: t('tx.notRecordedNetwork') });
       }
     });
   };
@@ -216,7 +221,7 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
         >
           <DollarSign size={20} />
         </div>
-        Log Transaction
+        {t('header.logTransaction')}
       </h2>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -250,7 +255,7 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
               color: type === 'BOUGHT' ? 'var(--text-primary)' : 'var(--text-secondary)',
             }}
           >
-            <ArrowUpRight size={14} /> Bought
+            <ArrowUpRight size={14} /> {t('tx.type.bought')}
           </button>
 
           <button
@@ -271,7 +276,7 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
               color: type === 'SOLD' ? 'var(--text-primary)' : 'var(--text-secondary)',
             }}
           >
-            <ArrowDownLeft size={14} /> Sold
+            <ArrowDownLeft size={14} /> {t('tx.type.sold')}
           </button>
 
           <button
@@ -292,7 +297,7 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
               color: type === 'DEPOSIT' ? 'var(--text-primary)' : 'var(--text-secondary)',
             }}
           >
-            <PlusCircle size={14} /> Deposit
+            <PlusCircle size={14} /> {t('tx.type.deposit')}
           </button>
 
           <button
@@ -313,7 +318,7 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
               color: type === 'WITHDRAWAL' ? 'var(--text-primary)' : 'var(--text-secondary)',
             }}
           >
-            <MinusCircle size={14} /> Withdraw
+            <MinusCircle size={14} /> {t('tx.type.withdraw')}
           </button>
         </div>
 
@@ -326,12 +331,12 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
               <>
             <div style={{ position: 'relative' }} ref={searchContainerRef}>
               <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Search size={14} /> Instrument Ticker / Symbol (Type 3+ letters)</span>
-                {isSearching && <span style={{ fontSize: '11px', color: 'var(--text-accent)' }}>Searching live market...</span>}
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Search size={14} /> {t('tx.instrument')}</span>
+                {isSearching && <span style={{ fontSize: '11px', color: 'var(--text-accent)' }}>{t('tx.searching')}</span>}
               </label>
               <input
                 type="text"
-                placeholder="e.g. SAN.MC, AAPL, NVDA, BTC-USD"
+                placeholder={t('tx.tickerPlaceholder')}
                 value={symbol}
                 onChange={(e) => {
                   setSymbol(e.target.value);
@@ -382,7 +387,7 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
                         <span style={{ color: 'var(--text-secondary)', marginLeft: '8px', fontSize: '12px' }}>{item.name}</span>
                       </div>
                       <span style={{ fontSize: '11px', color: 'var(--color-profit)', backgroundColor: 'var(--color-profit-bg)', padding: '2px 6px', borderRadius: '4px' }}>
-                        {item.assetClass}
+                        {dataLabel(t, 'assetClass', item.assetClass)}
                       </span>
                     </div>
                   ))}
@@ -397,12 +402,12 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-                  Quantity (Shares / Units)
+                  {t('tx.quantity')}
                 </label>
                 <input
                   type="number"
                   step="any"
-                  placeholder="e.g. 10.5 or 0.025"
+                  placeholder={t('tx.quantityPlaceholder')}
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
                   required
@@ -411,13 +416,13 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
                 />
                 {isSale && sellingHolding && (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    <span>Available: {formatUnits(sellingHolding.quantity)} units</span>
+                    <span>{t('tx.available', { units: formatUnits(sellingHolding.quantity) })}</span>
                     <button
                       type="button"
                       onClick={() => setQuantity(formatUnits(sellingHolding.quantity))}
                       style={{ border: '1px solid var(--border-subtle-color)', borderRadius: '6px', background: 'transparent', color: 'var(--text-accent)', fontWeight: 700, fontSize: '11px', padding: '2px 8px', cursor: 'pointer' }}
                     >
-                      MAX
+                      {t('tx.max')}
                     </button>
                   </div>
                 )}
@@ -430,12 +435,12 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-                  Total Money {type === 'BOUGHT' ? 'Invested' : 'Received'} (€)
+                  {type === 'BOUGHT' ? t('tx.totalInvested') : t('tx.totalReceived')}
                 </label>
                 <input
                   type="number"
                   step="any"
-                  placeholder="e.g. 1500.00"
+                  placeholder={t('tx.amountPlaceholder')}
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   required
@@ -447,59 +452,56 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-                  Asset Class
+                  {t('tx.assetClass')}
                 </label>
                 <select value={assetClass} onChange={(e) => setAssetClass(e.target.value)} disabled={isSale} aria-readonly={isSale} style={inputStyle}>
-                  {isSale && !['Stock', 'ETF', 'Crypto', 'Bond', 'Real Estate'].includes(assetClass) && <option value={assetClass}>{assetClass}</option>}
-                  <option value="Stock">Stock</option>
-                  <option value="ETF">ETF</option>
-                  <option value="Crypto">Crypto</option>
-                  <option value="Bond">Bond</option>
-                  <option value="Real Estate">Real Estate</option>
+                  {isSale && !ASSET_CLASSES.includes(assetClass) && <option value={assetClass}>{dataLabel(t, 'assetClass', assetClass)}</option>}
+                  {ASSET_CLASSES.map((option) => (
+                    <option key={option} value={option}>
+                      {dataLabel(t, 'assetClass', option)}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-                  Sector
+                  {t('tx.sector')}
                 </label>
                 <select value={sector} onChange={(e) => setSector(e.target.value)} disabled={isSale} aria-readonly={isSale} style={inputStyle}>
-                  {isSale && !['Technology', 'Financials', 'Healthcare', 'Energy', 'Industrials', 'Consumer', 'Crypto'].includes(sector) && <option value={sector}>{sector}</option>}
-                  <option value="Technology">Technology</option>
-                  <option value="Financials">Financials</option>
-                  <option value="Healthcare">Healthcare</option>
-                  <option value="Energy">Energy</option>
-                  <option value="Industrials">Industrials</option>
-                  <option value="Consumer">Consumer</option>
-                  <option value="Crypto">Crypto</option>
+                  {isSale && !SECTORS.includes(sector) && <option value={sector}>{dataLabel(t, 'sector', sector)}</option>}
+                  {SECTORS.map((option) => (
+                    <option key={option} value={option}>
+                      {dataLabel(t, 'sector', option)}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
 
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-                Region / Geography
+                {t('tx.region')}
               </label>
               <select value={region} onChange={(e) => setRegion(e.target.value)} disabled={isSale} aria-readonly={isSale} style={inputStyle}>
-                  {isSale && !['Spain', 'Europe', 'North America', 'Asia-Pacific', 'LatAm', 'Global'].includes(region) && <option value={region}>{region}</option>}
-                <option value="Spain">Spain</option>
-                <option value="Europe">Europe</option>
-                <option value="North America">North America</option>
-                <option value="Asia-Pacific">Asia-Pacific</option>
-                <option value="LatAm">LatAm</option>
-                <option value="Global">Global</option>
+                  {isSale && !REGIONS.includes(region) && <option value={region}>{dataLabel(t, 'region', region)}</option>}
+                {REGIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {dataLabel(t, 'region', option)}
+                  </option>
+                ))}
               </select>
             </div>
           </>
         ) : (
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-              Cash Amount (€)
+              {t('tx.cashAmount')}
             </label>
             <input
               type="number"
               step="any"
-              placeholder="e.g. 5000.00"
+              placeholder={t('tx.cashPlaceholder')}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               required
@@ -511,7 +513,7 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
         {/* Date Field Moved Above Broker Fee */}
         <div>
           <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-            <Calendar size={14} /> Transaction Date (Past or Present)
+            <Calendar size={14} /> {t('tx.date')}
           </label>
           <input
             type="date"
@@ -525,12 +527,12 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
         {/* Broker Fee Field */}
         <div>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-            Broker Fee (€)
+            {t('tx.fee')}
           </label>
           <input
             type="number"
             step="any"
-            placeholder="0.00"
+            placeholder={t('tx.feePlaceholder')}
             value={fee}
             onChange={(e) => setFee(e.target.value)}
             style={inputStyle}
@@ -572,12 +574,16 @@ export default function TransactionForm({ onSuccess, positions = [] }: Transacti
             boxShadow: '0 4px 14px var(--accent-blue-glow)',
           }}
         >
-          {isSubmitting ? 'Confirming...' : 'Confirm'}
+          {isSubmitting ? t('tx.confirming') : t('tx.confirm')}
         </button>
       </form>
     </div>
   );
 }
+
+const ASSET_CLASSES = ['Stock', 'ETF', 'Crypto', 'Bond', 'Real Estate'];
+const SECTORS = ['Technology', 'Financials', 'Healthcare', 'Energy', 'Industrials', 'Consumer', 'Crypto'];
+const REGIONS = ['Spain', 'Europe', 'North America', 'Asia-Pacific', 'LatAm', 'Global'];
 
 const inputStyle = {
   width: '100%',

@@ -1,10 +1,12 @@
-const plural = (count: number, unit: string) => `${count} ${unit}${count === 1 ? '' : 's'}`;
+import { translateEnglish, type Translate } from '../i18n/translate';
 
 /** "1 year 2 months" for 14.2, "less than a month" for 0.3, "not started yet" for 0. Display only. */
-export function formatMonths(months: number): string {
+export function formatMonths(months: number, t: Translate = translateEnglish): string {
   const whole = Math.round(months);
-  if (whole < 1) return months > 0 ? 'less than a month' : 'not started yet';
+  if (whole < 1) return months > 0 ? t('duration.lessThanMonth') : t('duration.notStarted');
   const years = Math.floor(whole / 12);
   const rest = whole % 12;
-  return [years > 0 ? plural(years, 'year') : '', rest > 0 ? plural(rest, 'month') : ''].filter(Boolean).join(' ');
+  const yearsText = years > 0 ? t('duration.years', { count: years }) : '';
+  const monthsText = rest > 0 ? t('duration.months', { count: rest }) : '';
+  return yearsText && monthsText ? t('duration.yearsAndMonths', { years: yearsText, months: monthsText }) : yearsText || monthsText;
 }

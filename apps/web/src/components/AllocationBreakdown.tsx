@@ -1,5 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { formatCurrency } from '../data/sampleChartData';
+import { dataLabel, type DataKind } from '../i18n/dataLabels';
+import { useTranslation } from '../i18n/useTranslation';
+import { formatFixed } from '../lib/money';
 import { type PositionItem } from './HoldingsTable';
 
 export interface BreakdownItem {
@@ -35,6 +38,9 @@ const COLOR_PALETTE = [
   'var(--chart-color-10)',
 ];
 
+/** The row that stands for uninvested money among the holdings. */
+const CASH_NAME = 'Cash';
+
 export const AllocationBreakdown: React.FC<AllocationBreakdownProps> = ({
   breakdowns,
   positions,
@@ -42,6 +48,7 @@ export const AllocationBreakdown: React.FC<AllocationBreakdownProps> = ({
   netWorth,
   currency = 'EUR',
 }) => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabType>('sectors');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
@@ -58,7 +65,7 @@ export const AllocationBreakdown: React.FC<AllocationBreakdownProps> = ({
 
       if (cashBalance > 0) {
         list.push({
-          name: 'Cash',
+          name: CASH_NAME,
           amount: cashBalance,
           percentage: netWorth > 0 ? Math.round((cashBalance / netWorth) * 1000) / 10 : 0,
         });
@@ -125,11 +132,16 @@ export const AllocationBreakdown: React.FC<AllocationBreakdownProps> = ({
   }, [activeItems, hoveredIndex]);
 
   const tabLabels: Record<TabType, string> = {
-    sectors: 'Sectors',
-    regions: 'Regions',
-    assetClasses: 'Asset classes',
-    holdings: 'Holdings',
+    sectors: t('allocation.sectors'),
+    regions: t('allocation.regions'),
+    assetClasses: t('allocation.assetClasses'),
+    holdings: t('allocation.holdings'),
   };
+
+  /** Sectors, regions and asset classes are stored words shown in the screen's language; a holding is named by its own name. */
+  const KIND_OF_TAB: Partial<Record<TabType, DataKind>> = { sectors: 'sector', regions: 'region', assetClasses: 'assetClass' };
+  const kind = KIND_OF_TAB[activeTab];
+  const labelOf = (item: BreakdownItem) => (kind ? dataLabel(t, kind, item.name) : item.name === CASH_NAME ? t('cash.title') : item.name);
 
   const activeHoveredItem = hoveredIndex !== null && activeItems[hoveredIndex] ? activeItems[hoveredIndex] : null;
 
@@ -142,9 +154,9 @@ export const AllocationBreakdown: React.FC<AllocationBreakdownProps> = ({
       <div className="dashboard-allocation-panel">
         {/* Header with Title and Tabs */}
         <div className="dashboard-allocation__header">
-          <h2 className="dashboard-panel-title">Allocation</h2>
+          <h2 className="dashboard-panel-title">{t('allocation.title')}</h2>
 
-          <nav className="segmented-control" role="tablist" aria-label="Allocation views">
+          <nav className="segmented-control" role="tablist" aria-label={t('allocation.views')}>
             {(['sectors', 'regions', 'assetClasses', 'holdings'] as const).map((tab) => (
               <button
                 key={tab}
@@ -193,7 +205,7 @@ export const AllocationBreakdown: React.FC<AllocationBreakdownProps> = ({
               {/* Center Text Overlay */}
               <div className="dashboard-allocation__center-overlay">
                 <div className="dashboard-allocation__center-label">
-                  {activeHoveredItem ? activeHoveredItem.name : tabLabels[activeTab]}
+                  {activeHoveredItem ? labelOf(activeHoveredItem) : tabLabels[activeTab]}
                 </div>
                 <div className="dashboard-allocation__center-amount">
                   {activeHoveredItem
@@ -202,7 +214,7 @@ export const AllocationBreakdown: React.FC<AllocationBreakdownProps> = ({
                 </div>
                 {activeHoveredItem && (
                   <div className="dashboard-allocation__center-pct">
-                    {activeHoveredItem.percentage.toFixed(1)}%
+                    {formatFixed(activeHoveredItem.percentage, 1)}%
                   </div>
                 )}
               </div>
@@ -213,7 +225,9 @@ export const AllocationBreakdown: React.FC<AllocationBreakdownProps> = ({
           <div className="dashboard-allocation__legend-col">
             {activeItems.length === 0 ? (
               <div className="dashboard-allocation__empty">
-                No allocation data recorded yet. Click <strong>Log Transaction</strong> above to add positions.
+                {t('allocation.emptyBefore')}
+                <strong>{t('header.logTransaction')}</strong>
+                {t('allocation.emptyAfter')}
               </div>
             ) : (
               <div className="dashboard-allocation__legend-list">
@@ -232,14 +246,14 @@ export const AllocationBreakdown: React.FC<AllocationBreakdownProps> = ({
                             className="dashboard-allocation__legend-dot"
                             style={{ backgroundColor: item.color }}
                           />
-                          <span className="dashboard-allocation__legend-name">{item.name}</span>
+                          <span className="dashboard-allocation__legend-name">{labelOf(item)}</span>
                         </div>
                         <div className="dashboard-allocation__legend-values">
                           <span className="dashboard-allocation__legend-amount">
                             {formatCurrency(item.amount, currency)}
                           </span>
                           <span className="dashboard-allocation__legend-pct">
-                            {item.percentage.toFixed(1)}%
+                            {formatFixed(item.percentage, 1)}%
                           </span>
                         </div>
                       </div>

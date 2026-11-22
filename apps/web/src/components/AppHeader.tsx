@@ -1,4 +1,7 @@
 import { Globe, LogOut, Plus } from 'lucide-react';
+import { dataLabel } from '../i18n/dataLabels';
+import LanguageSelector from '../i18n/LanguageSelector';
+import { useTranslation } from '../i18n/useTranslation';
 import ProfileAvatar from './ProfileAvatar';
 
 interface AppHeaderProps {
@@ -21,6 +24,8 @@ export default function AppHeader({
   onOpenProfile,
   onSignOut,
 }: AppHeaderProps) {
+  const { t } = useTranslation();
+
   return (
     <header className="app-header">
       <span className="app-header__brand">Portfolio Tracker</span>
@@ -30,30 +35,32 @@ export default function AppHeader({
           type="button"
           role="switch"
           aria-checked={isRealInflationMode}
-          aria-label="Adjust for inflation"
+          aria-label={t('header.adjustInflation')}
           className="inflation-switch"
-          title="Show every figure in today's purchasing power"
+          title={t('header.adjustInflationHint')}
           onClick={onToggleInflation}
         >
           <span className="inflation-switch__track" aria-hidden="true">
             <span className="inflation-switch__thumb" />
           </span>
-          <span aria-hidden="true">Adjust for inflation</span>
+          <span aria-hidden="true">{t('header.adjustInflation')}</span>
         </button>
 
-        <button type="button" className="header-chip" onClick={onOpenCountry} title="The country whose inflation is used">
+        <LanguageSelector />
+
+        <button type="button" className="header-chip" onClick={onOpenCountry} title={t('header.countryHint')}>
           <Globe size={14} aria-hidden="true" />
-          {country}
+          {dataLabel(t, 'country', country)}
         </button>
 
-        <button type="button" className="header-primary" onClick={onLogTransaction} aria-label="Log Transaction">
+        <button type="button" className="header-primary" onClick={onLogTransaction} aria-label={t('header.logTransaction')}>
           <Plus size={16} aria-hidden="true" />
-          <span className="header-primary__label" aria-hidden="true">Log Transaction</span>
+          <span className="header-primary__label" aria-hidden="true">{t('header.logTransaction')}</span>
         </button>
 
         <ProfileAvatar onOpen={onOpenProfile} />
 
-        <button type="button" className="header-icon-button" onClick={onSignOut} aria-label="Sign out" title="Sign out">
+        <button type="button" className="header-icon-button" onClick={onSignOut} aria-label={t('header.signOut')} title={t('header.signOut')}>
           <LogOut size={16} aria-hidden="true" />
         </button>
       </div>

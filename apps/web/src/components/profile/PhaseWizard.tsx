@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { useMemo, useState } from 'react';
 import type { CreateFixedCostRequest, LivingPhaseDto } from '../../contracts';
 import { useStepDraft } from '../../hooks/useStepDraft';
@@ -31,8 +32,9 @@ const stepsFor = (editing: boolean): PhaseFlowStepId[] => (editing ? ['place', '
 
 /** Add or change a living phase, one question at a time, in the middle of the screen. */
 export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCurrency, today, onClose, onSubmit }: PhaseWizardProps) {
+  const { t } = useTranslation();
   const stepIds = useMemo(() => stepsFor(phase !== null), [phase]);
-  const steps = stepIds.map((id) => ({ id, label: PHASE_STEP_COPY[id].label }));
+  const steps = stepIds.map((id) => ({ id, label: t(PHASE_STEP_COPY[id].label) }));
   const { values, setValues, step, setStep, resumedAtStep, discard } = useStepDraft(
     `phase:${phase?.id ?? 'new'}`,
     phaseDraftSchema,
@@ -58,7 +60,7 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
   const changeCosts = (next: CreateFixedCostRequest[]) => setValues((previous) => ({ ...previous, costs: next }));
 
   const submit = async () => {
-    const carried = carriedStreams(candidates, carry, form.startDate, (text) => parseMajorToMinor(text, form.currency));
+    const carried = carriedStreams(candidates, carry, form.startDate, (text) => parseMajorToMinor(text, form.currency), t);
     if (!carried.ok) {
       feedback.showServerErrors({ monthlyIncome: carried.message });
       setStep(stepIds.indexOf('money'));
@@ -97,15 +99,15 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
 
   return (
     <WizardModal
-      title={phase ? 'Edit living phase' : 'Add a living phase'}
+      title={phase ? t('phaseWizard.edit') : t('phaseWizard.add')}
       steps={steps}
       stepIndex={step}
-      heading={copy.heading}
+      heading={t(copy.heading)}
       resumed={resumedAtStep === step}
       error={formError}
       busy={saving}
       hideNext={addingBill}
-      finishLabel={phase ? 'Save changes' : 'Add living phase'}
+      finishLabel={phase ? t('phaseWizard.save') : t('profile.addPhase')}
       onBack={() => setStep(step - 1)}
       onNext={next}
       onClose={onClose}

@@ -1,4 +1,6 @@
 import { filterDataByPeriod, type ChartDataPoint, type DateRange, type ReportingPeriod } from '../data/sampleChartData';
+import type { MessageKey } from '../i18n/catalogs';
+import { translateEnglish, type Translate } from '../i18n/translate';
 import { periodReturn, type PeriodReturn } from './periodReturn';
 
 /** What the portfolio gained or lost over the selected reporting period. One answer for the chart and the tiles. */
@@ -8,17 +10,17 @@ export function returnForPeriod(data: ChartDataPoint[], period: ReportingPeriod,
   return periodReturn(data, period === 'All' ? null : startDate, endDate);
 }
 
-const PHRASES: Record<ReportingPeriod, string> = {
-  All: 'since you started',
-  YTD: 'this year',
-  '1Y': 'in the past year',
-  MTD: 'this month',
-  '1M': 'in the past month',
-  '1W': 'in the past week',
-  '1D': 'in the past day',
-  'Last year': 'last year',
-  'Last month': 'last month',
-  Custom: 'in this period',
+const PHRASES: Record<ReportingPeriod, MessageKey> = {
+  All: 'period.phrase.all',
+  YTD: 'period.phrase.ytd',
+  '1Y': 'period.phrase.1y',
+  MTD: 'period.phrase.mtd',
+  '1M': 'period.phrase.1m',
+  '1W': 'period.phrase.1w',
+  '1D': 'period.phrase.1d',
+  'Last year': 'period.phrase.lastYear',
+  'Last month': 'period.phrase.lastMonth',
+  Custom: 'period.phrase.custom',
 };
 
-export const periodPhrase = (period: ReportingPeriod): string => PHRASES[period];
+export const periodPhrase = (period: ReportingPeriod, t: Translate = translateEnglish): string => t(PHRASES[period]);

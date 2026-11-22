@@ -1,3 +1,5 @@
+import { intlLocale } from '../i18n/locale';
+import { useTranslation } from '../i18n/useTranslation';
 import { useState } from 'react';
 import { CAPITAL_MILESTONE_CATEGORIES, MAX_CAPITAL_MILESTONES, type CapitalHorizonResponse, type CapitalMilestone, type CapitalMilestoneCategory } from '../contracts';
 import type { MutationResult } from '../lib/apiErrors';
@@ -18,6 +20,7 @@ type Editing = { kind: 'new'; form: MilestoneForm } | { kind: 'existing'; id: st
 
 /** How far each goal is from the portfolio, and a quiet way to set or change one. */
 export default function CapitalHorizonCard({ capitalHorizon, onSave }: CapitalHorizonCardProps) {
+  const { t, locale } = useTranslation();
   const [editing, setEditing] = useState<Editing | null>(null);
   const stored = capitalHorizon.milestones.map(toCapitalMilestone);
   const active = capitalHorizon.milestones.filter(({ enabled }) => enabled);
@@ -28,15 +31,15 @@ export default function CapitalHorizonCard({ capitalHorizon, onSave }: CapitalHo
     onSave(stored.some(({ id }) => id === milestone.id) ? stored.map((current) => (current.id === milestone.id ? milestone : current)) : [...stored, milestone]);
 
   return (
-    <section className="capital-horizon" aria-label="Capital horizon">
+    <section className="capital-horizon" aria-label={t('capital.label')}>
       {active.map((milestone) => {
-        const view = describeCapitalMilestone(milestone, capitalHorizon);
+        const view = describeCapitalMilestone(milestone, capitalHorizon, intlLocale(locale), t);
         return (
           <article key={milestone.id} className="capital-horizon__milestone">
             <div className="capital-horizon__top">
               <h3 className="capital-horizon__badge">{view.badge}</h3>
               <button type="button" className="profile-text-button" onClick={() => setEditing({ kind: 'existing', id: milestone.id })}>
-                Edit milestone
+                {t('capital.edit')}
               </button>
             </div>
             <p className="capital-horizon__subtext">{view.subtext}</p>
@@ -56,13 +59,13 @@ export default function CapitalHorizonCard({ capitalHorizon, onSave }: CapitalHo
 
       {hasRoom && (
         <div className={`capital-horizon__ghost${active.length === 0 ? ' is-empty' : ''}`}>
-          <button type="button" className="profile-text-button" onClick={() => setEditing({ kind: 'new', form: formForPreset('CUSTOM') })}>
-            + Set a milestone target
+          <button type="button" className="profile-text-button" onClick={() => setEditing({ kind: 'new', form: formForPreset('CUSTOM', t) })}>
+            {t('capital.set')}
           </button>
           {active.length === 0 &&
             PRESETS.map((category) => (
-              <button key={category} type="button" className="profile-toggle-button" onClick={() => setEditing({ kind: 'new', form: formForPreset(category) })}>
-                {CATEGORY_LABELS[category]}
+              <button key={category} type="button" className="profile-toggle-button" onClick={() => setEditing({ kind: 'new', form: formForPreset(category, t) })}>
+                {t(CATEGORY_LABELS[category])}
               </button>
             ))}
         </div>

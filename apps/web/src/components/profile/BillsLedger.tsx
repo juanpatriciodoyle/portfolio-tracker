@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import type { BillingRecordDto, CreateBillingRecordRequest, LivingPhaseDto, UpdateBillingRecordRequest } from '../../contracts';
@@ -25,6 +26,8 @@ interface BillsLedgerProps {
 
 /** The raw past bills of a home, to look through, correct or remove. */
 export default function BillsLedger({ phase, records, context, onUpdate, onDelete, onPickPdfs, onClose, announce }: BillsLedgerProps) {
+  const words = useTranslation();
+  const { t } = words;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
@@ -36,7 +39,7 @@ export default function BillsLedger({ phase, records, context, onUpdate, onDelet
     const result = await onUpdate(recordId, toUpdate(input));
     if (result.ok) {
       setEditingId(null);
-      announce('Bill updated');
+      announce(t('ledger.updated'));
     }
     return result;
   };
@@ -47,27 +50,27 @@ export default function BillsLedger({ phase, records, context, onUpdate, onDelet
       if (result.ok) {
         setConfirmingId(null);
         setRemoveError(null);
-        announce('Bill removed');
+        announce(t('ledger.removed'));
       } else {
-        setRemoveError(describeFailure(result.failure));
+        setRemoveError(describeFailure(result.failure, [], words));
       }
     });
 
   return (
-    <Modal label="Manage bills and documents" onClose={onClose}>
+    <Modal label={t('ledger.label')} onClose={onClose}>
       <div className="expense-modal">
         <div>
-          <h2 className="dialog__title">Bills &amp; documents</h2>
+          <h2 className="dialog__title">{t('ledger.title')}</h2>
         </div>
 
         <PdfPicker onFiles={onPickPdfs} />
 
         {sorted.length === 0 ? (
-          <p className="phase-details__hint">No bills yet.</p>
+          <p className="phase-details__hint">{t('ledger.none')}</p>
         ) : (
-          <ul className="cost-list bill-list" aria-label="Bills received">
+          <ul className="cost-list bill-list" aria-label={t('ledger.list')}>
             {sorted.map((record) => {
-              const name = `${CATEGORY_LABELS[record.category]} bill from ${record.vendor}`;
+              const name = t('ledger.billFrom', { category: t(CATEGORY_LABELS[record.category]), vendor: record.vendor });
               return (
                 <li key={record.id} className="cost-row bill-row" data-category={record.category}>
                   {editingId === record.id ? (
@@ -86,23 +89,23 @@ export default function BillsLedger({ phase, records, context, onUpdate, onDelet
                         <span className="bill-row__text">
                           <span className="cost-row__name">
                             {record.vendor}
-                            <span className="cost-row__label"> · {CATEGORY_LABELS[record.category]}</span>
+                            <span className="cost-row__label"> · {t(CATEGORY_LABELS[record.category])}</span>
                           </span>
-                          <span className="bill-row__period">{formatPhaseRange(record.periodStart, record.periodEnd, undefined, 'now')}</span>
+                          <span className="bill-row__period">{formatPhaseRange(record.periodStart, record.periodEnd, undefined, t('phase.now'))}</span>
                         </span>
                       </div>
                       <span className="cost-row__amount">
                         {formatMinor(record.amountMinor, record.currency)}{' '}
-                        <span className="cost-row__cadence">{BILLING_CADENCE_PHRASES[record.cadence]}</span>
+                        <span className="cost-row__cadence">{t(BILLING_CADENCE_PHRASES[record.cadence])}</span>
                       </span>
                       {confirmingId === record.id ? (
-                        <div className="confirm-inline" role="group" aria-label={`Confirm removing ${name}`}>
-                          <span>Remove this bill?</span>
+                        <div className="confirm-inline" role="group" aria-label={t('ledger.confirmRemoving', { name })}>
+                          <span>{t('ledger.removeQuestion')}</span>
                           <button type="button" className="profile-danger-button" disabled={removing} aria-busy={removing} onClick={() => removeBill(record.id)}>
-                            Remove
+                            {t('ledger.remove')}
                           </button>
                           <button type="button" className="profile-text-button" onClick={() => setConfirmingId(null)}>
-                            Keep
+                            {t('ledger.keep')}
                           </button>
                         </div>
                       ) : (
@@ -110,7 +113,7 @@ export default function BillsLedger({ phase, records, context, onUpdate, onDelet
                           <button
                             type="button"
                             className="profile-icon-button"
-                            aria-label={`Edit ${name}`}
+                            aria-label={t('ledger.edit', { name })}
                             onClick={() => {
                               setEditingId(record.id);
                               setConfirmingId(null);
@@ -118,7 +121,7 @@ export default function BillsLedger({ phase, records, context, onUpdate, onDelet
                           >
                             <Pencil size={14} aria-hidden="true" />
                           </button>
-                          <button type="button" className="profile-icon-button" aria-label={`Remove ${name}`} onClick={() => setConfirmingId(record.id)}>
+                          <button type="button" className="profile-icon-button" aria-label={t('ledger.removeItem', { name })} onClick={() => setConfirmingId(record.id)}>
                             <Trash2 size={14} aria-hidden="true" />
                           </button>
                         </div>

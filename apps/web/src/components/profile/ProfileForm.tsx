@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { ChevronDown, Pencil } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { EMPLOYMENT_STATUSES, type EmploymentStatus, type ProfileData } from '../../contracts';
@@ -24,20 +25,17 @@ interface ProfileFormProps {
   announce: (message: string) => void;
 }
 
-const adults = (count: number) => `${count} ${count === 1 ? 'adult' : 'adults'}`;
-const children = (count: number) => `${count} ${count === 1 ? 'child' : 'children'}`;
-
-const DEMOGRAPHICS_TITLE = 'Demographics & Household Settings';
 
 /** Collapsed by default: administrative setup data stays out of sight until the person asks to see or change it. */
 function Summary({ profile, onEdit }: { profile: ProfileData; onEdit: () => void }) {
+  const { t } = useTranslation();
   const id = useId();
   const [open, setOpen] = useState(false);
-  const unset = <span className="profile-facts__unset">Not set</span>;
+  const unset = <span className="profile-facts__unset">{t('demographics.notSet')}</span>;
   const household =
     profile.dependentChildren > 0
-      ? `${adults(profile.householdAdults)}, ${children(profile.dependentChildren)}`
-      : adults(profile.householdAdults);
+      ? `${t('demographics.adults', { count: profile.householdAdults })}, ${t('demographics.children', { count: profile.dependentChildren })}`
+      : t('demographics.adults', { count: profile.householdAdults });
   const empty = isProfileEmpty(profile);
 
   return (
@@ -51,33 +49,33 @@ function Summary({ profile, onEdit }: { profile: ProfileData; onEdit: () => void
             aria-controls={`${id}-facts`}
             onClick={() => setOpen((current) => !current)}
           >
-            <span>{DEMOGRAPHICS_TITLE}</span>
+            <span>{t('demographics.title')}</span>
             <ChevronDown className="profile-disclosure__chevron" size={16} aria-hidden="true" />
           </button>
         </h2>
         {open && (
           <button type="button" className="profile-text-button" onClick={onEdit}>
-            <Pencil size={14} aria-hidden="true" /> {empty ? 'Add details' : 'Edit'}
+            <Pencil size={14} aria-hidden="true" /> {empty ? t('demographics.addDetails') : t('common.edit')}
           </button>
         )}
       </div>
       <div id={`${id}-facts`} hidden={!open}>
         {empty ? (
           <p className="profile-section__hint">
-            Tell us a little about yourself. Age, household and work let us compare your numbers with people like you.
+            {t('demographics.hint')}
           </p>
         ) : (
           <dl className="profile-facts">
             <div>
-              <dt>Name</dt>
+              <dt>{t('demographics.name')}</dt>
               <dd>{profile.fullName ?? unset}</dd>
             </div>
             <div>
-              <dt>Born</dt>
+              <dt>{t('demographics.born')}</dt>
               <dd>{profile.birthYear ?? unset}</dd>
             </div>
             <div>
-              <dt>Nationality</dt>
+              <dt>{t('demographics.nationality')}</dt>
               <dd>
                 {profile.nationalities.length > 0
                   ? profile.nationalities.map((code) => `${flagEmoji(code)} ${countryName(code)}`).join(', ')
@@ -85,16 +83,16 @@ function Summary({ profile, onEdit }: { profile: ProfileData; onEdit: () => void
               </dd>
             </div>
             <div>
-              <dt>Tax residence</dt>
+              <dt>{t('demographics.taxResidence')}</dt>
               <dd>{profile.taxResidence ? `${flagEmoji(profile.taxResidence)} ${countryName(profile.taxResidence)}` : unset}</dd>
             </div>
             <div>
-              <dt>Household</dt>
+              <dt>{t('demographics.household')}</dt>
               <dd>{household}</dd>
             </div>
             <div>
-              <dt>Work</dt>
-              <dd>{profile.employmentStatus ? EMPLOYMENT_LABELS[profile.employmentStatus] : unset}</dd>
+              <dt>{t('demographics.work')}</dt>
+              <dd>{profile.employmentStatus ? t(EMPLOYMENT_LABELS[profile.employmentStatus]) : unset}</dd>
             </div>
           </dl>
         )}
@@ -105,6 +103,7 @@ function Summary({ profile, onEdit }: { profile: ProfileData; onEdit: () => void
 
 /** "Demographics & Household Settings": a collapsed card that opens into a summary or an editor. Everything here is stored encrypted. */
 export default function ProfileForm({ profile, onSave, announce }: ProfileFormProps) {
+  const { t } = useTranslation();
   const id = useId();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<ProfileDraft>(() => toProfileDraft(profile));
@@ -123,7 +122,7 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const result = validateProfileDraft(draft);
+    const result = validateProfileDraft(draft, t);
     if (!result.ok) {
       setErrors(result.errors);
       return;
@@ -134,7 +133,7 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
       const outcome = await onSave(result.profile);
       if (outcome.ok) {
         setEditing(false);
-        announce('Profile saved');
+        announce(t('profile.announce.saved'));
       } else {
         setFormError(describeFailure(outcome.failure));
       }
@@ -143,22 +142,22 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
 
   if (!editing) {
     return (
-      <section className="profile-card" aria-label={DEMOGRAPHICS_TITLE}>
+      <section className="profile-card" aria-label={t('demographics.title')}>
         <Summary profile={profile} onEdit={startEditing} />
       </section>
     );
   }
 
   return (
-    <section className="profile-card" aria-label={DEMOGRAPHICS_TITLE}>
+    <section className="profile-card" aria-label={t('demographics.title')}>
       <div className="profile-section__header">
-        <h2 className="profile-section__title">{DEMOGRAPHICS_TITLE}</h2>
+        <h2 className="profile-section__title">{t('demographics.title')}</h2>
       </div>
       <form className="profile-form" onSubmit={handleSubmit} noValidate>
         <div className="profile-form__grid">
           <div className="form-group">
             <label className="form-label" htmlFor={`${id}-fullName`}>
-              Full name
+              {t('demographics.fullName')}
             </label>
             <input
               id={`${id}-fullName`}
@@ -178,7 +177,7 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
 
           <div className="form-group">
             <label className="form-label" htmlFor={`${id}-birthYear`}>
-              Year of birth
+              {t('demographics.birthYear')}
             </label>
             <input
               id={`${id}-birthYear`}
@@ -200,7 +199,7 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
 
           <div className="form-group profile-form__wide">
             <label className="form-label" htmlFor={`${id}-nationality`}>
-              Nationalities
+              {t('demographics.nationalities')}
             </label>
             <NationalitiesInput
               id={`${id}-nationality`}
@@ -217,19 +216,19 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
 
           <div className="form-group">
             <label className="form-label" htmlFor={`${id}-taxResidence`}>
-              Tax residence
+              {t('demographics.taxResidence')}
             </label>
             <CountrySelect
               id={`${id}-taxResidence`}
               value={draft.taxResidence}
               onChange={(code) => set('taxResidence', code)}
-              placeholder="Not set"
+              placeholder={t('demographics.notSet')}
             />
           </div>
 
           <div className="form-group">
             <label className="form-label" htmlFor={`${id}-employment`}>
-              Work
+              {t('demographics.work')}
             </label>
             <select
               id={`${id}-employment`}
@@ -237,10 +236,10 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
               value={draft.employmentStatus}
               onChange={(event) => set('employmentStatus', event.target.value as EmploymentStatus | '')}
             >
-              <option value="">Prefer not to say</option>
+              <option value="">{t('demographics.preferNot')}</option>
               {EMPLOYMENT_STATUSES.map((status) => (
                 <option key={status} value={status}>
-                  {EMPLOYMENT_LABELS[status]}
+                  {t(EMPLOYMENT_LABELS[status])}
                 </option>
               ))}
             </select>
@@ -248,7 +247,7 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
 
           <Stepper
             id={`${id}-adults`}
-            label="Adults in household"
+            label={t('demographics.adultsLabel')}
             value={draft.householdAdults}
             min={1}
             max={10}
@@ -256,7 +255,7 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
           />
           <Stepper
             id={`${id}-children`}
-            label="Dependent children"
+            label={t('demographics.childrenLabel')}
             value={draft.dependentChildren}
             min={0}
             max={15}
@@ -272,10 +271,10 @@ export default function ProfileForm({ profile, onSave, announce }: ProfileFormPr
 
         <div className="profile-form__actions">
           <button type="submit" className="btn-primary-apply" disabled={saving} aria-busy={saving}>
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? t('demographics.saving') : t('common.save')}
           </button>
           <button type="button" className="btn-secondary-cancel" onClick={() => setEditing(false)}>
-            Cancel
+            {t('common.cancel')}
           </button>
         </div>
       </form>

@@ -1,5 +1,8 @@
+import { intlLocale } from '../i18n/locale';
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useTranslation } from '../i18n/useTranslation';
 import { chartThemeFromDocument } from '../lib/chartTheme';
+import { displayLocale, formatFixed } from '../lib/money';
 import { easeOutExpo } from '../lib/easing';
 import { prefersReducedMotion } from '../lib/prefersReducedMotion';
 import {
@@ -27,6 +30,8 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
   customRange,
   currency = 'EUR',
 }) => {
+  const { t, locale } = useTranslation();
+  const dateLocale = intlLocale(locale);
   const [chartMode, setChartMode] = useState<ChartMode>('value');
   // The canvas cannot read CSS variables itself: the colours come from the same tokens as everything else.
   const [theme] = useState(chartThemeFromDocument);
@@ -156,7 +161,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
 
       const label =
         chartMode === 'performance'
-          ? `${val.toFixed(1)}%`
+          ? `${formatFixed(val, 1)}%`
           : formatCurrency(val, currency, 0);
 
       ctx.fillText(label, padding.left - 8, y);
@@ -310,7 +315,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       const dObj = new Date(filteredData[0].date_time);
-      const dateLabel = dObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      const dateLabel = dObj.toLocaleDateString(dateLocale, { month: 'short', day: 'numeric', year: 'numeric' });
       ctx.fillText(dateLabel, padding.left + chartW / 2, padding.top + chartH + 10);
     } else if (filteredData.length > 1) {
       const xStepCount = Math.min(6, filteredData.length);
@@ -325,11 +330,11 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
         const x = getX(idx);
         const dObj = new Date(pt.date_time);
 
-        let dateLabel = dObj.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+        let dateLabel = dObj.toLocaleDateString(dateLocale, { month: 'short', year: '2-digit' });
         if (period === '1D' || period === '1W') {
-          dateLabel = dObj.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+          dateLabel = dObj.toLocaleDateString(dateLocale, { weekday: 'short', day: 'numeric' });
         } else if (period === '1M' || period === 'MTD') {
-          dateLabel = dObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          dateLabel = dObj.toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' });
         }
 
         ctx.fillText(dateLabel, x, padding.top + chartH + 10);
@@ -371,7 +376,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
         ctx.restore();
       }
     }
-  }, [filteredData, chartMode, visibleDatasets, currency, hoverPoint, period, theme]);
+  }, [filteredData, chartMode, visibleDatasets, currency, hoverPoint, period, theme, dateLocale]);
 
   // Redraw when dependencies change or resize occurs
   useEffect(() => {
@@ -445,18 +450,18 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
       <div className="dashboard-panel-spacious value-overview">
         {/* Top Header Summary */}
         <div className="value-overview__top">
-          <h2 className="dashboard-panel-title">Growth</h2>
+          <h2 className="dashboard-panel-title">{t('chart.title')}</h2>
 
           {/* Mode Switcher Segmented Control */}
           <div className="value-overview__controls">
-            <div className="segmented-control" role="group" aria-label="Main chart type">
+            <div className="segmented-control" role="group" aria-label={t('chart.mode')}>
               <button
                 type="button"
                 onClick={() => setChartMode('value')}
                 className={`segmented-control__item ${chartMode === 'value' ? 'segmented-control__item--active' : ''}`}
                 aria-pressed={chartMode === 'value'}
               >
-                Value
+                {t('chart.value')}
               </button>
               <button
                 type="button"
@@ -464,7 +469,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                 className={`segmented-control__item ${chartMode === 'profit_loss' ? 'segmented-control__item--active' : ''}`}
                 aria-pressed={chartMode === 'profit_loss'}
               >
-                Profit/loss
+                {t('chart.profitLoss')}
               </button>
               <button
                 type="button"
@@ -472,7 +477,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                 className={`segmented-control__item ${chartMode === 'performance' ? 'segmented-control__item--active' : ''}`}
                 aria-pressed={chartMode === 'performance'}
               >
-                Performance
+                {t('chart.performance')}
               </button>
             </div>
           </div>
@@ -500,7 +505,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
               }}
             >
               <div className="portfolio-chart-tooltip__title">
-                {new Date(hoverPoint.point.date_time).toLocaleDateString(undefined, {
+                {new Date(hoverPoint.point.date_time).toLocaleDateString(displayLocale(), {
                   month: 'short',
                   day: 'numeric',
                   year: 'numeric',
@@ -513,7 +518,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                     <div className="portfolio-chart-tooltip__row">
                       <dt className="portfolio-chart-tooltip__label">
                         <span className="portfolio-chart-legend-swatch portfolio-chart-legend-swatch-value" />
-                        Portfolio value
+                        {t('chart.portfolioValue')}
                       </dt>
                       <dd className="portfolio-chart-tooltip__value">
                         {formatCurrency(hoverPoint.point.portfolio_value_in_reporting_currency, currency)}
@@ -523,7 +528,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                     <div className="portfolio-chart-tooltip__row">
                       <dt className="portfolio-chart-tooltip__label">
                         <span className="portfolio-chart-legend-swatch portfolio-chart-legend-swatch-cashflow" />
-                        Net contributions
+                        {t('chart.netContributions')}
                       </dt>
                       <dd className="portfolio-chart-tooltip__value">
                         {formatCurrency(hoverPoint.point.cumulative_cost_in_reporting_currency, currency)}
@@ -533,7 +538,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                     <div className="portfolio-chart-tooltip__row">
                       <dt className="portfolio-chart-tooltip__label">
                         <span className="portfolio-chart-legend-swatch portfolio-chart-legend-swatch-benchmark" />
-                        Benchmark value
+                        {t('chart.benchmarkValue')}
                       </dt>
                       <dd className="portfolio-chart-tooltip__value">
                         {formatCurrency(hoverPoint.point.benchmark_value_in_reporting_currency, currency)}
@@ -547,7 +552,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                     <div className="portfolio-chart-tooltip__row">
                       <dt className="portfolio-chart-tooltip__label">
                         <span className="portfolio-chart-legend-swatch portfolio-chart-legend-swatch-profit-loss" />
-                        Cumulative profit/loss
+                        {t('chart.cumulativeProfitLoss')}
                       </dt>
                       <dd className="portfolio-chart-tooltip__value">
                         {formatCurrency(
@@ -561,7 +566,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                     <div className="portfolio-chart-tooltip__row">
                       <dt className="portfolio-chart-tooltip__label">
                         <span className="portfolio-chart-legend-swatch portfolio-chart-legend-swatch-benchmark" />
-                        Benchmark profit/loss
+                        {t('chart.benchmarkProfitLoss')}
                       </dt>
                       <dd className="portfolio-chart-tooltip__value">
                         {formatCurrency(
@@ -579,7 +584,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                     <div className="portfolio-chart-tooltip__row">
                       <dt className="portfolio-chart-tooltip__label">
                         <span className="portfolio-chart-legend-swatch portfolio-chart-legend-swatch-profit-loss" />
-                        Portfolio performance (TWR)
+                        {t('chart.portfolioPerformanceTwr')}
                       </dt>
                       <dd className="portfolio-chart-tooltip__value">
                         {formatPercent(hoverPoint.point.cumulative_time_weighted_return_rate * 100)}
@@ -589,7 +594,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                     <div className="portfolio-chart-tooltip__row">
                       <dt className="portfolio-chart-tooltip__label">
                         <span className="portfolio-chart-legend-swatch portfolio-chart-legend-swatch-benchmark" />
-                        Benchmark performance
+                        {t('chart.benchmarkPerformance')}
                       </dt>
                       <dd className="portfolio-chart-tooltip__value">
                         {formatPercent(hoverPoint.point.cumulative_benchmark_time_weighted_return_rate * 100)}
@@ -603,7 +608,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
         </div>
 
         {/* Legend Controls */}
-        <div className="portfolio-chart-legend" aria-label="Chart lines">
+        <div className="portfolio-chart-legend" aria-label={t('chart.lines')}>
           {chartMode === 'value' && (
             <>
               <button
@@ -615,7 +620,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                 aria-pressed={visibleDatasets.portfolio}
               >
                 <span className="portfolio-chart-legend-swatch portfolio-chart-legend-swatch-value" />
-                Portfolio value
+                {t('chart.portfolioValue')}
               </button>
 
               <button
@@ -624,11 +629,11 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                 className={`portfolio-chart-legend-item ${
                   visibleDatasets.cashflow ? '' : 'portfolio-chart-legend-item--muted'
                 }`}
-                title="External deposits and transferred-in assets minus withdrawals"
+                title={t('chart.netContributionsHint')}
                 aria-pressed={visibleDatasets.cashflow}
               >
                 <span className="portfolio-chart-legend-swatch portfolio-chart-legend-swatch-cashflow" />
-                Net contributions
+                {t('chart.netContributions')}
               </button>
 
               <button
@@ -640,7 +645,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                 aria-pressed={visibleDatasets.benchmark}
               >
                 <span className="portfolio-chart-legend-swatch portfolio-chart-legend-swatch-benchmark" />
-                Benchmark value (MSCI World)
+                {t('chart.benchmarkValueMsci')}
               </button>
             </>
           )}
@@ -656,7 +661,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                 aria-pressed={visibleDatasets.portfolio}
               >
                 <span className="portfolio-chart-legend-swatch portfolio-chart-legend-swatch-profit-loss" />
-                Cumulative profit/loss
+                {t('chart.cumulativeProfitLoss')}
               </button>
 
               <button
@@ -668,7 +673,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                 aria-pressed={visibleDatasets.benchmark}
               >
                 <span className="portfolio-chart-legend-swatch portfolio-chart-legend-swatch-benchmark" />
-                Benchmark profit/loss
+                {t('chart.benchmarkProfitLoss')}
               </button>
             </>
           )}
@@ -684,7 +689,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                 aria-pressed={visibleDatasets.portfolio}
               >
                 <span className="portfolio-chart-legend-swatch portfolio-chart-legend-swatch-profit-loss" />
-                Portfolio performance
+                {t('chart.portfolioPerformance')}
               </button>
 
               <button
@@ -696,7 +701,7 @@ export const PortfolioChart: React.FC<PortfolioChartProps> = ({
                 aria-pressed={visibleDatasets.benchmark}
               >
                 <span className="portfolio-chart-legend-swatch portfolio-chart-legend-swatch-benchmark" />
-                Benchmark performance
+                {t('chart.benchmarkPerformance')}
               </button>
             </>
           )}

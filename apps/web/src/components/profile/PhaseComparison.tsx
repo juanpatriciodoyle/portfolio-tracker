@@ -1,3 +1,5 @@
+import { intlLocale } from '../../i18n/locale';
+import { useTranslation } from '../../i18n/useTranslation';
 import { X } from 'lucide-react';
 import type { ComparisonState } from '../../hooks/usePhaseComparison';
 import { describeComparison } from './describeComparison';
@@ -12,27 +14,28 @@ interface PhaseComparisonProps {
 
 /** Two homes side by side, in words first and numbers second. No charts. */
 export default function PhaseComparison({ fromName, toName, state, onClose }: PhaseComparisonProps) {
+  const { t, locale } = useTranslation();
   if (state.status === 'idle') return null;
-  const description = state.status === 'ready' ? describeComparison({ fromName, toName, comparison: state.comparison }) : null;
+  const description = state.status === 'ready' ? describeComparison({ fromName, toName, comparison: state.comparison }, intlLocale(locale), t) : null;
 
   return (
     <section
       className="profile-card phase-comparison"
-      aria-label={`Comparison of ${fromName} and ${toName}`}
+      aria-label={t('compare.label', { from: fromName, to: toName })}
       aria-live="polite"
       aria-busy={state.status === 'loading'}
     >
       <header className="phase-comparison__header">
         <h2 className="profile-section__title">
           {fromName} <span aria-hidden="true">→</span>
-          <span className="visually-hidden"> compared with </span> {toName}
+          <span className="visually-hidden">{t('compare.comparedWith')}</span> {toName}
         </h2>
-        <button type="button" className="profile-icon-button" aria-label="Close comparison" onClick={onClose}>
+        <button type="button" className="profile-icon-button" aria-label={t('compare.close')} onClick={onClose}>
           <X size={14} aria-hidden="true" />
         </button>
       </header>
 
-      {state.status === 'loading' && <p className="phase-comparison__hint">Comparing…</p>}
+      {state.status === 'loading' && <p className="phase-comparison__hint">{t('compare.comparing')}</p>}
       {state.status === 'error' && (
         <p className="form-error-text" role="alert">
           {state.message}

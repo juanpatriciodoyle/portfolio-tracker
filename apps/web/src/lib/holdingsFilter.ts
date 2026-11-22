@@ -1,3 +1,5 @@
+import type { MessageKey } from '../i18n/catalogs';
+
 export type FilterField = 'assetClass' | 'sector' | 'region';
 
 export interface Filterable {
@@ -11,7 +13,7 @@ export type HoldingsFilters = Readonly<Record<FilterField, readonly string[]>>;
 
 export const EMPTY_FILTERS: HoldingsFilters = { assetClass: [], sector: [], region: [] };
 
-export const FILTER_LABELS: Record<FilterField, string> = { assetClass: 'Asset class', sector: 'Sector', region: 'Region' };
+export const FILTER_LABELS: Record<FilterField, MessageKey> = { assetClass: 'holdings.assetClass', sector: 'holdings.sector', region: 'holdings.region' };
 
 /** What can be chosen in a group: the values the holdings actually have, once each. */
 export function filterOptions(rows: readonly Filterable[], field: FilterField): string[] {

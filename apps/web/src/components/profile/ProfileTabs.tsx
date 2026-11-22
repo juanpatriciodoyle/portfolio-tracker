@@ -1,4 +1,5 @@
 import { useRef, type KeyboardEvent } from 'react';
+import { useTranslation } from '../../i18n/useTranslation';
 import { panelId, profileTabsFor, tabId, type ProfileTabId } from '../../lib/profileTab';
 
 interface ProfileTabsProps {
@@ -10,6 +11,7 @@ interface ProfileTabsProps {
 
 /** The tab strip: arrow keys, Home and End move between tabs; only the open one is in the Tab order. */
 export default function ProfileTabs({ active, onChange, isAdmin = false }: ProfileTabsProps) {
+  const { t } = useTranslation();
   const tabs = profileTabsFor(isAdmin);
   const buttons = useRef<Record<string, HTMLButtonElement | null>>({});
 
@@ -25,7 +27,7 @@ export default function ProfileTabs({ active, onChange, isAdmin = false }: Profi
   };
 
   return (
-    <div className="profile-tabs" role="tablist" aria-label="Profile sections">
+    <div className="profile-tabs" role="tablist" aria-label={t('profile.tabs')}>
       {tabs.map((tab) => (
         <button
           key={tab.id}
@@ -42,7 +44,7 @@ export default function ProfileTabs({ active, onChange, isAdmin = false }: Profi
           onClick={() => onChange(tab.id)}
           onKeyDown={handleKeyDown}
         >
-          {tab.label}
+          {t(tab.label)}
         </button>
       ))}
     </div>

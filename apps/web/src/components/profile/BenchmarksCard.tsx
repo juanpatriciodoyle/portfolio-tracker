@@ -1,3 +1,5 @@
+import { intlLocale } from '../../i18n/locale';
+import { useTranslation } from '../../i18n/useTranslation';
 import { useId } from 'react';
 import type { BenchmarksView } from './billingView';
 import { describePhaseBenchmark, describeRefreshedAt, type Kpi } from './describeBenchmarks';
@@ -20,22 +22,23 @@ function Figure({ metric, kpi, verdict }: { metric: string; kpi: Kpi; verdict?: 
 
 /** Where one living phase's income stands in the country and in the person's other nationalities; the figures behind it are in the data sources. */
 export default function BenchmarksCard({ phaseId, view }: BenchmarksCardProps) {
+  const { t, locale } = useTranslation();
   const id = useId();
   const { status, benchmarks, message, onRetry, nameOf } = view;
   const phase = benchmarks?.phases.find((candidate) => candidate.phaseId === phaseId);
-  const described = phase ? describePhaseBenchmark(phase, nameOf) : null;
-  const refreshed = describeRefreshedAt(benchmarks?.refreshedAt ?? null);
+  const described = phase ? describePhaseBenchmark(phase, nameOf, intlLocale(locale), t) : null;
+  const refreshed = describeRefreshedAt(benchmarks?.refreshedAt ?? null, intlLocale(locale));
   const noIncome = phase?.gaps.includes('NO_INCOME') ?? false;
 
   return (
     <section className="benchmarks" aria-labelledby={`${id}-title`} aria-busy={status === 'loading'}>
       <h4 className="phase-details__heading" id={`${id}-title`}>
-        Where you stand
+        {t('benchmarks.title')}
       </h4>
 
       {status === 'loading' && !benchmarks && (
         <div className="benchmarks__skeleton" role="status">
-          <span className="visually-hidden">Loading comparisons…</span>
+          <span className="visually-hidden">{t('benchmarks.loading')}</span>
           <span className="benchmarks__skeleton-bar" aria-hidden="true" />
           <span className="benchmarks__skeleton-bar" aria-hidden="true" />
         </div>
@@ -44,15 +47,15 @@ export default function BenchmarksCard({ phaseId, view }: BenchmarksCardProps) {
       {status !== 'loading' && status !== 'ready' && (
         <div className="benchmarks__problem">
           <p className="form-error-text" role="alert">
-            {message ?? 'The comparisons could not be loaded.'}
+            {message ?? t('benchmarks.loadError')}
           </p>
           <button type="button" className="btn-secondary-cancel" onClick={onRetry}>
-            Try again
+            {t('common.tryAgain')}
           </button>
         </div>
       )}
 
-      {benchmarks && !phase && <p className="phase-details__hint">No comparison is available for this living phase yet.</p>}
+      {benchmarks && !phase && <p className="phase-details__hint">{t('benchmarks.none')}</p>}
 
       {described && noIncome && !described.hasComparison && (
         <p className="phase-details__hint">{described.gaps[0]}</p>
@@ -76,7 +79,7 @@ export default function BenchmarksCard({ phaseId, view }: BenchmarksCardProps) {
             ))}
           </ul>
           {described.positioning.insights.length > 0 && (
-            <ul className="benchmarks__insights" aria-label="How you compare">
+            <ul className="benchmarks__insights" aria-label={t('benchmarks.howYouCompare')}>
               {described.positioning.insights.map((insight) => (
                 <li key={insight}>{insight}</li>
               ))}
@@ -87,7 +90,7 @@ export default function BenchmarksCard({ phaseId, view }: BenchmarksCardProps) {
 
       {benchmarks && phase && !(noIncome && !described?.hasComparison) && (
         <details className="benchmarks__how">
-          <summary>Data sources</summary>
+          <summary>{t('benchmarks.dataSources')}</summary>
           <ul className="benchmarks__figures">
             {described?.income && <Figure metric="income" kpi={described.income} />}
             {described?.areaFigures.map((kpi) => <Figure key={kpi.label} metric="area" kpi={kpi} />)}
@@ -95,13 +98,13 @@ export default function BenchmarksCard({ phaseId, view }: BenchmarksCardProps) {
             {described?.purchasingPower && <Figure metric="purchasing-power" kpi={described.purchasingPower} />}
           </ul>
           {described && described.sources.length > 0 && (
-            <ul className="phase-details__hint benchmarks__sources" aria-label="Sources">
+            <ul className="phase-details__hint benchmarks__sources" aria-label={t('benchmarks.sources')}>
               {described.sources.map((source) => (
                 <li key={source.url}>
                   <a href={source.url} target="_blank" rel="noreferrer noopener">
                     {source.name}
                   </a>
-                  {source.retrieved ? ` · retrieved ${source.retrieved}` : ''}
+                  {source.retrieved ? t('benchmarks.retrieved', { date: source.retrieved }) : ''}
                 </li>
               ))}
             </ul>
@@ -109,31 +112,14 @@ export default function BenchmarksCard({ phaseId, view }: BenchmarksCardProps) {
           <ul className="phase-details__hint benchmarks__notes">
             {described?.gaps.map((gap) => <li key={gap}>{gap}</li>)}
             {described?.positioning.unavailable.map((note) => <li key={note}>{note}</li>)}
-            <li>These are national averages, not figures for your city.</li>
-            <li>
-              Income is compared per person after adjusting for household size. We assume 1 adult and no children unless your
-              profile says otherwise.
-            </li>
-            <li>Housing means rent, utilities and property taxes.</li>
-            <li>
-              Purchasing power in another country converts your income with international dollars (PPP), which use national price
-              levels, not city prices, and change slowly.
-            </li>
-            <li>Argentine figures are in current pesos of the quarter published, so they can be out of date.</li>
-            <li>
-              The EU is compared in euros. A region or the world is compared in international dollars per person per day at 2021
-              prices (the World Bank&apos;s 2021 PPP round): your income is converted with the World Bank&apos;s PPP factor of the same
-              round, then adjusted for the rise in dollar prices since 2021.
-            </li>
-            <li>
-              World and region figures come from household surveys, which tend to miss the very richest, so a top place can be
-              slightly generous. Europe outside the EU is compared with the EU.
-            </li>
-            <li>
-              Country figures are refreshed monthly and the EU, regions and world about every six months, from Eurostat, INDEC and the
-              World Bank
-              {refreshed ? `. Last refreshed ${refreshed}.` : '.'}
-            </li>
+            <li>{t('benchmarks.note.national')}</li>
+            <li>{t('benchmarks.note.income')}</li>
+            <li>{t('benchmarks.note.housing')}</li>
+            <li>{t('benchmarks.note.power')}</li>
+            <li>{t('benchmarks.note.argentina')}</li>
+            <li>{t('benchmarks.note.areas')}</li>
+            <li>{t('benchmarks.note.surveys')}</li>
+            <li>{t('benchmarks.note.refresh', { refreshed: refreshed ? t('benchmarks.lastRefreshed', { date: refreshed }) : '.' })}</li>
           </ul>
         </details>
       )}

@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { useId, useState, type FormEvent } from 'react';
 import {
   createFixedCostRequest,
@@ -11,7 +12,7 @@ import { clampDateYear, keepDecimal } from '../../lib/inputFilters';
 import { minorToInputString, parseMajorToMinor } from '../../lib/money';
 import CategoryChips from './CategoryChips';
 import { describeFailure } from './failureMessage';
-import { CADENCE_OPTIONS } from './labels';
+import { cadenceOptions } from './labels';
 import SegmentedChoice from './SegmentedChoice';
 import { useSubmitOnce } from '../../hooks/useSubmitOnce';
 
@@ -32,6 +33,7 @@ interface Errors {
 
 /** Add or change one bill: what it is, what each payment costs, and how often it is paid. */
 export default function FixedCostEditor({ currency, initial, onSubmit, onCancel }: FixedCostEditorProps) {
+  const { t } = useTranslation();
   const id = useId();
   const [category, setCategory] = useState<FixedCostCategory | null>(initial?.category ?? null);
   const [cadence, setCadence] = useState<CostCadence>(initial?.cadence ?? 'MONTHLY');
@@ -45,8 +47,8 @@ export default function FixedCostEditor({ currency, initial, onSubmit, onCancel 
     event.preventDefault();
     const found: Errors = {};
     const amountMinor = parseMajorToMinor(amount, currency);
-    if (category === null) found.category = 'Pick what this bill is for.';
-    if (amountMinor === null) found.amount = 'Enter an amount such as 48 or 48.50.';
+    if (category === null) found.category = t('fixedCost.errCategory');
+    if (amountMinor === null) found.amount = t('fixedCost.errAmount');
     if (category === null || amountMinor === null) {
       setErrors(found);
       return;
@@ -62,8 +64,8 @@ export default function FixedCostEditor({ currency, initial, onSubmit, onCancel 
     });
     if (!parsed.success) {
       for (const issue of parsed.error.issues) {
-        if (issue.path[0] === 'label') found.label = 'Keep the label under 80 characters.';
-        else found.amount = 'That amount is too large.';
+        if (issue.path[0] === 'label') found.label = t('fixedCost.errLabel');
+        else found.amount = t('form.amountTooLarge');
       }
       setErrors(found);
       return;
@@ -81,7 +83,7 @@ export default function FixedCostEditor({ currency, initial, onSubmit, onCancel 
       className="cost-editor"
       onSubmit={handleSubmit}
       noValidate
-      aria-label={initial ? 'Edit fixed cost' : 'Add a fixed cost'}
+      aria-label={initial ? t('fixedCost.edit') : t('fixedCost.add')}
     >
       <CategoryChips
         name={`${id}-category`}
@@ -101,14 +103,14 @@ export default function FixedCostEditor({ currency, initial, onSubmit, onCancel 
       <div className="cost-editor__row">
         <div className="form-group">
           <label className="form-label" htmlFor={`${id}-amount`}>
-            Amount each time
+            {t('fixedCost.amount')}
           </label>
           <input
             id={`${id}-amount`}
             className="form-input"
             inputMode="decimal"
             autoComplete="off"
-            placeholder="48.50"
+            placeholder={t('fixedCost.amountPlaceholder')}
             value={amount}
             onChange={(event) => setAmount(keepDecimal(event.target.value))}
             aria-invalid={errors.amount !== undefined || undefined}
@@ -122,13 +124,13 @@ export default function FixedCostEditor({ currency, initial, onSubmit, onCancel 
         </div>
         <div className="form-group">
           <label className="form-label" htmlFor={`${id}-label`}>
-            Label (optional)
+            {t('fixedCost.label')}
           </label>
           <input
             id={`${id}-label`}
             className="form-input"
             autoComplete="off"
-            placeholder="Company / Provider"
+            placeholder={t('form.companyPlaceholder')}
             value={label}
             onChange={(event) => setLabel(event.target.value)}
             aria-invalid={errors.label !== undefined || undefined}
@@ -144,8 +146,8 @@ export default function FixedCostEditor({ currency, initial, onSubmit, onCancel 
 
       <SegmentedChoice
         name={`${id}-cadence`}
-        legend="How often is it paid?"
-        options={CADENCE_OPTIONS}
+        legend={t('fixedCost.howOften')}
+        options={cadenceOptions(t)}
         value={cadence}
         onChange={(chosen) => {
           setCadence(chosen);
@@ -154,7 +156,7 @@ export default function FixedCostEditor({ currency, initial, onSubmit, onCancel 
 
       <div className="form-group">
         <label className="form-label" htmlFor={`${id}-endDate`}>
-          Ends on (optional)
+          {t('fixedCost.endsOn')}
         </label>
         <input
           id={`${id}-endDate`}
@@ -173,10 +175,10 @@ export default function FixedCostEditor({ currency, initial, onSubmit, onCancel 
 
       <div className="cost-editor__actions">
         <button type="submit" className="btn-primary-apply" disabled={saving} aria-busy={saving}>
-          {saving ? 'Saving…' : initial ? 'Save changes' : 'Add cost'}
+          {saving ? t('fixedCost.saving') : initial ? t('fixedCost.save') : t('fixedCost.addCost')}
         </button>
         <button type="button" className="btn-secondary-cancel" onClick={onCancel}>
-          Cancel
+          {t('common.cancel')}
         </button>
       </div>
     </form>

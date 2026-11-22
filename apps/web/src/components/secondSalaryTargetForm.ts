@@ -1,12 +1,13 @@
+import { currentTranslator, type Translate } from '../i18n/translate';
 import { secondSalaryTargetMonthlyMinorSchema } from '../contracts';
 import { parseMajorToMinor } from '../lib/money';
 
 export type TargetResult = { ok: true; monthlyMinor: number } | { ok: false; error: string };
 
 /** What was typed as the monthly second salary to aim at, as the amount the server stores. */
-export function validateTargetForm(typed: string, currency: string): TargetResult {
+export function validateTargetForm(typed: string, currency: string, t: Translate = currentTranslator()): TargetResult {
   const minor = parseMajorToMinor(typed, currency);
-  if (minor === null || minor <= 0) return { ok: false, error: 'Enter an amount such as 2500.' };
+  if (minor === null || minor <= 0) return { ok: false, error: t('secondSalary.errAmount') };
   const parsed = secondSalaryTargetMonthlyMinorSchema.safeParse(minor);
-  return parsed.success ? { ok: true, monthlyMinor: parsed.data } : { ok: false, error: 'That amount is too large.' };
+  return parsed.success ? { ok: true, monthlyMinor: parsed.data } : { ok: false, error: t('form.amountTooLarge') };
 }

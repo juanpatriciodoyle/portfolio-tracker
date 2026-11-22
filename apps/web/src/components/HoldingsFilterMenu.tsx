@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Filter } from 'lucide-react';
+import { dataLabel } from '../i18n/dataLabels';
+import { useTranslation } from '../i18n/useTranslation';
 import { FILTER_LABELS, countActiveFilters, filterOptions, toggleFilter, type Filterable, type FilterField, type HoldingsFilters, EMPTY_FILTERS } from '../lib/holdingsFilter';
 
 interface HoldingsFilterMenuProps {
@@ -12,6 +14,7 @@ const FIELDS: FilterField[] = ['assetClass', 'sector', 'region'];
 
 /** A funnel button that opens the choices for asset class, sector and region. */
 export default function HoldingsFilterMenu({ rows, filters, onChange }: HoldingsFilterMenuProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
   const active = countActiveFilters(filters);
@@ -30,8 +33,8 @@ export default function HoldingsFilterMenu({ rows, filters, onChange }: Holdings
         type="button"
         className="dashboard-icon-button holdings-toolbar__filter"
         onClick={() => setOpen(!open)}
-        aria-label="Filter holdings"
-        title="Filter holdings"
+        aria-label={t('holdings.filter')}
+        title={t('holdings.filter')}
         aria-expanded={open}
       >
         <Filter size={16} aria-hidden="true" />
@@ -39,17 +42,17 @@ export default function HoldingsFilterMenu({ rows, filters, onChange }: Holdings
       </button>
 
       {open && (
-        <div className="dashboard-table-column-menu__menu holdings-filter-menu" role="group" aria-label="Filter holdings">
+        <div className="dashboard-table-column-menu__menu holdings-filter-menu" role="group" aria-label={t('holdings.filter')}>
           {FIELDS.map((field) => {
             const options = filterOptions(rows, field);
             if (options.length === 0) return null;
             return (
               <fieldset key={field} className="holdings-filter-menu__group">
-                <legend>{FILTER_LABELS[field]}</legend>
+                <legend>{t(FILTER_LABELS[field])}</legend>
                 {options.map((option) => (
                   <label key={option} className="table-column-menu__item">
                     <input type="checkbox" className="table-column-menu__checkbox" checked={filters[field].includes(option)} onChange={() => onChange(toggleFilter(filters, field, option))} />
-                    {option}
+                    {dataLabel(t, field, option)}
                   </label>
                 ))}
               </fieldset>
@@ -57,7 +60,7 @@ export default function HoldingsFilterMenu({ rows, filters, onChange }: Holdings
           })}
           {active > 0 && (
             <button type="button" className="holdings-filter-menu__clear" onClick={() => onChange(EMPTY_FILTERS)}>
-              Clear filters
+              {t('holdings.clearFilters')}
             </button>
           )}
         </div>

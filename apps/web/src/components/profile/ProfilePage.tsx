@@ -1,3 +1,5 @@
+import LanguageSelector from '../../i18n/LanguageSelector';
+import { useTranslation } from '../../i18n/useTranslation';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import type { CreateBillingRecordRequest, CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto } from '../../contracts';
@@ -50,6 +52,7 @@ function latestCurrency(phases: readonly LivingPhaseDto[]): string {
 }
 
 export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: ProfilePageProps) {
+  const { t } = useTranslation();
   const phasesApi = useLivingPhases();
   const profileApi = useProfile();
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -123,7 +126,7 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
   const addBill = async (input: CreateBillingRecordRequest) => {
     const result = await billsApi.createBill(input);
     if (result.ok) {
-      announce(`Expense added to ${phases.find((phase) => phase.id === input.phaseId)?.name ?? 'your home'}`);
+      announce(t('profile.announce.expenseAdded', { name: phases.find((phase) => phase.id === input.phaseId)?.name ?? t('profile.yourHome') }));
     }
     return result;
   };
@@ -133,7 +136,7 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
     const renewed = findRenewedCost(phase, input);
     const result = renewed ? await phasesApi.updateFixedCost(phase.id, renewed.id, input) : await phasesApi.addFixedCost(phase.id, input);
     if (result.ok) {
-      announce(`${renewed ? 'Cost updated' : 'Cost added'} in ${phase.name}`);
+      announce(t(renewed ? 'profile.announce.costUpdated' : 'profile.announce.costAdded', { name: phase.name }));
     }
     return result;
   };
@@ -151,7 +154,7 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
       const result = await phasesApi.updatePhase(editor.phaseId, payload.update);
       if (result.ok) {
         setEditor(null);
-        announce('Living phase updated');
+        announce(t('profile.announce.phaseUpdated'));
       }
       return result;
     }
@@ -159,7 +162,7 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
     if (result.ok) {
       setEditor(null);
       setExpandedId(result.value.id);
-      announce('Living phase added');
+      announce(t('profile.announce.phaseAdded'));
     }
     return result;
   };
@@ -175,7 +178,7 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
     const result = await phasesApi.deletePhase(phaseId);
     if (result.ok) {
       setExpandedId((current) => (current === phaseId ? null : current));
-      announce('Living phase deleted');
+      announce(t('profile.announce.phaseDeleted'));
     }
     return result;
   };
@@ -184,43 +187,48 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
     <div className="profile-page">
       <header className="profile-page__header">
         <button type="button" className="profile-back" onClick={onBack}>
-          <ArrowLeft size={16} aria-hidden="true" /> Dashboard
+          <ArrowLeft size={16} aria-hidden="true" /> {t('profile.back')}
         </button>
-        <h1 className="profile-page__title">Profile</h1>
+        <h1 className="profile-page__title">{t('profile.title')}</h1>
+        <LanguageSelector />
       </header>
 
       <main className="profile-page__main">
         <div className="profile-page__content">
           {status === 'signed-out' && (
             <div className="profile-banner profile-banner--warning" role="alert">
-              <p>Your session has ended. Sign in again to see your profile.</p>
+              <p>{t('profile.signedOut')}</p>
               <button type="button" className="btn-primary-apply profile-banner__action" onClick={onSignedOut}>
-                Sign in again
+                {t('profile.signInAgain')}
               </button>
             </div>
           )}
           {status === 'encryption-unavailable' && (
             <div className="profile-banner profile-banner--warning" role="alert">
               <p>
-                <strong>Profile data cannot be stored yet.</strong> The server has no encryption key. Add{' '}
-                <code>PROFILE_ENCRYPTION_KEY</code> to <code>apps/api/.env</code> and restart the API.
+                <strong>{t('profile.encryption.title')}</strong>
+                {t('profile.encryption.before')}
+                <code>PROFILE_ENCRYPTION_KEY</code>
+                {t('profile.encryption.middle')}
+                <code>apps/api/.env</code>
+                {t('profile.encryption.after')}
               </p>
               <button type="button" className="btn-secondary-cancel profile-banner__action" onClick={retry}>
-                Try again
+                {t('common.tryAgain')}
               </button>
             </div>
           )}
           {status === 'error' && (
             <div className="profile-banner profile-banner--error" role="alert">
-              <p>{phasesApi.message ?? profileApi.message ?? 'Something went wrong.'}</p>
+              <p>{phasesApi.message ?? profileApi.message ?? t('profile.errorFallback')}</p>
               <button type="button" className="btn-secondary-cancel profile-banner__action" onClick={retry}>
-                Try again
+                {t('common.tryAgain')}
               </button>
             </div>
           )}
           {status === 'loading' && (
             <p className="profile-page__loading" role="status">
-              Loading…
+              {t('common.loading')}
             </p>
           )}
 
@@ -233,15 +241,15 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
                 <section aria-labelledby="living-phases-heading" className="profile-phases">
                   <div className="profile-section__header">
                     <h2 className="profile-section__title" id="living-phases-heading">
-                      Living phases
+                      {t('profile.livingPhases')}
                     </h2>
                     {phases.length > 0 && !profileEmpty && (
                       <div className="profile-section__actions">
                         <button type="button" className="profile-action-button profile-action-button--primary" onClick={() => setExpenseOpen(true)}>
-                          <Plus size={16} aria-hidden="true" /> Add expense
+                          <Plus size={16} aria-hidden="true" /> {t('profile.addExpense')}
                         </button>
                         <button type="button" className="profile-action-button profile-action-button--outline" onClick={() => setEditor({ mode: 'create' })}>
-                          <Plus size={16} aria-hidden="true" /> Add living phase
+                          <Plus size={16} aria-hidden="true" /> {t('profile.addPhase')}
                         </button>
                       </div>
                     )}
@@ -256,9 +264,9 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
 
                   {phases.length === 0 ? (
                     <div className="profile-card profile-empty">
-                      <h3 className="profile-empty__title">Where have you lived?</h3>
+                      <h3 className="profile-empty__title">{t('profile.whereLived')}</h3>
                       <button type="button" className="btn-primary-apply profile-empty__action" onClick={() => setEditor({ mode: 'create' })}>
-                        Add your first living phase
+                        {t('profile.addFirstPhase')}
                       </button>
                     </div>
                   ) : (
@@ -280,10 +288,10 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
                   )}
                 </section>
               {profileApi.status === 'ready' && profileApi.profile && profileEmpty && (
-                <section className="profile-card profile-empty" aria-label="About you">
-                  <h2 className="profile-empty__title">About you</h2>
+                <section className="profile-card profile-empty" aria-label={t('profile.aboutYou')}>
+                  <h2 className="profile-empty__title">{t('profile.aboutYou')}</h2>
                   <button type="button" className="btn-primary-apply profile-empty__action" onClick={() => setEditor({ mode: 'onboarding' })}>
-                    Tell us about yourself
+                    {t('profile.tellUs')}
                   </button>
                 </section>
               )}
@@ -314,10 +322,10 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
           ) : (
             <>
           {profileApi.status === 'ready' && profileApi.profile && profileEmpty && (
-            <section className="profile-card profile-empty" aria-label="About you">
-              <h2 className="profile-empty__title">About you</h2>
+            <section className="profile-card profile-empty" aria-label={t('profile.aboutYou')}>
+              <h2 className="profile-empty__title">{t('profile.aboutYou')}</h2>
               <button type="button" className="btn-primary-apply profile-empty__action" onClick={() => setEditor({ mode: 'onboarding' })}>
-                Tell us about yourself
+                {t('profile.tellUs')}
               </button>
             </section>
           )}
@@ -327,7 +335,7 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
           {isAdmin && dataReady && (
             <section className="profile-card usage-section" aria-labelledby="usage-analytics-heading">
               <h2 className="profile-section__title" id="usage-analytics-heading">
-                Analytics
+                {t('profile.tab.analytics')}
               </h2>
               <UsageAnalytics status={usage.status} message={usage.message} analytics={usage.analytics} onRetry={usage.reload} />
             </section>
@@ -362,7 +370,7 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
           onClose={() => setEditor(null)}
           onFinished={() => {
             setEditor(null);
-            announce('Profile saved');
+            announce(t('profile.announce.saved'));
           }}
         />
       )}

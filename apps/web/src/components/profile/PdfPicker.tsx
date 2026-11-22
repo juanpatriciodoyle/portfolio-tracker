@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { FileUp } from 'lucide-react';
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 
@@ -12,6 +13,7 @@ const isPdf = (file: File) => file.type === 'application/pdf' || file.name.toLow
 
 /** Choose, or drop, any number of bill PDFs at once. Nothing is uploaded until each one is reviewed. */
 export default function PdfPicker({ onFiles, large = false }: PdfPickerProps) {
+  const { t } = useTranslation();
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -40,17 +42,17 @@ export default function PdfPicker({ onFiles, large = false }: PdfPickerProps) {
     >
       <FileUp size={large ? 32 : 16} aria-hidden="true" />
       <span className="pdf-picker__text">
-        {large ? 'Drop your bills here' : 'Have the PDFs? Drop them here, or '}
+        {large ? t('picker.drop') : t('picker.dropSmall')}
         {large ? (
           <>
             <br />
-            or{' '}
+            {t('picker.or')}
           </>
         ) : null}
         <button type="button" className="pdf-picker__button" onClick={() => input.current?.click()}>
-          {large ? 'choose PDFs' : 'add from PDFs'}
+          {large ? t('picker.choose') : t('picker.addFrom')}
         </button>
-        {large ? ' from your computer. You can add several at once.' : '.'}
+        {large ? t('picker.fromComputer') : '.'}
       </span>
       <input
         ref={input}
@@ -59,7 +61,7 @@ export default function PdfPicker({ onFiles, large = false }: PdfPickerProps) {
         multiple
         className="visually-hidden"
         tabIndex={-1}
-        aria-label="Choose bill PDFs"
+        aria-label={t('picker.choosePdfs')}
         onChange={choose}
       />
     </div>

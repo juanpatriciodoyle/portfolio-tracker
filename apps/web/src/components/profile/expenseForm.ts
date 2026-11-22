@@ -18,6 +18,8 @@ import { parseMajorToMinor } from '../../lib/money';
 import { defaultExpensePhase, phaseCoveringDay } from '../../lib/phaseRouting';
 import { emptyBillForm, validateBill, type BillForm, type BillFormContext } from './billForm';
 import { reviewFormFrom } from './documentForm';
+import { currentTranslator, type Translate } from '../../i18n/translate';
+import type { MessageKey } from '../../i18n/catalogs';
 import { BILLING_CADENCE_PHRASES } from './labels';
 
 /** What the "Add an expense" wizard holds: the bill form, plus what only the wizard asks. */
@@ -34,14 +36,10 @@ export type ExpenseStepId = 'who' | 'amount' | 'dates' | 'again';
 export type ExpenseErrors = Partial<Record<'category' | 'vendor' | 'amount' | 'cadence' | 'periodStart' | 'periodEnd' | 'repeats' | 'form', string>>;
 
 /** How often it comes, in the words a person uses. `ONE_OFF` is "one time only". */
-export const FREQUENCY_OPTIONS: readonly { value: BillingCadence; label: string }[] = [
-  { value: 'MONTHLY', label: 'Every month' },
-  { value: 'BIMONTHLY', label: 'Every 2 months' },
-  { value: 'QUARTERLY', label: 'Every 3 months' },
-  { value: 'SEMI_ANNUALLY', label: 'Every 6 months' },
-  { value: 'ANNUAL', label: 'Every year' },
-  { value: 'ONE_OFF', label: 'One time only' },
-];
+const FREQUENCIES: readonly BillingCadence[] = ['MONTHLY', 'BIMONTHLY', 'QUARTERLY', 'SEMI_ANNUALLY', 'ANNUAL', 'ONE_OFF'];
+
+export const frequencyOptions = (t: Translate): readonly { value: BillingCadence; label: string }[] =>
+  FREQUENCIES.map((value) => ({ value, label: t(`expense.freq.${value}` satisfies MessageKey) }));
 
 export function emptyExpenseForm(): ExpenseForm {
   return { ...emptyBillForm(), spansDays: false, repeats: null, fromDocument: false };
@@ -106,28 +104,28 @@ export function asksIfItRepeats(form: ExpenseForm): boolean {
 }
 
 /** Checks one step like a person would, so a mistake is caught where it was made. */
-export function validateStep(step: ExpenseStepId, form: ExpenseForm, currency: string): ExpenseErrors {
+export function validateStep(step: ExpenseStepId, form: ExpenseForm, currency: string, t: Translate = currentTranslator()): ExpenseErrors {
   const errors: ExpenseErrors = {};
   if (step === 'who') {
-    if (form.vendor.trim() === '') errors.vendor = 'Who sent it?';
-    if (form.category === null) errors.category = 'Pick what this is for.';
+    if (form.vendor.trim() === '') errors.vendor = t('expense.errWho');
+    if (form.category === null) errors.category = t('expense.errCategory');
   } else if (step === 'amount') {
-    if (parseMajorToMinor(form.amount, currency) === null) errors.amount = 'Enter an amount such as 96 or 96.50.';
-    if (form.cadence === null) errors.cadence = 'Pick how often it comes.';
+    if (parseMajorToMinor(form.amount, currency) === null) errors.amount = t('bill.errAmount');
+    if (form.cadence === null) errors.cadence = t('expense.errCadence');
   } else if (step === 'dates') {
     const single = form.cadence === 'ONE_OFF' && !form.spansDays;
     if (datesRequired(form) || form.periodStart !== '' || form.periodEnd !== '') {
-      if (!isDate(form.periodStart)) errors.periodStart = single ? 'Pick the day it was paid.' : 'Pick the first day it covers.';
-      if (!single && !isDate(form.periodEnd)) errors.periodEnd = 'Pick the last day it covers.';
+      if (!isDate(form.periodStart)) errors.periodStart = single ? t('expense.errPaidDay') : t('expense.errFirstDay');
+      if (!single && !isDate(form.periodEnd)) errors.periodEnd = t('expense.errLastDay');
       if (!errors.periodStart && !errors.periodEnd && !single) {
-        if (form.periodEnd < form.periodStart) errors.periodEnd = 'It cannot end before it starts.';
+        if (form.periodEnd < form.periodStart) errors.periodEnd = t('expense.errEnd');
         else if (form.cadence !== null && !periodFitsCadence(form.cadence, form.periodStart, form.periodEnd)) {
-          errors.periodEnd = `Something that comes ${BILLING_CADENCE_PHRASES[form.cadence]} can cover at most ${maxPeriodDays(form.cadence)} days. Pick another frequency or shorten the days.`;
+          errors.periodEnd = t('expense.errTooLong', { cadence: t(BILLING_CADENCE_PHRASES[form.cadence]), days: maxPeriodDays(form.cadence) ?? '' });
         }
       }
     }
   } else if (form.repeats === null) {
-    errors.repeats = 'Pick one.';
+    errors.repeats = t('expense.errPickOne');
   }
   return errors;
 }
@@ -146,24 +144,25 @@ export function resolveExpense(
   form: ExpenseForm,
   phases: readonly LivingPhaseDto[],
   today: string | null,
-  chosenPhaseId: string | null = null
+  chosenPhaseId: string | null = null,
+  t: Translate = currentTranslator()
 ): ExpenseResolution {
-  if (form.category === null || form.cadence === null) return { ok: false, errors: { form: 'Check the details and try again.' } };
+  if (form.category === null || form.cadence === null) return { ok: false, errors: { form: t('form.checkDetails') } };
 
   const outcome = classifyExpense({ category: form.category, cadence: form.cadence, hasDates: hasDates(form), fromDocument: form.fromDocument, repeats: form.repeats });
-  if (outcome.kind === 'ASK_REPEATS') return { ok: false, errors: { repeats: 'Pick one.' } };
+  if (outcome.kind === 'ASK_REPEATS') return { ok: false, errors: { repeats: t('expense.errPickOne') } };
 
   if (outcome.kind === 'RECURRING_RATE') {
     const phase = defaultExpensePhase(phases, today ?? '');
-    if (phase === null) return { ok: false, errors: { form: 'Add a living phase first.' } };
+    if (phase === null) return { ok: false, errors: { form: t('expense.errAddPhase') } };
     const amountMinor = parseMajorToMinor(form.amount, phase.currency);
-    if (amountMinor === null) return { ok: false, errors: { amount: 'Enter an amount such as 96 or 96.50.' } };
+    if (amountMinor === null) return { ok: false, errors: { amount: t('bill.errAmount') } };
     const parsed = createFixedCostRequest.safeParse({ category: form.category, cadence: outcome.cadence satisfies CostCadence, amountMinor, label: form.vendor.trim() });
-    return parsed.success ? { ok: true, kind: 'RATE', phase, create: parsed.data } : { ok: false, errors: { form: 'Check the details and try again.' } };
+    return parsed.success ? { ok: true, kind: 'RATE', phase, create: parsed.data } : { ok: false, errors: { form: t('form.checkDetails') } };
   }
 
   const phase = chosenPhaseId !== null ? (phases.find((candidate) => candidate.id === chosenPhaseId) ?? null) : phaseCoveringDay(phases, form.periodStart);
-  if (phase === null) return { ok: false, errors: { periodStart: 'No living phase covers that day. Pick a day you lived somewhere.' } };
-  const result = validateBill({ ...form, cadence: outcome.cadence }, phase.id, phase.currency);
+  if (phase === null) return { ok: false, errors: { periodStart: t('bill.errNoPhase') } };
+  const result = validateBill({ ...form, cadence: outcome.cadence }, phase.id, phase.currency, t);
   return result.ok ? { ok: true, kind: 'RECEIPT', create: result.create } : { ok: false, errors: result.errors };
 }

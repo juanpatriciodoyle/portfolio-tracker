@@ -12,6 +12,7 @@ import {
   type UpdateLivingPhaseRequest,
 } from '../../contracts';
 import { parseMajorToMinor } from '../../lib/money';
+import { currentTranslator, type Translate } from '../../i18n/translate';
 import { phaseDisplayName } from '../../lib/phaseName';
 
 /** What the editor holds while a person types: everything is text until it is validated. */
@@ -88,11 +89,11 @@ export function initialPhaseForm(
   };
 }
 
-const REQUIRED_MESSAGES: Partial<Record<keyof PhaseFormState, string>> = {
-  city: 'Which city was it?',
-  address: 'Keep the address under 200 characters.',
-  notes: 'Keep the notes under 500 characters.',
-};
+const requiredMessages = (t: Translate): Partial<Record<keyof PhaseFormState, string>> => ({
+  city: t('phaseForm.errCity'),
+  address: t('phaseForm.errAddress'),
+  notes: t('phaseForm.errNotes'),
+});
 
 /** The contract's field names, mapped onto the form's. */
 const FORM_FIELD_FOR_CONTRACT_FIELD: Record<string, keyof PhaseFormState> = { incomeStreams: 'monthlyIncome' };
@@ -101,13 +102,6 @@ function isFormField(field: string): field is keyof PhaseFormState {
   return ['city', 'countryCode', 'tenure', 'currency', 'startDate', 'endDate', 'monthlyIncome', 'address', 'notes'].includes(field);
 }
 
-/** What the first income typed while adding a home is called; more can be added later, each with its own name. */
-const FIRST_INCOME_LABEL = 'Salary';
-
-const FUTURE_MESSAGES = {
-  startDate: 'Moved in cannot be a day in the future.',
-  endDate: 'Moved out cannot be a day in the future.',
-} as const;
 
 /**
  * Checks the form against the same contract the server uses, with messages written for people.
@@ -117,21 +111,22 @@ export function validatePhaseForm(
   form: PhaseFormState,
   today: string,
   fixedCosts: readonly CreateFixedCostRequest[] = [],
-  carriedJobs: readonly IncomeStreamDto[] = []
+  carriedJobs: readonly IncomeStreamDto[] = [],
+  t: Translate = currentTranslator()
 ): PhaseFormResult {
   const errors: PhaseFieldErrors = {};
 
   // Income is optional: nothing typed is a home without income. Further jobs are added from the home itself.
   const monthlyIncomeMinor = form.monthlyIncome.trim() === '' ? 0 : parseMajorToMinor(form.monthlyIncome, form.currency);
-  if (monthlyIncomeMinor === null) errors.monthlyIncome = 'Enter an amount such as 3200, or leave it empty.';
-  if (form.startDate === '') errors.startDate = 'Add the day you moved in.';
-  else if (form.startDate > today) errors.startDate = FUTURE_MESSAGES.startDate;
+  if (monthlyIncomeMinor === null) errors.monthlyIncome = t('phaseForm.errIncome');
+  if (form.startDate === '') errors.startDate = t('phaseForm.errMovedIn');
+  else if (form.startDate > today) errors.startDate = t('phaseForm.errFutureIn');
   if (!form.stillLivingHere) {
-    if (form.endDate === '') errors.endDate = 'Add the day you left, or tick "Still living here".';
-    else if (form.endDate > today) errors.endDate = FUTURE_MESSAGES.endDate;
-    else if (form.startDate !== '' && form.endDate <= form.startDate) errors.endDate = 'Moved out must be after the day you moved in.';
+    if (form.endDate === '') errors.endDate = t('phaseForm.errMovedOut');
+    else if (form.endDate > today) errors.endDate = t('phaseForm.errFutureOut');
+    else if (form.startDate !== '' && form.endDate <= form.startDate) errors.endDate = t('phaseForm.errOrder');
   }
-  if (form.countryCode === '') errors.countryCode = 'Choose a country.';
+  if (form.countryCode === '') errors.countryCode = t('phaseForm.errCountry');
 
   const fields = {
     name: phaseDisplayName(form),
@@ -146,7 +141,7 @@ export function validatePhaseForm(
   };
   const incomeStreams: IncomeStreamDto[] =
     monthlyIncomeMinor !== null && monthlyIncomeMinor > 0 && form.startDate !== ''
-      ? [{ label: FIRST_INCOME_LABEL, amountMinor: monthlyIncomeMinor, startDate: form.startDate, endDate: null }]
+      ? [{ label: t('income.rolePlaceholder'), amountMinor: monthlyIncomeMinor, startDate: form.startDate, endDate: null }]
       : [];
   incomeStreams.push(...carriedJobs);
 
@@ -156,7 +151,7 @@ export function validatePhaseForm(
       const contractField = String(issue.path[0] ?? '');
       const field = FORM_FIELD_FOR_CONTRACT_FIELD[contractField] ?? contractField;
       if (!isFormField(field) || errors[field] !== undefined) continue;
-      errors[field] = issue.code === 'too_small' || issue.code === 'invalid_type' ? (REQUIRED_MESSAGES[field] ?? issue.message) : issue.message;
+      errors[field] = issue.code === 'too_small' || issue.code === 'invalid_type' ? (requiredMessages(t)[field] ?? issue.message) : issue.message;
     }
   }
 
@@ -166,8 +161,8 @@ export function validatePhaseForm(
 }
 
 /** What is wrong with the fields of one step, ignoring every other step. */
-export function phaseStepErrors(form: PhaseFormState, today: string, step: PhaseStepId): PhaseFieldErrors {
-  const result = validatePhaseForm(form, today);
+export function phaseStepErrors(form: PhaseFormState, today: string, step: PhaseStepId, t: Translate = currentTranslator()): PhaseFieldErrors {
+  const result = validatePhaseForm(form, today, [], [], t);
   if (result.ok) return {};
   const own: readonly string[] = PHASE_STEP_FIELDS[step];
   return Object.fromEntries(Object.entries(result.errors).filter(([field]) => own.includes(field)));
@@ -192,8 +187,8 @@ export interface PhaseFeedback {
  * What a person should see while filling the form: an empty field stays quiet until its step has been
  * tried, but an answer that cannot be right is flagged at once, and one that passes is confirmed.
  */
-export function phaseFeedback(form: PhaseFormState, today: string, tried: ReadonlySet<PhaseStepId>): PhaseFeedback {
-  const result = validatePhaseForm(form, today);
+export function phaseFeedback(form: PhaseFormState, today: string, tried: ReadonlySet<PhaseStepId>, t: Translate = currentTranslator()): PhaseFeedback {
+  const result = validatePhaseForm(form, today, [], [], t);
   const errors: PhaseFieldErrors = result.ok ? {} : result.errors;
   return {
     errorOf: (field) => (hasAnswer(form, field) || tried.has(stepOfField(field)) ? errors[field] : undefined),

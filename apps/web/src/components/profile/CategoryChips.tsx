@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import type { FixedCostCategory } from '../../contracts';
 import { CATEGORY_GROUPS, CATEGORY_LABELS } from './labels';
 
@@ -21,15 +22,16 @@ export default function CategoryChips({
   name,
   value,
   onChange,
-  legend = 'What is it for?',
+  legend,
   errorId,
   invalid = false,
   unread = false,
   only,
 }: CategoryChipsProps) {
+  const { t } = useTranslation();
   return (
     <fieldset className={`profile-chips${unread ? ' is-unread' : ''}`} aria-describedby={errorId}>
-      <legend className="form-label">{legend}</legend>
+      <legend className="form-label">{legend ?? t('category.legend')}</legend>
       <div className="profile-chips__groups">
         {CATEGORY_GROUPS.map((group) => ({ ...group, categories: group.categories.filter((category) => !only || only.includes(category)) }))
           .filter((group) => group.categories.length > 0)
@@ -38,11 +40,11 @@ export default function CategoryChips({
             key={group.id}
             className="profile-chips__group"
             role={group.label ? 'group' : undefined}
-            aria-label={group.label ?? undefined}
+            aria-label={group.label ? t(group.label) : undefined}
           >
             {group.label && (
               <span className="profile-chips__group-label" aria-hidden="true">
-                {group.label}
+                {t(group.label)}
               </span>
             )}
             {group.categories.map((category) => (
@@ -61,7 +63,7 @@ export default function CategoryChips({
                   aria-invalid={invalid || undefined}
                 />
                 <span className="profile-chip__dot" aria-hidden="true" />
-                {CATEGORY_LABELS[category]}
+                {t(CATEGORY_LABELS[category])}
               </label>
             ))}
           </div>

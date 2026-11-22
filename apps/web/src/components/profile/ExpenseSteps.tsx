@@ -1,3 +1,5 @@
+import type { MessageKey } from '../../i18n/catalogs';
+import { useTranslation } from '../../i18n/useTranslation';
 import { useId, useState, type ReactNode } from 'react';
 import type { CreateBillingRecordRequest, CreateFixedCostRequest, LivingPhaseDto } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
@@ -9,7 +11,7 @@ import { withPeriod, withVendor, type BillField, type BillFormContext } from './
 import CategoryChips from './CategoryChips';
 import { describeDocumentFailure } from './describeDocument';
 import {
-  FREQUENCY_OPTIONS,
+  frequencyOptions,
   datesRequired,
   resolveExpense,
   stepsFor,
@@ -53,14 +55,13 @@ export interface ExpenseStepsProps {
   title?: string;
 }
 
-const STEP_LABELS: Record<ExpenseStepId, string> = { who: 'Sender', amount: 'Amount', dates: 'Days', again: 'Check' };
-const START_STEP: WizardStepInfo = { id: 'start', label: 'Start' };
+const STEP_LABELS: Record<ExpenseStepId, MessageKey> = { who: 'expense.step.who', amount: 'expense.step.amount', dates: 'expense.step.dates', again: 'expense.step.again' };
 
-const HEADINGS: Record<ExpenseStepId, string> = {
-  who: 'Who sent it, and what is it for?',
-  amount: 'How much, and how often does it come?',
-  dates: 'Which days does it cover?',
-  again: 'Will this come again?',
+const HEADINGS: Record<ExpenseStepId, MessageKey> = {
+  who: 'expense.heading.who',
+  amount: 'expense.heading.amount',
+  dates: 'expense.heading.dates',
+  again: 'expense.heading.again',
 };
 
 /** The questions of an expense, one step at a time. The answers decide how it is stored: nobody picks that. */
@@ -80,9 +81,11 @@ export default function ExpenseSteps({
   onSubmitRate,
   onSaved,
   onClose,
-  title = 'Add an expense',
+  title,
 }: ExpenseStepsProps) {
+  const { t } = useTranslation();
   const id = useId();
+  const heading = title ?? t('bill.addExpense');
   const [form, setForm] = useState<ExpenseForm>(initial);
   const [step, setStep] = useState<ExpenseStepId>('who');
   const [errors, setErrors] = useState<ExpenseErrors>({});
@@ -91,7 +94,10 @@ export default function ExpenseSteps({
   const ids = stepsFor(form);
   const position = Math.max(ids.indexOf(step), 0);
   const isLast = position === ids.length - 1;
-  const milestones: WizardStepInfo[] = [...(hasStartStep ? [START_STEP] : []), ...ids.map((stepId) => ({ id: stepId, label: STEP_LABELS[stepId] }))];
+  const milestones: WizardStepInfo[] = [
+    ...(hasStartStep ? [{ id: 'start', label: t('expense.step.start') }] : []),
+    ...ids.map((stepId) => ({ id: stepId, label: t(STEP_LABELS[stepId]) })),
+  ];
 
   const chosenPhase = chosenPhaseId === null ? null : (phases.find((phase) => phase.id === chosenPhaseId) ?? null);
   // Where the amount is read: the home chosen for a document, else the home a bill would go to today.
@@ -108,7 +114,7 @@ export default function ExpenseSteps({
     );
 
   const save = async () => {
-    const result = resolveExpense(form, phases, context.today, chosenPhaseId);
+    const result = resolveExpense(form, phases, context.today, chosenPhaseId, t);
     if (!result.ok) {
       setErrors(result.errors);
       // An answer missing for an earlier step: go back to where it is asked.
@@ -124,7 +130,7 @@ export default function ExpenseSteps({
   };
 
   const next = () => {
-    const found = validateStep(step, form, currency);
+    const found = validateStep(step, form, currency, t);
     setErrors(found);
     if (Object.keys(found).length > 0) return;
     if (isLast) {
@@ -157,14 +163,14 @@ export default function ExpenseSteps({
           {notices}
           <div className="form-group">
             <label className="form-label" htmlFor={`${id}-vendor`}>
-              Who sent it?
+              {t('expense.who')}
             </label>
             <input
               id={`${id}-vendor`}
               className={inputClass('vendor', form.vendor.trim() !== '')}
               autoComplete="off"
               maxLength={80}
-              placeholder="Company / Provider"
+              placeholder={t('form.companyPlaceholder')}
               value={form.vendor}
               onChange={(event) =>
                 // No days are made up while typing: they are offered on their own step.
@@ -179,7 +185,7 @@ export default function ExpenseSteps({
             name={`${id}-category`}
             value={form.category}
             onChange={(category) => update((current) => withExpenseCategory(current, category))}
-            legend="What is it for?"
+            legend={t('category.legend')}
             invalid={errors.category !== undefined}
             errorId={errors.category ? `${id}-category-error` : undefined}
             unread={blank('category', form.category !== null)}
@@ -192,14 +198,14 @@ export default function ExpenseSteps({
         <>
           <div className="form-group">
             <label className="form-label" htmlFor={`${id}-amount`}>
-              Total on the bill
+              {t('bill.total')}
             </label>
             <input
               id={`${id}-amount`}
               className={inputClass('amount', form.amount.trim() !== '')}
               inputMode="decimal"
               autoComplete="off"
-              placeholder="96.50"
+              placeholder={t('bill.totalPlaceholder')}
               value={form.amount}
               onChange={(event) => update((current) => ({ ...current, amount: keepDecimal(event.target.value) }))}
               aria-invalid={errors.amount !== undefined || undefined}
@@ -209,8 +215,8 @@ export default function ExpenseSteps({
           </div>
           <SegmentedChoice
             name={`${id}-frequency`}
-            legend="How often does it come?"
-            options={FREQUENCY_OPTIONS}
+            legend={t('expense.howOften')}
+            options={frequencyOptions(t)}
             value={form.cadence}
             onChange={(cadence) => update((current) => withFrequency(current, cadence))}
             unread={blank('cadence', form.cadence !== null)}
@@ -224,10 +230,10 @@ export default function ExpenseSteps({
           {form.cadence === 'ONE_OFF' && (
             <SegmentedChoice
               name={`${id}-span`}
-              legend="Does it cover one day or several?"
+              legend={t('expense.span')}
               options={[
-                { value: 'single', label: 'A single day' },
-                { value: 'several', label: 'Covers several days' },
+                { value: 'single', label: t('expense.single') },
+                { value: 'several', label: t('expense.several') },
               ]}
               value={form.spansDays ? 'several' : 'single'}
               onChange={(choice) => update((current) => withSpansDays(current, choice === 'several'))}
@@ -236,7 +242,7 @@ export default function ExpenseSteps({
           <div className="cost-editor__row">
             <div className="form-group">
               <label className="form-label" htmlFor={`${id}-periodStart`}>
-                {form.cadence === 'ONE_OFF' && !form.spansDays ? 'The day it was paid' : 'Covers from'}
+                {form.cadence === 'ONE_OFF' && !form.spansDays ? t('expense.paidDay') : t('bill.coversFrom')}
               </label>
               <input
                 id={`${id}-periodStart`}
@@ -252,7 +258,7 @@ export default function ExpenseSteps({
             {!(form.cadence === 'ONE_OFF' && !form.spansDays) && (
               <div className="form-group">
                 <label className="form-label" htmlFor={`${id}-periodEnd`}>
-                  Until
+                  {t('bill.until')}
                 </label>
                 <input
                   id={`${id}-periodEnd`}
@@ -274,10 +280,10 @@ export default function ExpenseSteps({
         <>
           <SegmentedChoice
             name={`${id}-again`}
-            legend="Will this come again?"
+            legend={t('expense.heading.again')}
             options={[
-              { value: 'yes', label: 'Yes, it repeats' },
-              { value: 'no', label: 'No, only this once' },
+              { value: 'yes', label: t('expense.againYes') },
+              { value: 'no', label: t('expense.againNo') },
             ]}
             value={form.repeats === null ? null : form.repeats ? 'yes' : 'no'}
             onChange={(choice) => update((current) => ({ ...current, repeats: choice === 'yes' }))}
@@ -288,7 +294,7 @@ export default function ExpenseSteps({
 
       {onSkip && (
         <button type="button" className="profile-text-button expense-wizard__skip" onClick={onSkip} disabled={busy}>
-          Skip this one
+          {t('expense.skip')}
         </button>
       )}
     </>
@@ -296,23 +302,23 @@ export default function ExpenseSteps({
 
   const hints: Partial<Record<ExpenseStepId, string>> = {
     dates: !datesRequired(form)
-      ? 'Optional. Leave both empty if it simply repeats, or add the days to log a bill you already received.'
+      ? t('expense.hint.optional')
       : form.cadence === 'ONE_OFF'
         ? undefined
-        : 'We suggested the latest period. Change it to match the bill.',
-    again: 'A repeating bill is averaged with the other ones in this home. A one-time bill is not.',
+        : t('expense.hint.suggested'),
+    again: t('expense.hint.again'),
   };
 
   return (
     <WizardModal
-      title={progress ? `${title} · ${progress}` : title}
+      title={progress ? `${heading} · ${progress}` : heading}
       steps={milestones}
       stepIndex={(hasStartStep ? 1 : 0) + position}
-      heading={step === 'dates' && form.cadence === 'ONE_OFF' ? 'When was it paid?' : HEADINGS[step]}
+      heading={step === 'dates' && form.cadence === 'ONE_OFF' ? t('expense.heading.paid') : t(HEADINGS[step])}
       hint={hints[step]}
       error={errors.form}
       busy={busy}
-      finishLabel={initial.fromDocument ? 'Log bill' : 'Add expense'}
+      finishLabel={initial.fromDocument ? t('expense.logBill') : t('bill.saveExpense')}
       wide={preview !== undefined}
       onBack={back}
       onNext={next}

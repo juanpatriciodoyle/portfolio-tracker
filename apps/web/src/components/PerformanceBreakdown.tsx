@@ -1,7 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { formatCurrency } from '../data/sampleChartData';
+import { intlLocale } from '../i18n/locale';
+import { useTranslation } from '../i18n/useTranslation';
 import { authorizedFetch } from '../lib/authorizedFetch';
+import { formatFixed, monthNames } from '../lib/money';
 
 export interface PerformancePeriodItem {
   period_type: 'year' | 'month' | 'ttm';
@@ -19,27 +22,14 @@ interface PerformanceBreakdownProps {
   userId?: string;
 }
 
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const MONTH_FULL_NAMES = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-
 export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
   periodsData: initialPeriodsData,
   currency = 'EUR',
   userId,
 }) => {
+  const { t, locale } = useTranslation();
+  const MONTH_NAMES = useMemo(() => monthNames('short', intlLocale(locale)), [locale]);
+  const MONTH_FULL_NAMES = useMemo(() => monthNames('long', intlLocale(locale)), [locale]);
   const [unit, setUnit] = useState<'currency' | 'percent'>('currency');
   const [view, setView] = useState<'bar' | 'heatmap'>('bar');
   const [selectedYear, setSelectedYear] = useState<string>('all');
@@ -88,22 +78,22 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
     const currSymbol = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : '€';
 
     if (abs >= 1000000) {
-      return `${sign}${currSymbol}${(abs / 1000000).toFixed(1)}M`;
+      return `${sign}${currSymbol}${formatFixed(abs / 1000000, 1)}M`;
     }
     if (abs >= 1000) {
-      return `${sign}${currSymbol}${(abs / 1000).toFixed(1)}K`;
+      return `${sign}${currSymbol}${formatFixed(abs / 1000, 1)}K`;
     }
     if (abs === 0) {
       return `${currSymbol}0`;
     }
-    return `${sign}${currSymbol}${abs.toFixed(0)}`;
+    return `${sign}${currSymbol}${formatFixed(abs, 0)}`;
   };
 
   // Format compact percent (e.g. +6.68% or -4.58%)
   const formatCompactPercent = (rate: number) => {
     const pct = rate * 100;
     const sign = pct > 0 ? '+' : '';
-    return `${sign}${pct.toFixed(2)}%`;
+    return `${sign}${formatFixed(pct, 2)}%`;
   };
 
   // Calculate Heatmap Alpha & Colors based on value
@@ -215,7 +205,7 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
         },
       };
     });
-  }, [selectedYear, availableYears, periods]);
+  }, [selectedYear, availableYears, periods, MONTH_NAMES]);
 
   // Determine displayed years in heatmap (collapse to first 3 if showAllYears is false)
   const displayedYears = useMemo(() => {
@@ -234,32 +224,32 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
       <div className="dashboard-performance">
         {/* Header with Title and Control Toggles */}
         <div className="dashboard-performance__header">
-          <h2 className="dashboard-panel-title">Performance</h2>
+          <h2 className="dashboard-panel-title">{t('perf.title')}</h2>
           <div className="dashboard-performance__controls">
             {/* Unit Toggle: P/L vs % */}
-            <div className="segmented-control" aria-label="Performance return unit">
+            <div className="segmented-control" aria-label={t('perf.unit')}>
               <button
                 type="button"
                 className={`segmented-control__item ${unit === 'currency' ? 'segmented-control__item--active' : ''}`}
                 onClick={() => setUnit('currency')}
                 aria-pressed={unit === 'currency'}
-                title="Show net profit or loss for each period in base currency"
+                title={t('perf.profitLossHint')}
               >
-                P/L
+                {t('perf.profitLoss')}
               </button>
               <button
                 type="button"
                 className={`segmented-control__item ${unit === 'percent' ? 'segmented-control__item--active' : ''}`}
                 onClick={() => setUnit('percent')}
                 aria-pressed={unit === 'percent'}
-                title="Show cumulative time-weighted return (TWR) for each period"
+                title={t('perf.percentHint')}
               >
                 %
               </button>
             </div>
 
             {/* View Toggle: Bar Chart vs Heatmap */}
-            <div className="segmented-control" aria-label="Performance chart type">
+            <div className="segmented-control" aria-label={t('perf.chartType')}>
               <button
                 type="button"
                 id="portfolio-performance-bar-button"
@@ -267,7 +257,7 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
                 onClick={() => setView('bar')}
                 aria-pressed={view === 'bar'}
               >
-                Bar chart
+                {t('perf.bar')}
               </button>
               <button
                 type="button"
@@ -276,7 +266,7 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
                 onClick={() => setView('heatmap')}
                 aria-pressed={view === 'heatmap'}
               >
-                Heatmap
+                {t('perf.heatmap')}
               </button>
             </div>
           </div>
@@ -284,23 +274,23 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
 
         {/* Period Navigation Rail */}
         <div className="dashboard-pill-rail dashboard-pill-rail--bordered dashboard-pill-rail--section-tabs dashboard-performance__tabs-scroll">
-          <nav className="segmented-control segmented-control--subtle dashboard-pill-rail__list dashboard-performance__tabs" aria-label="Performance periods">
+          <nav className="segmented-control segmented-control--subtle dashboard-pill-rail__list dashboard-performance__tabs" aria-label={t('perf.periods')}>
             <button
               type="button"
               className={`segmented-control__item ${selectedYear === 'all' ? 'segmented-control__item--active' : ''}`}
               onClick={() => setSelectedYear('all')}
               aria-pressed={selectedYear === 'all'}
             >
-              All
+              {t('period.all')}
             </button>
             <button
               type="button"
               className={`segmented-control__item ${selectedYear === 'ttm' ? 'segmented-control__item--active' : ''}`}
               onClick={() => setSelectedYear('ttm')}
               aria-pressed={selectedYear === 'ttm'}
-              title="Trailing 12 months"
+              title={t('perf.ttmHint')}
             >
-              TTM
+              {t('perf.ttm')}
             </button>
             {availableYears.map((yr) => (
               <button
@@ -427,7 +417,7 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
                       {barChartItems[hoveredBarIndex].label}
                     </div>
                     <div style={{ color: 'var(--text-secondary)', fontSize: '11.5px' }}>
-                      Absolute return:{' '}
+                      {t('perf.absoluteReturn')}{' '}
                       <span
                         style={{
                           fontWeight: 600,
@@ -445,7 +435,7 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
                       </span>
                     </div>
                     <div style={{ color: 'var(--text-secondary)', fontSize: '11.5px', marginTop: '2px' }}>
-                      TWR:{' '}
+                      {t('perf.twr')}{' '}
                       <span
                         style={{
                           fontWeight: 600,
@@ -453,7 +443,7 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
                             barChartItems[hoveredBarIndex].item.time_weighted_return_rate >= 0 ? 'var(--color-profit)' : 'var(--color-loss)',
                         }}
                       >
-                        {(barChartItems[hoveredBarIndex].item.time_weighted_return_rate * 100).toFixed(2)}%
+                        {formatFixed(barChartItems[hoveredBarIndex].item.time_weighted_return_rate * 100, 2)}%
                       </span>
                     </div>
                   </div>
@@ -495,7 +485,7 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
                                 <span
                                   key={`${yr}-${monthNum}`}
                                   className="dashboard-performance__heatmap-cell is-empty"
-                                  aria-label={`${mName} ${yr}: no data`}
+                                  aria-label={t('perf.noData', { month: mName, year: yr })}
                                 />
                               );
                             }
@@ -509,9 +499,9 @@ export const PerformanceBreakdown: React.FC<PerformanceBreakdownProps> = ({
                             const twr = periodItem?.time_weighted_return_rate || 0;
 
                             const titleText = `${MONTH_FULL_NAMES[mIdx]} ${yr}
-Absolute return: ${valAbs >= 0 ? '+' : ''}${formatCurrency(valAbs, currency)}
-TWR: ${twr >= 0 ? '+' : ''}${(twr * 100).toFixed(2)}%
-${mName} 1, ${yr} - ${mName} ${new Date(yr, monthNum, 0).getDate()}, ${yr}`;
+${t('perf.absoluteReturn')} ${valAbs >= 0 ? '+' : ''}${formatCurrency(valAbs, currency)}
+${t('perf.twr')} ${twr >= 0 ? '+' : ''}${formatFixed(twr * 100, 2)}%
+${t('perf.cellRange', { month: mName, year: yr, last: new Date(yr, monthNum, 0).getDate() })}`;
 
                             return (
                               <button
@@ -549,7 +539,7 @@ ${mName} 1, ${yr} - ${mName} ${new Date(yr, monthNum, 0).getDate()}, ${yr}`;
                     onClick={() => setShowAllYears(!showAllYears)}
                     aria-expanded={showAllYears}
                   >
-                    <span>{showAllYears ? 'Show less' : 'Show more'}</span>
+                    <span>{showAllYears ? t('perf.showLess') : t('perf.showMore')}</span>
                     {showAllYears ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </button>
                 </div>

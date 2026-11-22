@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import Modal from '../Modal';
 import MilestoneBar, { type WizardStepInfo } from './MilestoneBar';
@@ -46,6 +47,7 @@ export default function WizardModal({
   onClose,
   children,
 }: WizardModalProps) {
+  const { t } = useTranslation();
   const id = useId();
   const fields = useRef<HTMLDivElement>(null);
   const isFirst = stepIndex === 0;
@@ -80,7 +82,7 @@ export default function WizardModal({
               {heading}
             </h2>
             {hint && <p className="wizard__hint">{hint}</p>}
-            {resumed && <p className="wizard__resumed">Picked up where you left off.</p>}
+            {resumed && <p className="wizard__resumed">{t('wizard.resumed')}</p>}
             <div className="wizard__fields" ref={fields}>
               {children}
             </div>
@@ -95,11 +97,11 @@ export default function WizardModal({
 
         <footer className="wizard__footer">
           <button type="button" className="btn-secondary-cancel" onClick={isFirst ? onClose : onBack} disabled={busy}>
-            {isFirst ? 'Cancel' : 'Back'}
+            {isFirst ? t('common.cancel') : t('common.back')}
           </button>
           {!hideNext && (
             <button type="button" className="btn-primary-apply wizard__next" onClick={onNext} disabled={busy}>
-              {busy ? 'Saving…' : isLast ? finishLabel : 'Continue'}
+              {busy ? t('wizard.saving') : isLast ? finishLabel : t('common.continue')}
             </button>
           )}
         </footer>

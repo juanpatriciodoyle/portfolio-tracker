@@ -2,9 +2,17 @@
  * Display helpers for money and calendar days. Formatting and parsing only: the API owns every
  * calculation, so nothing here adds, converts or compares amounts.
  */
+import { activeLocale } from '../i18n/activeLocale';
+import { intlLocale } from '../i18n/locale';
 
-/** Matches the browser's language; falls back to English where there is no navigator. */
+/**
+ * The language numbers and dates are written in: the one the person chose in the app, else the
+ * browser's, else English. Every formatter below takes a locale and uses this as its default, so
+ * switching language changes them all from one place.
+ */
 export function displayLocale(): string {
+  const chosen = activeLocale();
+  if (chosen) return intlLocale(chosen);
   return (typeof navigator !== 'undefined' && navigator.language) || 'en-US';
 }
 
@@ -17,12 +25,36 @@ export function currencyExponent(currency: string): number {
   }
 }
 
+const symbolChoices = new Map<string, 'symbol' | 'narrowSymbol'>();
+
+/**
+ * Some languages only know a currency by its code ("EUR 900" in Argentine Spanish) where people write its sign ("€ 900").
+ * Then the one-character sign is used. "$" stays out of it: where it means pesos, a dollar amount must keep its "US$".
+ */
+function currencyDisplayFor(currency: string, locale: string): 'symbol' | 'narrowSymbol' {
+  const memo = `${locale}|${currency}`;
+  const known = symbolChoices.get(memo);
+  if (known) return known;
+  const signOf = (currencyDisplay: 'symbol' | 'narrowSymbol') => {
+    try {
+      return new Intl.NumberFormat(locale, { style: 'currency', currency, currencyDisplay }).formatToParts(0).find((part) => part.type === 'currency')?.value;
+    } catch {
+      return undefined;
+    }
+  };
+  const narrow = signOf('narrowSymbol');
+  const choice = signOf('symbol') === currency && narrow !== undefined && narrow.length === 1 && narrow !== '$' ? 'narrowSymbol' : 'symbol';
+  symbolChoices.set(memo, choice);
+  return choice;
+}
+
 function formatCurrency(amountMinor: number, currency: string, locale: string, signed: boolean): string {
   const exponent = currencyExponent(currency);
   const isWhole = amountMinor % 10 ** exponent === 0;
   return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
+    currencyDisplay: currencyDisplayFor(currency, locale),
     minimumFractionDigits: isWhole ? 0 : exponent,
     maximumFractionDigits: exponent,
     signDisplay: signed ? 'exceptZero' : 'auto',
@@ -47,6 +79,22 @@ export function formatPercent(fraction: number, locale: string = displayLocale()
 /** "1,284": a whole count with the locale's grouping. A figure on its way up is rounded first. */
 export function formatCount(value: number, locale: string = displayLocale()): string {
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+}
+
+/** "1,234.50" / "1.234,50": a number with exactly this many decimals, grouped the way the language groups. */
+export function formatFixed(value: number, fractionDigits: number, locale: string = displayLocale()): string {
+  return new Intl.NumberFormat(locale, { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }).format(value);
+}
+
+/** "12.5" / "12,5": a number with at most this many decimals and no trailing zeros. */
+export function formatUpTo(value: number, maxFractionDigits: number, locale: string = displayLocale()): string {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: maxFractionDigits }).format(value);
+}
+
+/** The twelve month names, January first: "Jan" / "ene" short, "January" / "enero" long. */
+export function monthNames(width: 'short' | 'long', locale: string = displayLocale()): string[] {
+  const format = new Intl.DateTimeFormat(locale, { month: width, timeZone: 'UTC' });
+  return Array.from({ length: 12 }, (_, month) => format.format(new Date(Date.UTC(2024, month, 15))));
 }
 
 /** Amount for an editable field: "3200" or "3200.50", no grouping and no currency symbol. */

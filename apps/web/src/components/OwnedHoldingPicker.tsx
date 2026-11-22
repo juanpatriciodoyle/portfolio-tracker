@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { Search } from 'lucide-react';
+import { useTranslation } from '../i18n/useTranslation';
 import { findSellable, formatUnits, type SellablePosition } from '../lib/saleRules';
 
 interface OwnedHoldingPickerProps {
@@ -11,13 +12,14 @@ interface OwnedHoldingPickerProps {
 
 /** A searchable list of what the person owns. Nothing else can be typed in: you can only sell what you hold. */
 export default function OwnedHoldingPicker({ positions, selected, onSelect, inputStyle }: OwnedHoldingPickerProps) {
+  const { t } = useTranslation();
   const listId = useId();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
 
   const matches = findSellable(positions, query);
-  const label = (p: SellablePosition) => `${p.symbol} · ${p.name} (Available: ${formatUnits(p.quantity)} units)`;
+  const label = (p: SellablePosition) => `${p.symbol} · ${p.name} (${t('tx.available', { units: formatUnits(p.quantity) })})`;
 
   const choose = (position: SellablePosition) => {
     onSelect(position);
@@ -28,7 +30,7 @@ export default function OwnedHoldingPicker({ positions, selected, onSelect, inpu
   if (findSellable(positions, '').length === 0) {
     return (
       <p role="status" style={{ ...inputStyle, color: 'var(--text-secondary)', margin: 0 }}>
-        No open positions available to sell
+        {t('picker.none')}
       </p>
     );
   }
@@ -36,7 +38,7 @@ export default function OwnedHoldingPicker({ positions, selected, onSelect, inpu
   return (
     <div style={{ position: 'relative' }}>
       <label htmlFor={`${listId}-input`} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-        <Search size={14} /> What did you sell?
+        <Search size={14} /> {t('picker.question')}
       </label>
       <input
         id={`${listId}-input`}
@@ -46,7 +48,7 @@ export default function OwnedHoldingPicker({ positions, selected, onSelect, inpu
         aria-autocomplete="list"
         autoComplete="off"
         type="text"
-        placeholder="Search what you own"
+        placeholder={t('picker.placeholder')}
         value={open ? query : selected ? label(selected) : query}
         onFocus={() => setOpen(true)}
         onChange={(e) => {
@@ -93,7 +95,7 @@ export default function OwnedHoldingPicker({ positions, selected, onSelect, inpu
             boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
           }}
         >
-          {matches.length === 0 && <li style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-secondary)' }}>You do not own anything that matches.</li>}
+          {matches.length === 0 && <li style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-secondary)' }}>{t('picker.noMatch')}</li>}
           {matches.map((p, index) => (
             <li
               key={p.symbol}
@@ -115,7 +117,7 @@ export default function OwnedHoldingPicker({ positions, selected, onSelect, inpu
             >
               <span style={{ fontWeight: 700 }}>{p.symbol}</span>
               <span style={{ marginLeft: '8px', fontSize: '12px', opacity: 0.8 }}>{p.name}</span>
-              <span style={{ float: 'right', fontSize: '12px' }}>Available: {formatUnits(p.quantity)} units</span>
+              <span style={{ float: 'right', fontSize: '12px' }}>{t('tx.available', { units: formatUnits(p.quantity) })}</span>
             </li>
           ))}
         </ul>

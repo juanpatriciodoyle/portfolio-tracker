@@ -1,3 +1,4 @@
+import { currentTranslator, type Translate } from '../../i18n/translate';
 import { z } from 'zod';
 import { EMPLOYMENT_STATUSES, saveProfileRequest, type ProfileData } from '../../contracts';
 
@@ -44,13 +45,13 @@ function isProfileField(field: string): field is keyof ProfileDraft {
   return ['fullName', 'birthYear', 'nationalities', 'taxResidence', 'householdAdults', 'dependentChildren', 'employmentStatus'].includes(field);
 }
 
-export function validateProfileDraft(draft: ProfileDraft): ProfileFormResult {
+export function validateProfileDraft(draft: ProfileDraft, t: Translate = currentTranslator()): ProfileFormResult {
   const errors: ProfileFieldErrors = {};
   const birthYearText = draft.birthYear.trim();
   let birthYear: number | null = null;
   if (birthYearText !== '') {
     if (/^\d{4}$/.test(birthYearText)) birthYear = Number(birthYearText);
-    else errors.birthYear = 'Use a four-digit year such as 1990.';
+    else errors.birthYear = t('demographics.errBirthYear');
   }
 
   const parsed = saveProfileRequest.safeParse({
@@ -87,13 +88,13 @@ export type OnboardingStepId = keyof typeof ONBOARDING_STEP_FIELDS;
  * What is wrong with one step of the first-time flow. Everything is optional in a profile except that
  * the flow wants a name, so a person who completes it is not asked to start again.
  */
-export function onboardingStepErrors(draft: ProfileDraft, step: OnboardingStepId): ProfileFieldErrors {
+export function onboardingStepErrors(draft: ProfileDraft, step: OnboardingStepId, t: Translate = currentTranslator()): ProfileFieldErrors {
   const errors: ProfileFieldErrors = {};
-  const result = validateProfileDraft(draft);
+  const result = validateProfileDraft(draft, t);
   if (!result.ok) {
     const own: readonly string[] = ONBOARDING_STEP_FIELDS[step];
     for (const [field, message] of Object.entries(result.errors)) if (own.includes(field)) errors[field as keyof ProfileDraft] = message;
   }
-  if (step === 'about' && draft.fullName.trim() === '') errors.fullName = 'Tell us what to call you.';
+  if (step === 'about' && draft.fullName.trim() === '') errors.fullName = t('demographics.errName');
   return errors;
 }

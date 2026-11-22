@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { Percent, Globe, Check, RefreshCw } from 'lucide-react';
 import { authorizedFetch } from '../lib/authorizedFetch';
 import { useSubmitOnce } from '../hooks/useSubmitOnce';
+import { dataLabel } from '../i18n/dataLabels';
+import { useTranslation } from '../i18n/useTranslation';
+import { formatUpTo } from '../lib/money';
 
 interface InflationSettingsModalProps {
   currentCountry: string;
@@ -26,6 +29,7 @@ export default function InflationSettingsModal({
   onClose,
   onUpdate,
 }: InflationSettingsModalProps) {
+  const { t } = useTranslation();
   const [country, setCountry] = useState(currentCountry || 'Spain');
   const [rate, setRate] = useState((currentRate || 2.8).toString());
   const { run: runSave, pending: isSaving } = useSubmitOnce();
@@ -117,18 +121,18 @@ export default function InflationSettingsModal({
           </div>
           <div>
             <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>
-              Inflation Country
+              {t('inflation.title')}
             </h3>
             <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Adjust resident country rate to count true real earnings.
+              {t('inflation.subtitle')}
             </p>
           </div>
         </div>
 
         <div style={{ marginBottom: '20px', padding: '12px 14px', borderRadius: '10px', backgroundColor: 'var(--bg-canvas)', border: '1px solid var(--border-subtle-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>🇪🇸 Spain Annual CPI Inflation</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Monthly Eurostat / INE sync service</div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{t('inflation.spainTitle')}</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('inflation.spainSource')}</div>
           </div>
           <button
             type="button"
@@ -148,14 +152,14 @@ export default function InflationSettingsModal({
               gap: '4px',
             }}
           >
-            <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} /> {isSyncing ? 'Syncing...' : 'Sync Latest'}
+            <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} /> {isSyncing ? t('inflation.syncing') : t('inflation.sync')}
           </button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px', color: 'var(--text-secondary)' }}>
-              Resident Country
+              {t('inflation.country')}
             </label>
             <select
               value={country}
@@ -173,16 +177,16 @@ export default function InflationSettingsModal({
             >
               {Object.keys(COUNTRY_INFLATION_PRESETS).map((c) => (
                 <option key={c} value={c}>
-                  {c} ({COUNTRY_INFLATION_PRESETS[c]}% / year)
+                  {t('inflation.countryOption', { country: dataLabel(t, 'country', c), rate: formatUpTo(COUNTRY_INFLATION_PRESETS[c], 1) })}
                 </option>
               ))}
-              <option value="Custom">Custom Country</option>
+              <option value="Custom">{t('inflation.customCountry')}</option>
             </select>
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px', color: 'var(--text-secondary)' }}>
-              Annual Inflation Rate (%)
+              {t('inflation.rate')}
             </label>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <input
@@ -221,7 +225,7 @@ export default function InflationSettingsModal({
                 cursor: 'pointer',
               }}
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
@@ -242,7 +246,7 @@ export default function InflationSettingsModal({
                 gap: '6px',
               }}
             >
-              <Check size={16} /> {isSaving ? 'Saving...' : 'Save Settings'}
+              <Check size={16} /> {isSaving ? t('inflation.saving') : t('inflation.save')}
             </button>
           </div>
         </form>

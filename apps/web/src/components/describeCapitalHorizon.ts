@@ -1,3 +1,5 @@
+import { currentTranslator, type Translate } from '../i18n/translate';
+import type { MessageKey } from '../i18n/catalogs';
 import type { CapitalHorizonGap, CapitalHorizonResponse, CapitalMilestonePacingDto } from '../contracts';
 import { displayLocale, formatMinor } from '../lib/money';
 
@@ -9,35 +11,33 @@ export interface CapitalMilestoneView {
   progressLabel: string;
 }
 
-const GAP_TEXT: Record<CapitalHorizonGap, string> = {
-  NO_CURRENT_PHASE: 'Add the place you live now to estimate the date.',
-  CURRENCY_MISMATCH: 'Your costs are in another currency than your portfolio, so the date cannot be estimated yet.',
+const GAP_TEXT: Record<CapitalHorizonGap, MessageKey> = {
+  NO_CURRENT_PHASE: 'capital.gap.NO_CURRENT_PHASE',
+  CURRENCY_MISMATCH: 'capital.gap.CURRENCY_MISMATCH',
 };
 
-const PACED = 'Paced with your current lifestyle & spending protected.';
-
 /** Why a goal has no date: the reason it cannot be paced, in words. */
-function whyNoDate({ gap }: CapitalHorizonResponse): string {
-  if (gap) return GAP_TEXT[gap];
-  return 'Set aside a monthly surplus and your date appears here.';
+function whyNoDate({ gap }: CapitalHorizonResponse, t: Translate): string {
+  if (gap) return t(GAP_TEXT[gap]);
+  return t('capital.noDate');
 }
 
-function describeWhen({ title, achieved, monthsRemaining }: CapitalMilestonePacingDto): string {
-  if (achieved) return `${title}: Goal achieved!`;
-  if (monthsRemaining === null) return `${title}: your date starts with your first monthly surplus`;
-  return `${title}: ${monthsRemaining} ${monthsRemaining === 1 ? 'month' : 'months'} away`;
+function describeWhen({ title, achieved, monthsRemaining }: CapitalMilestonePacingDto, t: Translate): string {
+  if (achieved) return t('capital.achieved', { title });
+  if (monthsRemaining === null) return t('capital.start', { title });
+  return t('capital.monthsAway', { title, count: monthsRemaining });
 }
 
 /** Wording of one goal. The server did the pacing: this only decides how to show it. */
-export function describeCapitalMilestone(milestone: CapitalMilestonePacingDto, horizon: CapitalHorizonResponse, locale: string = displayLocale()): CapitalMilestoneView {
+export function describeCapitalMilestone(milestone: CapitalMilestonePacingDto, horizon: CapitalHorizonResponse, locale: string = displayLocale(), t: Translate = currentTranslator()): CapitalMilestoneView {
   const money = (amountMinor: number) => formatMinor(amountMinor, horizon.currency, locale);
   const needed = money(milestone.capitalNeededMinor);
   const held = Math.min(Math.max(horizon.liquidPortfolioMinor, 0), milestone.capitalNeededMinor);
 
   return {
-    badge: describeWhen(milestone),
-    subtext: `${needed} capital target (${milestone.capitalRequiredPercentage}% requirement) · ${milestone.monthsRemaining === null ? whyNoDate(horizon) : PACED}`,
+    badge: describeWhen(milestone, t),
+    subtext: t('capital.subtext', { needed, percentage: milestone.capitalRequiredPercentage, why: milestone.monthsRemaining === null ? whyNoDate(horizon, t) : t('capital.paced') }),
     progress: milestone.progress,
-    progressLabel: `${money(held)} of ${needed} capital target`,
+    progressLabel: t('capital.progress', { held: money(held), needed }),
   };
 }

@@ -8,7 +8,8 @@ export interface CurrencyOption {
 /** Offered first, so the usual suspects are one glance away. */
 const COMMON_CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'ARS', 'BRL', 'MXN', 'CLP', 'COP', 'UYU', 'JPY', 'CNY', 'INR', 'CAD', 'AUD'];
 
-function currencyName(code: string, locale: string): string {
+/** "Euro" / "euro": the currency's name in the language. */
+export function currencyName(code: string, locale: string): string {
   try {
     return new Intl.DisplayNames([locale], { type: 'currency' }).of(code) ?? code;
   } catch {

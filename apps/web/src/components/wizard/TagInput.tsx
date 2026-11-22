@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { X } from 'lucide-react';
 import { useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { splitEntries } from '../../lib/countrySearch';
@@ -38,6 +39,7 @@ export default function TagInput({
   invalid = false,
   describedBy,
 }: TagInputProps) {
+  const { t } = useTranslation();
   const [text, setText] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
   const full = tags.length >= max;
@@ -61,7 +63,7 @@ export default function TagInput({
         continue;
       }
       if (next.length >= max) {
-        message = `Up to ${max} are allowed.`;
+        message = t('tags.limit', { max });
         rest = entries.slice(position);
         break;
       }
@@ -116,7 +118,7 @@ export default function TagInput({
         className="form-input"
         autoComplete="off"
         value={text}
-        placeholder={full ? `Up to ${max}` : placeholder}
+        placeholder={full ? t('tags.upTo', { max }) : placeholder}
         disabled={full}
         onChange={handleChange}
         onKeyDown={handleKeyDown}

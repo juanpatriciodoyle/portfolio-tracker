@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest, UpdateLivingPhaseRequest } from '../../contracts';
@@ -49,6 +50,8 @@ export default function LivingPhaseCard({
   billing,
   announce,
 }: LivingPhaseCardProps) {
+  const words = useTranslation();
+  const { t } = words;
   const id = useId();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const { run: runDelete, pending: deleting } = useSubmitOnce();
@@ -65,12 +68,12 @@ export default function LivingPhaseCard({
   // The income that counts is the one paying on today; a past home shows its last day, one still ahead its first.
   const today = billing?.asOf ?? phase.endDate ?? phase.startDate;
   const incomeDay = phase.endDate !== null && phase.endDate < today ? phase.endDate : today < phase.startDate ? phase.startDate : today;
-  const incomeSummary = summarizeActiveIncome(phase.incomeStreams, incomeDay, (amountMinor) => formatMinor(amountMinor, phase.currency), (day) => formatCalendarDate(day));
+  const incomeSummary = summarizeActiveIncome(phase.incomeStreams, incomeDay, (amountMinor) => formatMinor(amountMinor, phase.currency), (day) => formatCalendarDate(day), t);
 
   const confirmDelete = () =>
     runDelete(async () => {
       const result = await onDelete();
-      if (!result.ok) setDeleteError(describeFailure(result.failure));
+      if (!result.ok) setDeleteError(describeFailure(result.failure, [], words));
     });
 
   return (
@@ -91,7 +94,7 @@ export default function LivingPhaseCard({
             <ChevronDown className="phase-card__chevron" size={16} aria-hidden="true" />
           </button>
         </h3>
-        {status && <span className={`phase-status phase-status--${status}`}>{STATUS_LABELS[status]}</span>}
+        {status && <span className={`phase-status phase-status--${status}`}>{t(STATUS_LABELS[status])}</span>}
         {onToggleCompare && (
           <button
             type="button"
@@ -99,14 +102,14 @@ export default function LivingPhaseCard({
             aria-pressed={compareSelected}
             onClick={onToggleCompare}
           >
-            Compare
+            {t('card.compare')}
           </button>
         )}
       </header>
 
       {address && <p className="phase-card__address">{address}</p>}
       <p className="phase-card__meta">
-        {formatPhaseRange(phase.startDate, phase.endDate, undefined, status === 'upcoming' ? 'open' : 'now')}
+        {formatPhaseRange(phase.startDate, phase.endDate, undefined, status === 'upcoming' ? t('phase.open') : t('phase.now'))}
       </p>
 
       {entry && figures && (
@@ -114,10 +117,10 @@ export default function LivingPhaseCard({
           <IncomeViewToggle phaseId={phase.id} value={incomeView} onChange={setIncomeView} />
           <p className={`phase-card__leftover ${figures.savingsCapacityMinor >= 0 ? 'is-positive' : 'is-negative'}`}>
             <strong>{formatMinor(Math.abs(figures.savingsCapacityMinor), entry.currency)}</strong>{' '}
-            {figures.savingsCapacityMinor >= 0 ? 'left each month' : 'short each month'}
+            {figures.savingsCapacityMinor >= 0 ? t('card.left') : t('card.short')}
             {burn !== null && (
               <span className="phase-card__burn" data-chip="burn">
-                Burn rate: -{formatMinor(burn, entry.currency)}/mo
+                {t('card.burn', { amount: formatMinor(burn, entry.currency) })}
               </span>
             )}
           </p>
@@ -125,7 +128,7 @@ export default function LivingPhaseCard({
             <div className="phase-card__ratios">
               {savingsRate !== null && (
                 <div className="phase-bar-row" data-ratio="saved">
-                  <span className="phase-bar-row__label">{savingsRate >= 0 ? 'Saved' : 'Over budget'}</span>
+                  <span className="phase-bar-row__label">{savingsRate >= 0 ? t('card.saved') : t('card.overBudget')}</span>
                   <span className="phase-bar" aria-hidden="true">
                     <span
                       className={`phase-bar__fill ${savingsRate >= 0 ? 'phase-bar__fill--saved' : 'phase-bar__fill--loss'}`}
@@ -133,13 +136,13 @@ export default function LivingPhaseCard({
                     />
                   </span>
                   <span className="phase-bar-row__value">
-                    {savingsRate >= 0 ? formatPercent(savingsRate) : `${formatPercent(Math.abs(savingsRate))} of income`}
+                    {savingsRate >= 0 ? formatPercent(savingsRate) : t('card.ofIncome', { percent: formatPercent(Math.abs(savingsRate)) })}
                   </span>
                 </div>
               )}
               {housing !== null && (
-                <div className="phase-bar-row" data-ratio="housing" title="Rent and utilities, as a share of income">
-                  <span className="phase-bar-row__label">Housing</span>
+                <div className="phase-bar-row" data-ratio="housing" title={t('card.housingHint')}>
+                  <span className="phase-bar-row__label">{t('phaseFields.housing')}</span>
                   <span className="phase-bar" aria-hidden="true">
                     <span className="phase-bar__fill phase-bar__fill--housing" style={{ width: `${barWidthPercent(housing, 1)}%` }} />
                   </span>
@@ -162,7 +165,7 @@ export default function LivingPhaseCard({
           aria-controls={`${id}-income`}
           onClick={() => setIncomeOpen((open) => !open)}
         >
-          Income &amp; Career <span className="phase-card__career-add">· + Add job or income</span>
+          {t('card.incomeCareer')}<span className="phase-card__career-add">{t('card.addJob')}</span>
         </button>
       </div>
       {incomeOpen && (
@@ -184,19 +187,19 @@ export default function LivingPhaseCard({
 
           <div className="phase-card__footer">
             {confirmingDelete ? (
-              <div className="confirm-inline" role="group" aria-label={`Confirm deleting ${phase.name}`}>
-                <span>Delete {phase.name} and its costs?</span>
+              <div className="confirm-inline" role="group" aria-label={t('card.confirmDelete', { name: phase.name })}>
+                <span>{t('card.deletePrompt', { name: phase.name })}</span>
                 <button type="button" className="profile-danger-button" onClick={confirmDelete} disabled={deleting} aria-busy={deleting}>
-                  {deleting ? 'Deleting…' : 'Delete'}
+                  {deleting ? t('card.deleting') : t('common.delete')}
                 </button>
                 <button type="button" className="profile-text-button" onClick={() => setConfirmingDelete(false)}>
-                  Keep
+                  {t('ledger.keep')}
                 </button>
               </div>
             ) : (
               <>
                 <button type="button" className="profile-text-button" onClick={onEdit}>
-                  <Pencil size={14} aria-hidden="true" /> Edit phase
+                  <Pencil size={14} aria-hidden="true" /> {t('card.editPhase')}
                 </button>
                 <button
                   type="button"
@@ -206,7 +209,7 @@ export default function LivingPhaseCard({
                     setConfirmingDelete(true);
                   }}
                 >
-                  <Trash2 size={14} aria-hidden="true" /> Delete phase
+                  <Trash2 size={14} aria-hidden="true" /> {t('card.deletePhase')}
                 </button>
               </>
             )}

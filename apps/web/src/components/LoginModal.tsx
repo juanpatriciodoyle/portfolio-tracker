@@ -4,7 +4,13 @@ import { KeyRound, ShieldCheck } from 'lucide-react';
 import { startRegistration, startAuthentication } from '@simplewebauthn/browser';
 import { useAppConfig } from '../hooks/useAppConfig';
 import { isGoogleSignInConfigured } from '../lib/googleConfig';
+import LanguageSelector from '../i18n/LanguageSelector';
+import { useTranslation } from '../i18n/useTranslation';
+import { serverMessage } from '../lib/serverMessages';
 import GoogleSignIn from './GoogleSignIn';
+
+/** A refusal already worded for the person, as opposed to a raw error from the browser. */
+class Refusal extends Error {}
 
 interface User {
   id: string;
@@ -19,6 +25,8 @@ interface LoginModalProps {
 }
 
 export default function LoginModal({ onSuccess }: LoginModalProps) {
+  const words = useTranslation();
+  const { t } = words;
   const { run, pending: isLoading } = useSubmitOnce();
   const [error, setError] = useState<string | null>(null);
   const { demoEnabled } = useAppConfig();
@@ -47,10 +55,10 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
           } catch (_) {}
           onSuccess(data.user);
         } else {
-          setError(data.error || 'Google Sign-In failed.');
+          setError(serverMessage(data, words, 'login.googleFailed'));
         }
       } catch (err) {
-        setError('Could not reach the server. Check your connection and try again.');
+        setError(t('error.network'));
       }
     });
 
@@ -73,7 +81,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
 
         const optData = await optRes.json();
         if (!optRes.ok) {
-          throw new Error(optData.error || 'Failed to fetch passkey challenge.');
+          throw new Refusal(serverMessage(optData, words, 'login.passkeyChallenge'));
         }
 
         // 2. Trigger native browser TouchID / FaceID prompt
@@ -103,14 +111,18 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
           } catch (_) {}
           onSuccess(verifyData.user);
         } else {
-          setError(verifyData.error || 'Passkey verification failed.');
+          setError(serverMessage(verifyData, words, 'login.passkeyVerify'));
         }
       } catch (err: unknown) {
         const failure = err instanceof Error ? err : null;
         if (failure?.name === 'NotAllowedError') {
-          setError('Passkey prompt was cancelled.');
+          setError(t('login.passkeyCancelled'));
+        } else if (failure instanceof Refusal) {
+          setError(failure.message);
+        } else if (words.locale === 'en' && failure?.message) {
+          setError(failure.message);
         } else {
-          setError(failure?.message || 'Passkey authentication error.');
+          setError(t('login.passkeyError'));
         }
       }
     });
@@ -143,10 +155,10 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
           } catch (_) {}
           onSuccess(demoUser);
         } else {
-          setError(data.error || 'Failed to initialize demo portfolio.');
+          setError(serverMessage(data, words, 'login.demoFailed'));
         }
       } catch (err) {
-        setError('Could not reach the server. Check your connection and try again.');
+        setError(t('error.network'));
       }
     });
   };
@@ -164,6 +176,9 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
         padding: '20px',
       }}
     >
+      <div style={{ position: 'absolute', top: '16px', right: '16px' }}>
+        <LanguageSelector />
+      </div>
       <div
         style={{
           width: '100%',
@@ -180,7 +195,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
           Portfolio Tracker
         </h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: '0 0 28px 0' }}>
-          Passwordless & Biometric Authentication
+          {t('login.tagline')}
         </p>
 
         {error && (
@@ -203,7 +218,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {/* Sign in with Google: only where the deployment has a Google client id */}
           {isGoogleSignInConfigured() && (
-            <GoogleSignIn onToken={(accessToken) => void signInWithGoogleToken(accessToken)} onError={() => setError('Google Sign-In was cancelled or failed.')}>
+            <GoogleSignIn onToken={(accessToken) => void signInWithGoogleToken(accessToken)} onError={() => setError(t('login.googleCancelled'))}>
               {(signIn) => (
               <button
                 onClick={() => {
@@ -247,7 +262,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
                     d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16C3.7 19.7 7.5 23 12 23z"
                   />
                 </svg>
-                Continue with Google
+                {t('login.google')}
               </button>
               )}
             </GoogleSignIn>
@@ -275,7 +290,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
             }}
           >
             <KeyRound size={18} color="var(--color-profit)" />
-            Continue with Passkey / Touch ID
+            {t('login.passkey')}
           </button>
         </div>
 
@@ -297,7 +312,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
               lineHeight: 1.45,
             }}
           >
-            Explore a demo portfolio with multi-year performance charts, asset allocations, and live analytics.
+            {t('login.demoBlurb')}
           </p>
 
           <button
@@ -332,7 +347,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
               e.currentTarget.style.color = 'var(--text-accent)';
             }}
           >
-            <span>👀</span> Would you like to take a sneak peek?
+            <span>👀</span> {t('login.demoButton')}
           </button>
         </div>
         )}
@@ -348,7 +363,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
             color: 'var(--text-muted)',
           }}
         >
-          <ShieldCheck size={14} color="var(--color-profit)" /> Zero passwords stored. Encrypted session.
+          <ShieldCheck size={14} color="var(--color-profit)" /> {t('login.security')}
         </div>
       </div>
     </div>

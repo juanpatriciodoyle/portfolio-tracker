@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n/useTranslation';
 import { CalendarX, FileText, Pencil, Trash2 } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
 import type { CreateBillingRecordRequest, CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest } from '../../contracts';
@@ -30,6 +31,8 @@ type Dialog = 'ledger' | null;
 
 /** What opens up when a phase card is expanded: the income, the monthly costs, and how to change them. */
 export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost, billing, announce }: PhaseDetailsProps) {
+  const words = useTranslation();
+  const { t } = words;
   const id = useId();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
@@ -50,7 +53,7 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
       .map((category) => ({
         category,
         amountMinor: monthly?.[category] ?? 0,
-        note: describeCostBasis(category, basisOf?.[category].basis ?? null, basisOf?.[category].billCount ?? 0),
+        note: describeCostBasis(category, basisOf?.[category].basis ?? null, basisOf?.[category].billCount ?? 0, t),
         replaced: basisOf?.[category].basis === 'BILLS',
         declared: phase.fixedCosts.filter((cost) => cost.category === category),
       }))
@@ -61,8 +64,8 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
 
   const saveFromDocument = async (input: CreateBillingRecordRequest) => {
     const result = await billing?.onAdd(input);
-    if (result?.ok) announce('Bill logged');
-    return result ?? { ok: false as const, failure: { kind: 'unknown' as const, message: 'Bills are not available here.' } };
+    if (result?.ok) announce(t('details.billLogged'));
+    return result ?? { ok: false as const, failure: { kind: 'unknown' as const, message: t('details.noBills') } };
   };
 
   const pickPdfs = (files: File[]) => {
@@ -74,7 +77,7 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
     const result = await onUpdateCost(phase.id, costId, input);
     if (result.ok) {
       setEditingId(null);
-      announce('Cost updated');
+      announce(t('details.costUpdated'));
     }
     return result;
   };
@@ -85,9 +88,9 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
       if (result.ok) {
         setEndingId(null);
         setRemoveError(null);
-        announce('Subscription ended');
+        announce(t('details.subscriptionEnded'));
       } else {
-        setRemoveError(describeFailure(result.failure));
+        setRemoveError(describeFailure(result.failure, [], words));
       }
     });
 
@@ -97,19 +100,19 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
       if (result.ok) {
         setConfirmingId(null);
         setRemoveError(null);
-        announce('Cost removed');
+        announce(t('details.costRemoved'));
       } else {
-        setRemoveError(describeFailure(result.failure));
+        setRemoveError(describeFailure(result.failure, [], words));
       }
     });
 
   /** Edit and remove for one declared cost, or the question that confirms removing it. */
   const costControls = (cost: LivingPhaseDto['fixedCosts'][number]): ReactNode => {
-    const name = `${CATEGORY_LABELS[cost.category]}${cost.label ? ` ${cost.label}` : ''}`;
+    const name = `${t(CATEGORY_LABELS[cost.category])}${cost.label ? ` ${cost.label}` : ''}`;
     if (endingId === cost.id) {
       return (
-        <div className="confirm-inline" role="group" aria-label={`Confirm ending ${name}`}>
-          <label htmlFor={`${id}-last-day-${cost.id}`}>Last day</label>
+        <div className="confirm-inline" role="group" aria-label={t('details.confirmEnding', { name })}>
+          <label htmlFor={`${id}-last-day-${cost.id}`}>{t('details.lastDay')}</label>
           <input
             id={`${id}-last-day-${cost.id}`}
             type="date"
@@ -118,22 +121,22 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
             onChange={(event) => setLastDay(clampDateYear(event.target.value))}
           />
           <button type="button" className="profile-danger-button" disabled={lastDay === '' || costBusy} aria-busy={costBusy} onClick={() => endCost(cost.id)}>
-            End subscription
+            {t('details.endSubscription')}
           </button>
           <button type="button" className="profile-text-button" onClick={() => setEndingId(null)}>
-            Keep
+            {t('ledger.keep')}
           </button>
         </div>
       );
     }
     return confirmingId === cost.id ? (
-      <div className="confirm-inline" role="group" aria-label={`Confirm removing ${name}`}>
-        <span>Remove this cost?</span>
+      <div className="confirm-inline" role="group" aria-label={t('ledger.confirmRemoving', { name })}>
+        <span>{t('details.removeCostQuestion')}</span>
         <button type="button" className="profile-danger-button" disabled={costBusy} aria-busy={costBusy} onClick={() => removeCost(cost.id)}>
-          Remove
+          {t('ledger.remove')}
         </button>
         <button type="button" className="profile-text-button" onClick={() => setConfirmingId(null)}>
-          Keep
+          {t('ledger.keep')}
         </button>
       </div>
     ) : (
@@ -142,7 +145,7 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
           <button
             type="button"
             className="profile-icon-button"
-            aria-label={`End subscription ${name}`}
+            aria-label={t('details.endSubscriptionNamed', { name })}
             onClick={() => {
               setEndingId(cost.id);
               setLastDay(billing?.asOf ?? '');
@@ -156,7 +159,7 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
         <button
           type="button"
           className="profile-icon-button"
-          aria-label={`Edit ${name}`}
+          aria-label={t('ledger.edit', { name })}
           onClick={() => {
             setEditingId(cost.id);
             setConfirmingId(null);
@@ -164,7 +167,7 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
         >
           <Pencil size={14} aria-hidden="true" />
         </button>
-        <button type="button" className="profile-icon-button" aria-label={`Remove ${name}`} onClick={() => setConfirmingId(cost.id)}>
+        <button type="button" className="profile-icon-button" aria-label={t('ledger.removeItem', { name })} onClick={() => setConfirmingId(cost.id)}>
           <Trash2 size={14} aria-hidden="true" />
         </button>
       </div>
@@ -176,15 +179,15 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
       {entry && (
         <dl className="phase-stats">
           <div>
-            <dt>Time here</dt>
-            <dd>{formatMonths(entry.months)}</dd>
+            <dt>{t('details.timeHere')}</dt>
+            <dd>{formatMonths(entry.months, t)}</dd>
           </div>
           <div>
-            <dt>Earned</dt>
+            <dt>{t('details.earned')}</dt>
             <dd>{formatMinor(entry.totalIncomeMinor, entry.currency)}</dd>
           </div>
           <div>
-            <dt>Fixed costs paid</dt>
+            <dt>{t('details.fixedCostsPaid')}</dt>
             <dd>{formatMinor(entry.totalFixedCostsMinor, entry.currency)}</dd>
           </div>
         </dl>
@@ -193,12 +196,12 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
       <section aria-labelledby={`${id}-breakdown`}>
         <div className="phase-details__heading-row">
           <h4 className="phase-details__heading" id={`${id}-breakdown`}>
-            Fixed costs per month
+            {t('details.fixedCostsPerMonth')}
           </h4>
           {billing && (
             <div className="phase-details__actions">
               <button type="button" className="profile-text-button" onClick={() => setDialog('ledger')}>
-                <FileText size={14} aria-hidden="true" /> Manage bills &amp; documents
+                <FileText size={14} aria-hidden="true" /> {t('details.manageBills')}
               </button>
             </div>
           )}
@@ -208,12 +211,12 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
           <div className="phase-breakdown">
             {breakdown.map((group) => (
               <div key={group.id} className="phase-breakdown__group">
-                {group.label && <p className="phase-breakdown__group-label">{group.label}</p>}
+                {group.label && <p className="phase-breakdown__group-label">{t(group.label)}</p>}
                 <ul className="phase-breakdown__list">
                   {group.rows.map((row) => {
                     // One declared cost that no bill has replaced is the row itself: nothing is repeated underneath it.
                     const sole = row.declared.length === 1 && !row.replaced ? row.declared[0] : null;
-                    const cadence = sole?.endDate ? `Ended ${formatCalendarDate(sole.endDate)}` : sole && sole.category !== 'TAXES' ? CADENCE_LABELS[sole.cadence] : null;
+                    const cadence = sole?.endDate ? t('details.ended', { date: formatCalendarDate(sole.endDate) }) : sole && sole.category !== 'TAXES' ? t(CADENCE_LABELS[sole.cadence]) : null;
                     return (
                       <li key={row.category} className={`phase-breakdown__item${sole?.endDate ? ' is-ended' : ''}`} data-category={row.category}>
                         {sole && editingId === sole.id ? (
@@ -222,7 +225,7 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
                           <div className={`phase-breakdown__row${sole ? ' phase-breakdown__row--editable' : ''}`} title={row.note ?? undefined}>
                             <span className="category-dot" aria-hidden="true" />
                             <span className="phase-breakdown__name">
-                              <span>{CATEGORY_LABELS[row.category]}</span>
+                              <span>{t(CATEGORY_LABELS[row.category])}</span>
                               {cadence && <span className="phase-breakdown__note">{cadence}</span>}
                             </span>
                             {!sole?.endDate && <span className="phase-breakdown__amount">{formatMinor(row.amountMinor, phase.currency)}</span>}
@@ -231,15 +234,15 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
                         )}
 
                         {!sole && row.declared.length > 0 && (
-                          <ul className="cost-list cost-list--nested" aria-label={`Declared ${CATEGORY_LABELS[row.category]} costs`}>
+                          <ul className="cost-list cost-list--nested" aria-label={t('details.declaredCosts', { category: t(CATEGORY_LABELS[row.category]) })}>
                             {row.declared.map((cost) => {
-                              const declaredCadence = describeDeclaredCadence(cost.category, cost.cadence);
+                              const declaredCadence = describeDeclaredCadence(cost.category, cost.cadence, t);
                               return (
                                 <li
                                   key={cost.id}
                                   className={`cost-row${row.replaced ? ' is-replaced' : ''}${cost.endDate ? ' is-ended' : ''}`}
                                   data-category={cost.category}
-                                  title={row.replaced ? 'Replaced by your bills' : undefined}
+                                  title={row.replaced ? t('details.replaced') : undefined}
                                 >
                                   {editingId === cost.id ? (
                                     <FixedCostEditor initial={cost} currency={phase.currency} onSubmit={updateCost(cost.id)} onCancel={() => setEditingId(null)} />
@@ -247,8 +250,8 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
                                     <>
                                       <div className="cost-row__main">
                                         <span className="cost-row__name">
-                                          <span className="cost-row__struck">{cost.label ?? 'Declared'}</span>
-                                          {cost.endDate && <span className="phase-breakdown__note"> Ended {formatCalendarDate(cost.endDate)}</span>}
+                                          <span className="cost-row__struck">{cost.label ?? t('details.declared')}</span>
+                                          {cost.endDate && <span className="phase-breakdown__note"> {t('details.ended', { date: formatCalendarDate(cost.endDate) })}</span>}
                                         </span>
                                       </div>
                                       <span className="cost-row__amount">
@@ -300,7 +303,7 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
           openedFromPhaseId={phase.id}
           onSubmitReceipt={saveFromDocument}
           // PDFs are always bills that arrived: nothing here is stored as a rate.
-          onSubmitRate={async () => ({ ok: false as const, failure: { kind: 'unknown' as const, message: 'Costs cannot be declared from a PDF.' } })}
+          onSubmitRate={async () => ({ ok: false as const, failure: { kind: 'unknown' as const, message: t('details.noRateFromPdf') } })}
           onClose={() => setPdfFiles([])}
         />
       )}
