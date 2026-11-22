@@ -1859,3 +1859,25 @@
     min-height: 240px;
   }
 }
+
+/* Analytics (admin only): two figures like the home hero, then the date they were taken */
+.usage-analytics {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding: 8px 0;
+}
+.usage-analytics__empty {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-heading);
+}
+
+/* The analytics under the first-time button: a title, then the figures with room between them. */
+.usage-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}

@@ -1,4 +1,5 @@
 // GENERATED FILE: do not edit. Source of truth: apps/api/src/contracts. Run `npm run contracts:sync` at the repo root.
+export * from './adminAnalytics';
 export * from './benchmark';
 export * from './billingPeriod';
 export * from './billingRecord';

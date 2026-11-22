@@ -28,6 +28,8 @@ interface User {
   id: string;
   email: string;
   name?: string;
+  /** Only ever true after the admin signs in with Google. It decides what is shown; the server decides what is allowed. */
+  isAdmin?: boolean;
 }
 
 function App() {
@@ -122,7 +124,7 @@ function App() {
   }
 
   if (path === PROFILE_PATH) {
-    return <ProfilePage onBack={() => navigate('/')} onSignedOut={handleLogout} />;
+    return <ProfilePage onBack={() => navigate('/')} onSignedOut={handleLogout} isAdmin={user.isAdmin === true} />;
   }
 
   const periodChange = returnForPeriod(chartData, period, customRange);

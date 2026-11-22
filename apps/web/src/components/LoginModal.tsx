@@ -9,6 +9,7 @@ interface User {
   email: string;
   name?: string;
   avatarUrl?: string;
+  isAdmin?: boolean;
 }
 
 interface LoginModalProps {

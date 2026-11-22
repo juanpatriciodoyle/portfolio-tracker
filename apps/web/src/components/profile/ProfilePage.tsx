@@ -28,7 +28,9 @@ import { isProfileEmpty } from './profileDraft';
 import PhaseTimeline from './PhaseTimeline';
 import ProfileForm from './ProfileForm';
 import ProfileTabs from './ProfileTabs';
-import { panelId, readProfileTab, storeProfileTab, tabId, type ProfileTabId } from '../../lib/profileTab';
+import { panelId, profileTabsFor, readProfileTab, storeProfileTab, tabId, type ProfileTabId } from '../../lib/profileTab';
+import { useUsageAnalytics } from '../../hooks/useUsageAnalytics';
+import UsageAnalytics from './UsageAnalytics';
 import './profile.css';
 
 interface ProfilePageProps {
@@ -36,6 +38,8 @@ interface ProfilePageProps {
   onBack: () => void;
   /** The session has ended: return to sign-in. */
   onSignedOut: () => void;
+  /** The admin sees an Analytics tab. The server decides who may read it; this only decides who is shown the tab. */
+  isAdmin?: boolean;
 }
 
 type EditorState = { mode: 'create' } | { mode: 'edit'; phaseId: string } | { mode: 'onboarding' } | null;
@@ -45,7 +49,7 @@ function latestCurrency(phases: readonly LivingPhaseDto[]): string {
   return [...phases].sort((a, b) => b.startDate.localeCompare(a.startDate))[0]?.currency ?? 'EUR';
 }
 
-export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
+export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: ProfilePageProps) {
   const phasesApi = useLivingPhases();
   const profileApi = useProfile();
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -53,7 +57,10 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
   const [editor, setEditor] = useState<EditorState>(null);
   const [announcement, setAnnouncement] = useState('');
   const [expenseOpen, setExpenseOpen] = useState(false);
-  const [tab, setTab] = useState<ProfileTabId>(() => readProfileTab());
+  const [openedTab, setTab] = useState<ProfileTabId>(() => readProfileTab(undefined, isAdmin));
+  // A tab this person does not have (remembered from another session) opens as the first one.
+  const tab = profileTabsFor(isAdmin).some((candidate) => candidate.id === openedTab) ? openedTab : profileTabsFor(isAdmin)[0].id;
+  // The figures are read only for the admin, and only while their tab is open.
   const openTab = (next: ProfileTabId) => {
     setTab(next);
     storeProfileTab(next);
@@ -106,6 +113,8 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
   const profileEmpty = profileApi.status === 'ready' && profileApi.profile !== null && isProfileEmpty(profileApi.profile);
   // Until the profile is filled in, one button leads the way into the first home: there is nothing to put in tabs yet.
   const showTabs = dataReady && !(profileEmpty && phases.length === 0);
+  // The administrator's own account may be empty (a first sign-in): the analytics are still theirs to read, under the first-time button.
+  const usage = useUsageAnalytics(isAdmin && (showTabs ? tab === 'analytics' : dataReady));
 
   // An expense is added from one place: a bill lands in the home its days fall in, what something costs every so often in the home lived in today.
   const expensePhase = defaultExpensePhase(phases, today);
@@ -217,7 +226,7 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
 
           {showTabs ? (
             <>
-              <ProfileTabs active={tab} onChange={openTab} />
+              <ProfileTabs active={tab} onChange={openTab} isAdmin={isAdmin} />
 
               {tab === 'living' && (
                 <div role="tabpanel" id={panelId('living')} aria-labelledby={tabId('living')} className="profile-panel">
@@ -295,6 +304,12 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
                   )}
                 </div>
               )}
+
+              {isAdmin && tab === 'analytics' && (
+                <div role="tabpanel" id={panelId('analytics')} aria-labelledby={tabId('analytics')} className="profile-panel">
+                  <UsageAnalytics status={usage.status} message={usage.message} analytics={usage.analytics} onRetry={usage.reload} />
+                </div>
+              )}
             </>
           ) : (
             <>
@@ -308,6 +323,14 @@ export default function ProfilePage({ onBack, onSignedOut }: ProfilePageProps) {
           )}
           {profileApi.status === 'ready' && profileApi.profile && !profileEmpty && (
             <ProfileForm profile={profileApi.profile} onSave={profileApi.save} announce={announce} />
+          )}
+          {isAdmin && dataReady && (
+            <section className="profile-card usage-section" aria-labelledby="usage-analytics-heading">
+              <h2 className="profile-section__title" id="usage-analytics-heading">
+                Analytics
+              </h2>
+              <UsageAnalytics status={usage.status} message={usage.message} analytics={usage.analytics} onRetry={usage.reload} />
+            </section>
           )}
             </>
           )}

@@ -8,6 +8,7 @@ import {
   type ProfileData,
   type SecondSalaryResponse,
   type TimelineEntryDto,
+  type UsageAnalyticsResponse,
 } from '../contracts';
 
 export function makeCost(overrides: Partial<FixedCostDto> = {}): FixedCostDto {
@@ -154,4 +155,9 @@ export function makeCapitalHorizon(overrides: Partial<CapitalHorizonResponse> = 
     milestones: [makePacedMilestone()],
     ...overrides,
   };
+}
+
+/** 48 customers, 30 of whom signed in during the last three months. */
+export function makeUsageAnalytics(overrides: Partial<UsageAnalyticsResponse> = {}): UsageAnalyticsResponse {
+  return { registered: 48, active: 30, activePercent: 62.5, activeSince: '2026-08-22', asOf: '2026-11-22', ...overrides };
 }

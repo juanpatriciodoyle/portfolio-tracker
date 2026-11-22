@@ -44,6 +44,11 @@ export function formatPercent(fraction: number, locale: string = displayLocale()
   return new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits }).format(fraction);
 }
 
+/** "1,284": a whole count with the locale's grouping. A figure on its way up is rounded first. */
+export function formatCount(value: number, locale: string = displayLocale()): string {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+}
+
 /** Amount for an editable field: "3200" or "3200.50", no grouping and no currency symbol. */
 export function minorToInputString(amountMinor: number, currency: string): string {
   const exponent = currencyExponent(currency);

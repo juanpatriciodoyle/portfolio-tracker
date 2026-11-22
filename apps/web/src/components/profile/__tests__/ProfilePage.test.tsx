@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { ENCRYPTION_NOT_CONFIGURED, type BillingRecordDto, type LivingPhaseDto, type ProfileData, type TimelineEntryDto } from '../../../contracts';
 import * as client from '../../../lib/apiClient';
 import { ApiError, type RequestOptions } from '../../../lib/apiClient';
-import { makeBill, makeCapitalHorizon, makeEntry, makePhase, makeProfile, makeSecondSalary } from '../../../test/fixtures';
+import { makeBill, makeCapitalHorizon, makeEntry, makePhase, makeProfile, makeSecondSalary, makeUsageAnalytics } from '../../../test/fixtures';
 import { chooseCountry, clickContinue } from '../../../test/wizardHelpers';
 import ProfilePage from '../ProfilePage';
 
@@ -67,6 +67,7 @@ function serve(initial: Partial<World> = {}) {
     if (key === '/api/living-phases/timeline') return { asOf: '2026-10-31', entries: world.entries };
     if (key === '/api/insights/second-salary') return makeSecondSalary();
     if (key === '/api/insights/capital-horizon') return makeCapitalHorizon();
+    if (key === '/api/admin/analytics') return makeUsageAnalytics();
     if (key === 'POST /api/living-phases') return { id: 'new-phase' };
     if (key === '/api/billing-records') return { records: world.records };
     if (key === 'POST /api/billing-records') return { id: 'new-bill' };
@@ -88,10 +89,10 @@ function serve(initial: Partial<World> = {}) {
   return world;
 }
 
-function renderPage() {
+function renderPage(isAdmin = false) {
   const onBack = vi.fn();
   const onSignedOut = vi.fn();
-  render(<ProfilePage onBack={onBack} onSignedOut={onSignedOut} />);
+  render(<ProfilePage onBack={onBack} onSignedOut={onSignedOut} isAdmin={isAdmin} />);
   return { onBack, onSignedOut };
 }
 
@@ -626,5 +627,82 @@ describe('ProfilePage first time', () => {
 
     expect(screen.queryByRole('button', { name: /^Add living phase/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Tell us about yourself' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ProfilePage analytics tab (admin only)', () => {
+  const analyticsRequests = () => apiRequest.mock.calls.filter(([path]) => path === '/api/admin/analytics');
+
+  it('is not there for anyone else, and nothing is asked for it', async () => {
+    serve();
+    renderPage();
+
+    await screen.findByRole('heading', { name: 'Living phases' });
+    expect(screen.queryByRole('tab', { name: 'Analytics' })).not.toBeInTheDocument();
+    expect(analyticsRequests()).toHaveLength(0);
+  });
+
+  it('is a third tab for the admin, and asks for nothing until it is opened', async () => {
+    serve();
+    renderPage(true);
+
+    expect(await screen.findByRole('tab', { name: 'Analytics' })).toBeInTheDocument();
+    expect(analyticsRequests()).toHaveLength(0);
+  });
+
+  it('shows how many customers there are when it is opened', async () => {
+    serve();
+    renderPage(true);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Analytics' }));
+
+    expect(await screen.findByRole('img', { name: '48' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '30' })).toBeInTheDocument();
+    expect(screen.getByText('62.5% of customers')).toBeInTheDocument();
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'profile-panel-analytics');
+    expect(analyticsRequests()).toHaveLength(1);
+  });
+
+  it('opens on a remembered Analytics tab for the admin', async () => {
+    sessionStorage.setItem('profile-tab', 'analytics');
+    serve();
+    renderPage(true);
+
+    expect(await screen.findByRole('img', { name: '48' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Analytics' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('falls back to the first tab for anyone else who had it remembered, with nothing asked', async () => {
+    sessionStorage.setItem('profile-tab', 'analytics');
+    serve();
+    renderPage(false);
+
+    expect(await screen.findByRole('heading', { name: 'Living phases' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Living Costs & Career' })).toHaveAttribute('aria-selected', 'true');
+    expect(analyticsRequests()).toHaveLength(0);
+  });
+
+  describe('an administrator who has nothing yet', () => {
+    const emptyProfile = makeProfile({ fullName: null, birthYear: null, nationalities: [], taxResidence: null, employmentStatus: null });
+
+    it('still reaches the analytics, under the single first-time button', async () => {
+      serve({ profile: emptyProfile, phases: [], entries: [] });
+      renderPage(true);
+
+      expect(await screen.findByRole('button', { name: 'Tell us about yourself' })).toBeInTheDocument();
+      const analytics = await screen.findByRole('region', { name: 'Analytics' });
+      expect(within(analytics).getByText('Customers')).toBeInTheDocument();
+      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+      expect(analyticsRequests()).toHaveLength(1);
+    });
+
+    it('does not show it, or ask for it, to anyone else', async () => {
+      serve({ profile: emptyProfile, phases: [], entries: [] });
+      renderPage(false);
+
+      await screen.findByRole('button', { name: 'Tell us about yourself' });
+      expect(screen.queryByRole('region', { name: 'Analytics' })).not.toBeInTheDocument();
+      expect(analyticsRequests()).toHaveLength(0);
+    });
   });
 });

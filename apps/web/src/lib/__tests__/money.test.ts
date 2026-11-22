@@ -3,6 +3,7 @@ import {
   currencyExponent,
   displayLocale,
   formatCalendarDate,
+  formatCount,
   formatMinor,
   formatMonthYear,
   formatPercent,
@@ -178,5 +179,21 @@ describe('splitCents', () => {
   it('leaves a figure with no cents whole', () => {
     expect(splitCents('€468,414')).toEqual({ whole: '€468,414', cents: '' });
     expect(splitCents('€1,234')).toEqual({ whole: '€1,234', cents: '' });
+  });
+});
+
+describe('formatCount', () => {
+  it('groups thousands the way the locale does', () => {
+    expect(formatCount(1284, 'en-US')).toBe('1,284');
+    expect(formatCount(1284, 'es-ES')).toBe('1284');
+    expect(formatCount(1284, 'de-DE')).toBe('1.284');
+  });
+
+  it('rounds, because a figure on its way up is not a whole number', () => {
+    expect(formatCount(41.6, 'en-US')).toBe('42');
+  });
+
+  it('shows zero as zero', () => {
+    expect(formatCount(0, 'en-US')).toBe('0');
   });
 });
