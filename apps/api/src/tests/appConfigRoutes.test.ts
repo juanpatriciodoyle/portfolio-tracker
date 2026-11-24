@@ -1,8 +1,12 @@
 import express from 'express';
 import request from 'supertest';
+import { GuestService } from '../application/guestService';
+import { SlidingWindowRateLimiter } from '../application/limits';
 import { appConfigResponse } from '../contracts';
+import { generateToken } from '../lib/auth';
 import { createAppConfigRouter } from '../routes/appConfig';
 import { createDemoRouter, createDisabledDemoRouter } from '../routes/demo';
+import { InMemoryGuestAccounts } from './support/inMemoryGuestAccounts';
 
 describe('GET /api/config', () => {
   const appWith = (demoEnabled: boolean) => {
@@ -28,12 +32,12 @@ describe('the sneak peek switched off', () => {
   const app = express();
   app.use('/api', createDisabledDemoRouter());
 
-  it('answers 404 to a guest sign-in and to a guest reset, and issues no session', async () => {
+  it('answers 404 to a guest sign-in and to ending a guest session, and issues no session', async () => {
     const signIn = await request(app).post('/api/auth/demo');
-    const reset = await request(app).post('/api/auth/demo/reset');
+    const end = await request(app).post('/api/auth/demo/end');
 
     expect(signIn.status).toBe(404);
-    expect(reset.status).toBe(404);
+    expect(end.status).toBe(404);
     expect(signIn.body.token).toBeUndefined();
   });
 
@@ -42,10 +46,16 @@ describe('the sneak peek switched off', () => {
   });
 });
 
-describe('the sneak peek switched on', () => {
+describe('the demo switched on', () => {
   it('still answers a guest sign-in', async () => {
+    const guests = new GuestService({
+      accounts: new InMemoryGuestAccounts(),
+      seeder: { seed: async () => undefined },
+      issueToken: generateToken,
+      now: () => new Date('2026-11-23T10:00:00.000Z'),
+    });
     const app = express();
-    app.use('/api', createDemoRouter({ restore: async () => ({ id: 'guest', email: null, avatarUrl: null, country: 'Spain' }), isGuestAccount: async () => true }));
+    app.use('/api', createDemoRouter(guests, { limiter: new SlidingWindowRateLimiter({ limit: 10, windowMs: 60_000, now: () => 0 }) }));
     expect((await request(app).post('/api/auth/demo')).status).toBe(200);
   });
 });

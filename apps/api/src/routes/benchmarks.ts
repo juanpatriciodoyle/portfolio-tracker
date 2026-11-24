@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { BenchmarkService } from '../application/benchmarkService';
-import { benchmarksQuery, type CalendarDate } from '../contracts';
+import { benchmarkPreviewQuery, benchmarksQuery, type CalendarDate } from '../contracts';
 import { handle, noStore, parseRequest, requireUser, userIdOf } from './http';
 
 export interface BenchmarksRouterDeps {
@@ -18,6 +18,14 @@ export function createBenchmarksRouter({ service, today }: BenchmarksRouterDeps)
     handle(async (req, res) => {
       const { asOf } = parseRequest(benchmarksQuery, req.query);
       res.json(await service.benchmarks(userIdOf(req), asOf ?? today()));
+    })
+  );
+
+  // What is known about a country before the person has a living phase: the guard above covers it too.
+  router.get(
+    '/insights/benchmarks/preview',
+    handle(async (req, res) => {
+      res.json(await service.preview(userIdOf(req), parseRequest(benchmarkPreviewQuery, req.query)));
     })
   );
 

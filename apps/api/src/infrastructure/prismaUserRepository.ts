@@ -3,10 +3,11 @@ import type { AuthUser, UserRepository } from '../application/ports';
 import type { NewUserDefaults } from '../domain/newUser';
 import { log } from '../lib/logger';
 
-const asAuthUser = ({ id, country, passkeyCredentialId }: { id: string; country: string; passkeyCredentialId: string | null }): AuthUser => ({
+const asAuthUser = ({ id, country, passkeyCredentialId, isGuest }: { id: string; country: string; passkeyCredentialId: string | null; isGuest: boolean }): AuthUser => ({
   id,
   country,
   hasPasskey: passkeyCredentialId !== null,
+  isGuest,
 });
 
 /** Accounts in Postgres, found by the hash of an identity. Nothing that identifies a person is stored. */
@@ -15,6 +16,11 @@ export class PrismaUserRepository implements UserRepository {
 
   async findByIdentityHash(userHash: string): Promise<AuthUser | null> {
     const user = await this.db.user.findUnique({ where: { userHash } });
+    return user && asAuthUser(user);
+  }
+
+  async findById(userId: string): Promise<AuthUser | null> {
+    const user = await this.db.user.findUnique({ where: { id: userId } });
     return user && asAuthUser(user);
   }
 

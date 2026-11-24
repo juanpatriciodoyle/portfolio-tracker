@@ -1,4 +1,3 @@
-import type { FixedCostCategory } from '../contracts/vocabulary';
 import { currencyExponent } from './documentExtraction/currencies';
 
 /** A published point of an income distribution: the value (minor units per period) at a percentile. */
@@ -64,20 +63,36 @@ export function percentileAmong(points: readonly DistributionPoint[], value: num
   return { percentile: last.percentile, bound: 'EXACT' };
 }
 
+/**
+ * The value at a percentile of published points, by linear interpolation: the other way round of `percentileAmong`.
+ * Outside the published range there is no figure (it does not extrapolate).
+ */
+export function valueAtPercentile(points: readonly DistributionPoint[], percentile: number): number | null {
+  if (points.length === 0 || percentile < points[0].percentile || percentile > points[points.length - 1].percentile) return null;
+  for (let i = 1; i < points.length; i++) {
+    const below = points[i - 1];
+    const above = points[i];
+    if (percentile <= above.percentile) {
+      const span = above.percentile - below.percentile;
+      const fraction = span === 0 ? 0 : (percentile - below.percentile) / span;
+      return Math.round(below.value + fraction * (above.value - below.value));
+    }
+  }
+  return points[points.length - 1].value;
+}
+
+/** What one person lives on at a place in the country's distribution, per period of the distribution (see `valueAtPercentile`). */
+export function incomeAtPercentile(distribution: IncomeDistribution, percentile: number): number | null {
+  return valueAtPercentile(distribution.points, percentile);
+}
+
 /** Where a household's monthly income sits in the country's distribution (see `percentileAmong`). */
 export function incomePercentile(distribution: IncomeDistribution, monthlyHouseholdIncomeMinor: number, household: Household): IncomePercentile | null {
   const perPerson = incomePerPerson(monthlyHouseholdIncomeMinor, household, distribution.basis);
   return percentileAmong(distribution.points, distribution.period === 'YEAR' ? perPerson * 12 : perPerson);
 }
 
-/** What statistics offices count as housing costs: rent, the utilities and property taxes. Not internet, phone or subscriptions. */
-const HOUSING_CATEGORIES: readonly FixedCostCategory[] = ['RENT', 'ELECTRICITY', 'GAS', 'WATER', 'HEATING_COOLING', 'TAXES'];
-
-export function housingCostsMinor(monthlyByCategory: Readonly<Record<FixedCostCategory, number>>): number {
-  return HOUSING_CATEGORIES.reduce((total, category) => total + monthlyByCategory[category], 0);
-}
-
-/** Housing costs as a percentage of income, one decimal; null when there is no income to compare with. */
+/** An amount (rent) as a percentage of income, one decimal; null when there is no income to compare with. */
 export function housingShare(housingMinor: number, incomeMinor: number): number | null {
   return incomeMinor > 0 ? round1((housingMinor / incomeMinor) * 100) : null;
 }

@@ -53,31 +53,38 @@ enum HousingTenure {
 }
 
 model User {
-  id                  String          @id @default(uuid())
-  userHash            String?         @unique
-  email               String?         @unique
+  id                  String              @id @default(uuid())
+  userHash            String?             @unique
+  email               String?             @unique
   name                String?
   avatarUrl           String?
-  googleId            String?         @unique
-  passkeyCredentialId String?         @unique
+  googleId            String?             @unique
+  passkeyCredentialId String?             @unique
   passkeyPublicKey    String?
-  passkeyCounter      Int             @default(0)
+  passkeyCounter      Int                 @default(0)
   /// The last real sign-in (never the demo guest). Null for accounts that have not signed in since this was added.
   lastLoginAt         DateTime?
-  cashBalance         Float           @default(0.0)
-  country             String          @default("Spain")
-  baseCurrency        String          @default("EUR")
-  annualInflationRate Float           @default(2.8)
+  /// A demo guest: an account of its own that is erased when the guest signs out or `guestExpiresAt` passes. Never a customer.
+  isGuest             Boolean             @default(false)
+  guestExpiresAt      DateTime?
+  /// No longer read or written by the portfolio code: cash is replayed from the transactions (`domain/cashLedger.ts`).
+  /// Kept only because the guest seed still sets it; drop it with that seed.
+  cashBalance         Float               @default(0.0)
+  country             String              @default("Spain")
+  baseCurrency        String              @default("EUR")
+  annualInflationRate Float               @default(2.8)
   positions           Position[]
   transactions        Transaction[]
   realizedGains       RealizedGain[]
+  snapshots           PortfolioSnapshot[]
   livingPhases        LivingPhase[]
   billingRecords      BillingRecord[]
   profile             UserProfile?
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
   @@index([lastLoginAt])
+  @@index([isGuest, guestExpiresAt])
 }
 
 model Position {
@@ -96,23 +103,25 @@ model Position {
 }
 
 model Transaction {
-  id          String          @id @default(uuid())
-  userId      String?
-  user        User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type        TransactionType
-  symbol      String
-  name        String?
-  assetClass  String          @default("Stock")
-  region      String          @default("Europe")
-  sector      String          @default("Technology")
-  quantity    Float           @default(1.0)
-  amount      Float
-  fee         Float           @default(0.0)
-  totalAmount Float
-  currency    String          @default("EUR")
-  notes       String?
-  date        DateTime        @default(now())
-  createdAt   DateTime        @default(now())
+  id           String          @id @default(uuid())
+  userId       String?
+  user         User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         TransactionType
+  symbol       String
+  name         String?
+  assetClass   String          @default("Stock")
+  region       String          @default("Europe")
+  sector       String          @default("Technology")
+  quantity     Float           @default(1.0)
+  amount       Float
+  fee          Float           @default(0.0)
+  totalAmount  Float
+  /// A buy that drew on the cash the person holds instead of bringing new money. Meaningless for other types.
+  paidWithCash Boolean         @default(false)
+  currency     String          @default("EUR")
+  notes        String?
+  date         DateTime        @default(now())
+  createdAt    DateTime        @default(now())
 }
 
 model RealizedGain {
@@ -129,6 +138,22 @@ model RealizedGain {
   realizedPnlPercent Float
   date               DateTime @default(now())
   createdAt          DateTime @default(now())
+}
+
+/// One reading of a person's whole portfolio per UTC day, taken by the daily job and when the figures are read and today's is
+/// missing. It is the only source of "value over time": nothing is replayed or estimated for days nobody measured.
+/// The numbers live together in `values` (totalValue, holdingsValue, cash, moneyPutIn, benchmarkPrice) so the phase that
+/// field-encrypts portfolio data can seal them as one payload without another schema change.
+model PortfolioSnapshot {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day       DateTime @db.Date
+  currency  String
+  values    Json
+  createdAt DateTime @default(now())
+
+  @@unique([userId, day])
 }
 
 model InflationRate {

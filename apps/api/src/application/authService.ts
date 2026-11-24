@@ -1,13 +1,13 @@
 import { NEW_USER_DEFAULTS } from '../domain/newUser';
-import { GoogleNotConfiguredError, SignInRejectedError } from './errors';
+import { GoogleNotConfiguredError, ResourceNotFoundError, SignInRejectedError } from './errors';
 import type {
   AdminDirectory,
   AuthUser,
   IdentityHasher,
   IdentityVerifier,
   PasskeyAuthenticator,
-  PasskeyChallenge,
   PasskeyCredential,
+  PasskeySignInChallenge,
   SessionTokenIssuer,
   UserRepository,
   VerifiedGoogleIdentity,
@@ -27,12 +27,15 @@ export interface AuthServiceDeps {
 
 export interface SignedInUser {
   readonly id: string;
-  readonly email: string;
+  /** What Google confirmed in this sign-in. A passkey sign-in has none: no email is stored anywhere. */
+  readonly email?: string;
   readonly name: string;
   readonly avatarUrl?: string;
   readonly country: string;
   /** Only ever true after Google confirmed the administrator's email; the web app uses it to show the Analytics tab. */
   readonly isAdmin: boolean;
+  readonly hasPasskey: boolean;
+  readonly isGuest: boolean;
 }
 
 export interface SignIn {
@@ -41,16 +44,14 @@ export interface SignIn {
 }
 
 const NO_NAME_PLACEHOLDER = 'Privacy User';
-const GENERIC_PASSKEY_PREFIXES = new Set(['user', 'passkey']);
+/** What a passkey sign-in is called until the web app puts back the name it remembers from the last Google sign-in. */
+const PASSKEY_USER_NAME = 'Investor';
 
-/** The name shown for a passkey account, made from the part of the email before the "@". */
-export function passkeyDisplayName(email: string): string {
-  const prefix = email.split('@')[0];
-  if (GENERIC_PASSKEY_PREFIXES.has(prefix.toLowerCase())) return 'Investor';
-  return prefix.charAt(0).toUpperCase() + prefix.slice(1);
-}
-
-/** Signing in: who the person is, which account that is, and the session that proves it. No personal detail is stored. */
+/**
+ * Signing in: who the person is, which account that is, and the session that proves it. No personal detail is stored.
+ * An account is created only by Google, which confirms the email. A passkey is added afterwards, to the account that
+ * is already signed in, and then signs in on its own.
+ */
 export class AuthService {
   private readonly users: UserRepository;
   private readonly googleIdentities: IdentityVerifier;
@@ -78,22 +79,29 @@ export class AuthService {
     const account = await this.accountFor(identity.email);
     const isAdmin = this.admins.isAdmin(this.hashIdentity(identity.email));
 
-    return this.signedIn(account, {
-      email: identity.email,
-      name: identity.name || NO_NAME_PLACEHOLDER,
-      avatarUrl: identity.avatarUrl,
-    }, isAdmin);
+    return this.signedIn(account, { email: identity.email, name: identity.name || NO_NAME_PLACEHOLDER, avatarUrl: identity.avatarUrl }, isAdmin);
   }
 
-  async passkeyChallenge(email: string): Promise<PasskeyChallenge> {
-    await this.refuseTakeover(email);
-    return this.passkeys.challengeFor(email);
+  passkeySignInChallenge(): Promise<PasskeySignInChallenge> {
+    return this.passkeys.signInChallenge();
   }
 
-  async signInWithPasskey(email: string, credential: PasskeyCredential): Promise<SignIn> {
-    await this.refuseTakeover(email);
-    const account = await this.passkeys.verify(email, credential);
-    return this.signedIn(account, { email, name: passkeyDisplayName(email) });
+  /** The authenticator finds the account from the passkey itself. The administrator never signs in this way. */
+  async signInWithPasskey(challengeId: string, credential: PasskeyCredential): Promise<SignIn> {
+    const account = await this.passkeys.verifySignIn(challengeId, credential);
+    await this.refuseAdministrator(account.id);
+    return this.signedIn(account, { name: PASSKEY_USER_NAME });
+  }
+
+  /** The question for saving a passkey on the signed-in account, if that account may have one. */
+  async passkeyRegistrationOptions(userId: string): Promise<unknown> {
+    await this.requireMayAddPasskey(userId);
+    return this.passkeys.registrationOptions(userId);
+  }
+
+  async addPasskey(userId: string, credential: PasskeyCredential): Promise<void> {
+    await this.requireMayAddPasskey(userId);
+    await this.passkeys.register(userId, credential);
   }
 
   private async accountFor(email: string): Promise<AuthUser> {
@@ -104,17 +112,18 @@ export class AuthService {
     return this.users.create(userHash, NEW_USER_DEFAULTS);
   }
 
-  /**
-   * An email is not proof of who is asking, so a passkey may only create an account or open one that already has
-   * a passkey. An account made another way (Google) must be opened that way first, and the administrator's identity
-   * is never opened with a passkey at all: registering one would only need their email address.
-   */
-  private async refuseTakeover(email: string): Promise<void> {
-    const userHash = this.hashIdentity(email);
-    if (this.admins.isAdmin(userHash)) throw new SignInRejectedError('PASSKEY_NOT_FOR_ADMIN');
-    const existing = await this.users.findByIdentityHash(userHash);
-    if (!existing) this.requireOpenRegistration(userHash);
-    else if (!existing.hasPasskey) throw new SignInRejectedError('PASSKEY_NEEDS_SIGN_IN');
+  /** The administrator's identity is never opened with a passkey, and never holds one: Google confirms who they are, every time. */
+  private async refuseAdministrator(userId: string): Promise<void> {
+    const userHash = await this.users.identityHashOf(userId);
+    if (userHash !== null && this.admins.isAdmin(userHash)) throw new SignInRejectedError('PASSKEY_NOT_FOR_ADMIN');
+  }
+
+  private async requireMayAddPasskey(userId: string): Promise<void> {
+    const account = await this.users.findById(userId);
+    if (!account) throw new ResourceNotFoundError('Account');
+    if (account.isGuest) throw new SignInRejectedError('PASSKEY_NOT_FOR_GUEST');
+    await this.refuseAdministrator(userId);
+    if (account.hasPasskey) throw new SignInRejectedError('PASSKEY_ALREADY_ADDED');
   }
 
   /** With sign-up closed a new account is refused, except the administrator's own: without it nobody could ever get in. */
@@ -134,7 +143,7 @@ export class AuthService {
     await this.users.recordLogin(account.id, this.now());
     return {
       token: this.issueToken(account.id, { admin: isAdmin }),
-      user: { id: account.id, ...shown, country: account.country, isAdmin },
+      user: { id: account.id, ...shown, country: account.country, isAdmin, hasPasskey: account.hasPasskey, isGuest: false },
     };
   }
 }

@@ -1,9 +1,9 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import type { z } from 'zod';
 import { DocumentRejectedError, ForbiddenError, ResourceNotFoundError } from '../application/errors';
-import { DUPLICATE_BILLING_RECORD, INTERNAL_ERROR_MESSAGE, INVALID_REQUEST_MESSAGE } from '../contracts';
-import type { ApiErrorResponse, DuplicateBillingRecordErrorResponse, PhaseOverlapErrorResponse, ValidationErrorResponse } from '../contracts';
-import { DuplicateBillingRecordError, InsufficientHoldingsError, InvalidBillingRecordError, InvalidLivingPhaseError, InvalidProfileError, PhaseOverlapError } from '../domain/errors';
+import { DUPLICATE_BILLING_RECORD, INSUFFICIENT_CASH, INTERNAL_ERROR_MESSAGE, INVALID_REQUEST_MESSAGE, TRANSACTION_REQUIRED_BY_LATER } from '../contracts';
+import type { ApiErrorResponse, DuplicateBillingRecordErrorResponse, InsufficientCashErrorResponse, PhaseOverlapErrorResponse, TransactionRequiredByLaterErrorResponse, ValidationErrorResponse } from '../contracts';
+import { DuplicateBillingRecordError, InsufficientCashError, InsufficientHoldingsError, InvalidBillingRecordError, InvalidLivingPhaseError, InvalidProfileError, PhaseOverlapError, TransactionRequiredByLaterError } from '../domain/errors';
 import { verifyToken, type AuthenticatedRequest } from '../lib/auth';
 import { errorName, log } from '../lib/logger';
 
@@ -46,6 +46,7 @@ export function requireUser(req: Request, res: Response, next: NextFunction): vo
 
   (req as AuthenticatedRequest).userId = decoded.userId;
   (req as AuthenticatedRequest).admin = decoded.admin;
+  (req as AuthenticatedRequest).guest = decoded.guest;
   next();
 }
 
@@ -89,6 +90,14 @@ export function respondWithError(error: unknown, res: Response): void {
     res.status(DOCUMENT_STATUS[error.code]).json({ error: error.message, code: error.code } satisfies ApiErrorResponse);
   } else if (error instanceof InsufficientHoldingsError) {
     res.status(400).json({ error: error.message, code: error.code, availableUnits: error.availableUnits } satisfies ApiErrorResponse & { availableUnits: number });
+  } else if (error instanceof InsufficientCashError) {
+    res
+      .status(400)
+      .json({ error: error.message, code: INSUFFICIENT_CASH, currency: error.currency, availableMinor: error.availableMinor } satisfies InsufficientCashErrorResponse);
+  } else if (error instanceof TransactionRequiredByLaterError) {
+    res
+      .status(409)
+      .json({ error: error.message, code: TRANSACTION_REQUIRED_BY_LATER, dependent: error.dependent } satisfies TransactionRequiredByLaterErrorResponse);
   } else if (error instanceof DuplicateBillingRecordError) {
     res
       .status(409)

@@ -1,8 +1,8 @@
 import {
   compareShare,
   equivalentIncomeMinor,
-  housingCostsMinor,
   housingShare,
+  incomeAtPercentile,
   incomePercentile,
   incomePerPerson,
   internationalDollars,
@@ -82,13 +82,7 @@ describe('incomePercentile', () => {
   });
 });
 
-describe('housing costs and their share of income', () => {
-  const byCategory = { RENT: 120000, ELECTRICITY: 9600, GAS: 4000, WATER: 2500, HEATING_COOLING: 0, INTERNET: 4000, PHONE: 3000, SUBSCRIPTIONS: 1500, TAXES: 1000, OTHER: 700 };
-
-  it('counts rent, electricity, gas, water and property taxes, not internet, phone or subscriptions', () => {
-    expect(housingCostsMinor(byCategory)).toBe(120000 + 9600 + 4000 + 2500 + 1000);
-  });
-
+describe('rent and its share of income', () => {
   it('is a percentage of income with one decimal, or nothing without income', () => {
     expect(housingShare(137100, 320000)).toBe(42.8);
     expect(housingShare(0, 320000)).toBe(0);
@@ -143,5 +137,22 @@ describe('equivalentIncomeMinor', () => {
     expect(equivalentIncomeMinor(100, 'EUR', 0)).toBeNull();
     expect(equivalentIncomeMinor(100, 'EUR', -1)).toBeNull();
     expect(equivalentIncomeMinor(100, 'EUR', Number.NaN)).toBeNull();
+  });
+});
+
+describe('incomeAtPercentile (the figure that sits at a place in the distribution)', () => {
+  it('reads a published point as it is', () => {
+    expect(incomeAtPercentile(spain, 50)).toBe(20367 * 100);
+  });
+
+  it('interpolates between the published points, like the percentile does the other way round', () => {
+    // Argentina publishes the 45th (461,506 pesos) and the 55th (554,804): the 50th is halfway.
+    expect(incomeAtPercentile(argentina, 50)).toBe(50_815_500);
+  });
+
+  it('does not extrapolate: outside the published range there is no figure', () => {
+    expect(incomeAtPercentile(spain, 5)).toBeNull();
+    expect(incomeAtPercentile(spain, 95)).toBeNull();
+    expect(incomeAtPercentile({ ...spain, points: [] }, 50)).toBeNull();
   });
 });

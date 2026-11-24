@@ -22,6 +22,7 @@ const spain: StatisticsFragment = {
     distribution: { period: 'YEAR', basis: 'EQUIVALISED', points: [9091, 12374, 15130, 17742, 20367, 23372, 26791, 31569, 39385].map((euros, i) => ({ percentile: (i + 1) * 10, value: euros * 100 })) },
   },
   housingCostShare: { source: 'EUROSTAT', period: '2025', percent: 16 },
+  rentCostShare: { source: 'EUROSTAT', period: '2025', percent: 26.7 },
   purchasing: { source: 'WORLD_BANK', period: '2025', lcuPerInternationalDollar: 0.570991, gniPerPersonDollars: 59830 },
 };
 const argentina: StatisticsFragment = {
@@ -37,6 +38,7 @@ const eu: StatisticsFragment = {
     distribution: { period: 'YEAR', basis: 'EQUIVALISED', points: [11605, 15200, 18000, 20800, 23500, 26300, 29600, 34500, 42084].map((euros, i) => ({ percentile: (i + 1) * 10, value: euros * 100 })) },
   },
   housingCostShare: { source: 'EUROSTAT', period: '2025', percent: 18.9 },
+  rentCostShare: { source: 'EUROSTAT', period: '2025', percent: 25 },
 };
 const priceIndex = { '2021': 1, '2024': 1.2, '2025': 1.25 };
 const world: StatisticsFragment = {
@@ -128,13 +130,13 @@ describe('standing: country, continent and world', () => {
     expect(result.gaps).toEqual([]);
   });
 
-  it('compares housing with the EU average too', async () => {
+  it('compares the rent of a renter with the EU households that pay rent too', async () => {
     const { service, phases } = await setup();
     await phases.createPhase(USER, phase({}));
 
     const [result] = await first(service);
 
-    expect(result.continentHousing).toMatchObject({ areaCode: 'EU', areaName: 'the EU', yourSharePercent: 37.5, typicalSharePercent: 18.9, verdict: 'HIGHER', source: 'EUROSTAT' });
+    expect(result.continentHousing).toMatchObject({ areaCode: 'EU', areaName: 'the EU', yourSharePercent: 37.5, typicalSharePercent: 25, verdict: 'HIGHER', source: 'EUROSTAT' });
   });
 
   it('uses the World Bank region for someone living outside Europe, named as the data names it', async () => {

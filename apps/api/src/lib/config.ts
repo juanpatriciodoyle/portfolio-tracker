@@ -18,7 +18,7 @@ export interface AppConfig {
   readonly trustProxy: number;
   /** False closes sign-up: only people who already have an account can sign in. */
   readonly allowRegistration: boolean;
-  /** The public "sneak peek" guest account. Off by default in production. */
+  /** "Try the demo": a private demo account for every visit. Off by default in production unless set. */
   readonly enableDemo: boolean;
   readonly benchmarkRefresh: boolean;
 }

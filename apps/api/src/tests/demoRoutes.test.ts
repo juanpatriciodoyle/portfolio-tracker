@@ -1,77 +1,108 @@
 import express from 'express';
 import request from 'supertest';
-import { generateToken } from '../lib/auth';
-import { createDemoRouter, type DemoWorkspace } from '../routes/demo';
+import { GuestService } from '../application/guestService';
+import { SlidingWindowRateLimiter } from '../application/limits';
+import { generateToken, verifyToken } from '../lib/auth';
+import { createDemoRouter, createDisabledDemoRouter } from '../routes/demo';
+import { InMemoryGuestAccounts } from './support/inMemoryGuestAccounts';
 
-const JOE = 'user-joe';
-const ALICE = 'user-alice';
-
-function build(overrides: Partial<DemoWorkspace> = {}) {
-  const restores: string[] = [];
-  const workspace: DemoWorkspace = {
-    restore: async () => {
-      restores.push('restore');
-      return { id: JOE, email: 'demo@portfolio.local', avatarUrl: null, country: 'Spain' };
-    },
-    isGuestAccount: async (userId) => userId === JOE,
-    ...overrides,
-  };
+function build({ attemptsAllowed = 1000, seed = async () => undefined }: { attemptsAllowed?: number; seed?: () => Promise<void> } = {}) {
+  const accounts = new InMemoryGuestAccounts();
+  const seeded: string[] = [];
+  const guests = new GuestService({
+    accounts,
+    seeder: { seed: async (userId) => (seeded.push(userId), seed()) },
+    issueToken: generateToken,
+    now: () => new Date('2026-11-23T10:00:00.000Z'),
+  });
   const app = express();
   app.use(express.json());
-  app.use('/api', createDemoRouter(workspace));
-  return { app, restores };
+  app.use('/api', createDemoRouter(guests, { limiter: new SlidingWindowRateLimiter({ limit: attemptsAllowed, windowMs: 600_000, now: () => 0 }) }));
+  return { app, accounts, seeded };
 }
 
-const bearer = (userId: string) => `Bearer ${generateToken(userId)}`;
+const bearer = (token: string) => `Bearer ${token}`;
 
-describe('guest mode ("Sneak peek" as Joe)', () => {
-  it('starts every guest session from Joe’s clean default state', async () => {
-    const { app, restores } = build();
+beforeEach(() => {
+  jest.spyOn(console, 'error').mockImplementation(() => undefined);
+});
 
-    const response = await request(app).post('/api/auth/demo');
+describe('"Try the demo"', () => {
+  it('starts every visit in an account of its own, seeded, with a one-hour guest session', async () => {
+    const { app, seeded } = build();
 
-    expect(response.status).toBe(200);
-    expect(restores).toHaveLength(1);
-    expect(response.body.user).toMatchObject({ id: JOE, name: 'Joe' });
-    expect(typeof response.body.token).toBe('string');
+    const first = await request(app).post('/api/auth/demo');
+    const second = await request(app).post('/api/auth/demo');
+
+    expect(first.status).toBe(200);
+    expect(first.body.user).toMatchObject({ name: 'Joe', isGuest: true, isAdmin: false, hasPasskey: false });
+    expect(second.body.user.id).not.toBe(first.body.user.id);
+    expect(seeded).toEqual([first.body.user.id, second.body.user.id]);
+    expect(verifyToken(first.body.token)).toEqual({ userId: first.body.user.id, admin: false, guest: true });
   });
 
-  it('wipes what the guest changed when the guest signs out', async () => {
-    const { app, restores } = build();
-
-    const response = await request(app).post('/api/auth/demo/reset').set('Authorization', bearer(JOE));
-
-    expect(response.status).toBe(204);
-    expect(restores).toHaveLength(1);
-  });
-
-  it('refuses to wipe a real account, and says why', async () => {
-    const { app, restores } = build();
-
-    const response = await request(app).post('/api/auth/demo/reset').set('Authorization', bearer(ALICE));
-
-    expect(response.status).toBe(403);
-    expect(response.body.error).toMatch(/only.*guest/i);
-    expect(restores).toHaveLength(0);
-  });
-
-  it('refuses a reset without a token', async () => {
-    const { app, restores } = build();
-
-    const response = await request(app).post('/api/auth/demo/reset');
-
-    expect(response.status).toBe(401);
-    expect(restores).toHaveLength(0);
-  });
-
-  it('answers a failed restore with a readable message, not a raw error', async () => {
-    jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    const { app } = build({ restore: async () => { throw new Error('connection refused'); } });
+  it('answers 500 DEMO_UNAVAILABLE, and leaves no account behind, when the demo cannot be prepared', async () => {
+    const { app, accounts } = build({
+      seed: async () => {
+        throw new Error('db down');
+      },
+    });
 
     const response = await request(app).post('/api/auth/demo');
 
     expect(response.status).toBe(500);
-    expect(response.body.error).not.toMatch(/connection refused|internal server error/i);
-    expect(response.body.error.length).toBeGreaterThan(30);
+    expect(response.body).toMatchObject({ code: 'DEMO_UNAVAILABLE' });
+    expect(accounts.size).toBe(0);
+  });
+
+  it('shares the sign-in limit, so the demo cannot be used to fill the database', async () => {
+    const { app, accounts } = build({ attemptsAllowed: 2 });
+
+    await request(app).post('/api/auth/demo');
+    await request(app).post('/api/auth/demo');
+    const limited = await request(app).post('/api/auth/demo');
+
+    expect(limited.status).toBe(429);
+    expect(limited.body).toMatchObject({ code: 'TOO_MANY_ATTEMPTS' });
+    expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
+    expect(accounts.size).toBe(2);
+  });
+});
+
+describe('leaving the demo', () => {
+  it('erases the guest’s account when the guest signs out', async () => {
+    const { app, accounts } = build();
+    const { body } = await request(app).post('/api/auth/demo');
+
+    const response = await request(app).post('/api/auth/demo/end').set('Authorization', bearer(body.token));
+
+    expect(response.status).toBe(204);
+    expect(accounts.has(body.user.id)).toBe(false);
+  });
+
+  it('refuses to erase a real account, and says why', async () => {
+    const { app, accounts } = build();
+    accounts.addRealAccount('user-alice');
+
+    const response = await request(app).post('/api/auth/demo/end').set('Authorization', bearer(generateToken('user-alice')));
+
+    expect(response.status).toBe(403);
+    expect(response.body).toMatchObject({ code: 'NOT_A_GUEST' });
+    expect(accounts.has('user-alice')).toBe(true);
+  });
+
+  it('refuses a request without a session', async () => {
+    const { app } = build();
+    expect((await request(app).post('/api/auth/demo/end')).status).toBe(401);
+  });
+});
+
+describe('with the demo switched off', () => {
+  it('has no demo addresses at all', async () => {
+    const app = express();
+    app.use('/api', createDisabledDemoRouter());
+
+    expect((await request(app).post('/api/auth/demo')).status).toBe(404);
+    expect((await request(app).post('/api/auth/demo/end')).status).toBe(404);
   });
 });

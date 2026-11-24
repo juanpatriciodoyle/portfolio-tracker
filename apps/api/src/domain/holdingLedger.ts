@@ -10,7 +10,7 @@ export interface LedgerEntry {
 /** Quantities are floats (0.1 + 0.2): anything below this is dust, not a unit. */
 const UNIT_PRECISION = 1e8;
 /** `+ 0` turns a rounded -0 into 0. */
-const roundUnits = (units: number) => Math.round(units * UNIT_PRECISION) / UNIT_PRECISION + 0;
+export const roundUnits = (units: number) => Math.round(units * UNIT_PRECISION) / UNIT_PRECISION + 0;
 
 const signedUnits = (entry: LedgerEntry): number => (entry.type === 'BOUGHT' ? entry.quantity : entry.type === 'SOLD' ? -entry.quantity : 0);
 const isOf = (symbol: string) => (entry: LedgerEntry) => entry.symbol.toUpperCase() === symbol.toUpperCase() && (entry.type === 'BOUGHT' || entry.type === 'SOLD');

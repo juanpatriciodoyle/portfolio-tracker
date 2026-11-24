@@ -1,6 +1,5 @@
-import type { BenchmarkGap, BenchmarksResponse, CalendarDate, NationalityEquivalenceDto, PhaseBenchmarkDto, StandingDto } from '../contracts';
-import { compareShare, equivalentIncomeMinor, housingCostsMinor, housingShare, incomePerPerson, incomePercentile, internationalDollars, ratioOf, type Household } from '../domain/benchmarks';
-import { isLocalCurrency, localCurrencyOf } from '../domain/countryCurrencies';
+import { isLocalCurrency, localCurrencyOf, type BenchmarkGap, type BenchmarkPreviewQuery, type BenchmarkPreviewResponse, type BenchmarkSource, type BenchmarksResponse, type CalendarDate, type HousingBurdenDto, type HousingTenure, type NationalityEquivalenceDto, type PhaseBenchmarkDto, type StandingDto } from '../contracts';
+import { compareShare, equivalentIncomeMinor, housingShare, incomeAtPercentile, incomePerPerson, incomePercentile, internationalDollars, ratioOf, type Household } from '../domain/benchmarks';
 import { WORLD_AREA, continentAreaOf, convertAmountMinor, percentileAmong, referenceDollarsPerDay, type ReferenceArea } from '../domain/standing';
 import { phaseSnapshot } from '../domain/livingPhase';
 import type { CountryStatisticsService } from './countryStatisticsService';
@@ -44,8 +43,9 @@ export class BenchmarkService {
         name: dto.name,
         countryCode: dto.countryCode,
         currency: dto.currency,
+        tenure: dto.tenure,
         monthlyIncomeMinor: snapshot.monthlyIncomeMinor,
-        monthlyByCategory: snapshot.fixedCostsByCategoryMinor,
+        monthlyRentMinor: snapshot.fixedCostsByCategoryMinor.RENT,
         household,
         statistics,
         retrievedAt: stored.get(dto.countryCode)?.fetchedAt ?? '',
@@ -61,6 +61,58 @@ export class BenchmarkService {
 
     const fetched = [...stored.values()].flatMap((entry) => (entry ? [entry.fetchedAt] : []));
     return { asOf, refreshedAt: fetched.length > 0 ? fetched.sort()[0] : null, phases };
+  }
+
+  /**
+   * What is known about a country before the person has a living phase: the typical income, where their income sits
+   * and how their rent compares. The household is the profile's. A query on public statistics: it stores nothing.
+   */
+  async preview(userId: string, { countryCode, currency, monthlyIncomeMinor, monthlyRentMinor }: BenchmarkPreviewQuery): Promise<BenchmarkPreviewResponse> {
+    const [profile, stored] = await Promise.all([this.deps.profiles.getProfile(userId), this.deps.statistics.get(countryCode)]);
+    const household: Household = { adults: profile.householdAdults, children: profile.dependentChildren };
+    const statistics = stored?.statistics ?? null;
+
+    const income = statistics?.incomeDistribution ?? null;
+    const typicalYearOrMonth = income ? incomeAtPercentile(income.distribution, 50) : null;
+    const typicalMonthlyIncome =
+      income && typicalYearOrMonth !== null
+        ? {
+            amountMinor: income.distribution.period === 'YEAR' ? Math.round(typicalYearOrMonth / 12) : typicalYearOrMonth,
+            currency: income.currency,
+            basis: income.distribution.basis,
+            period: income.period,
+            source: income.source,
+          }
+        : null;
+
+    const benchmark = benchmarkPhase({
+      phaseId: '',
+      name: '',
+      countryCode,
+      currency,
+      tenure: 'RENT',
+      monthlyIncomeMinor: monthlyIncomeMinor ?? 0,
+      monthlyRentMinor: monthlyRentMinor ?? 0,
+      household,
+      statistics,
+      retrievedAt: stored?.fetchedAt ?? '',
+      continent: null,
+      world: null,
+      rates: { EUR: 1 },
+      previousPurchasing: null,
+    });
+    // Only the parts that were asked for can be missing: an income that was not typed is not a gap.
+    const asked: BenchmarkGap[] = [
+      ...(monthlyIncomeMinor ? (['NO_DISTRIBUTION', 'CURRENCY_MISMATCH'] as const) : []),
+      ...(monthlyIncomeMinor && monthlyRentMinor ? (['NO_HOUSING_BASELINE'] as const) : []),
+    ];
+    return {
+      countryCode,
+      typicalMonthlyIncome,
+      incomePercentile: benchmark.incomePercentile,
+      rent: benchmark.housingBurden,
+      gaps: benchmark.gaps.filter((gap) => asked.includes(gap)),
+    };
   }
 
   /** The euro value of the phase's currency and of the country's own: what converting an income needs. Empty when unknown. */
@@ -80,8 +132,10 @@ interface PhaseFacts {
   readonly name: string;
   readonly countryCode: string;
   readonly currency: string;
+  readonly tenure: HousingTenure;
   readonly monthlyIncomeMinor: number;
-  readonly monthlyByCategory: Parameters<typeof housingCostsMinor>[0];
+  /** What the home costs in rent each month (zero when none is declared). */
+  readonly monthlyRentMinor: number;
   readonly household: Household;
   readonly statistics: CountryStatistics | null;
   /** When the country's statistics were fetched. */
@@ -92,6 +146,18 @@ interface PhaseFacts {
   /** The euro value of one unit of the currencies that may need converting. */
   readonly rates: Readonly<Record<string, number>>;
   readonly previousPurchasing: { phaseId: string; dollars: number } | null;
+}
+
+/** Rent against what households that pay rent typically spend on it. */
+function rentBurden(rentMonthlyMinor: number, yourSharePercent: number, typical: { readonly percent: number; readonly period: string; readonly source: BenchmarkSource }): HousingBurdenDto {
+  return {
+    housingMonthlyMinor: rentMonthlyMinor,
+    yourSharePercent,
+    typicalSharePercent: typical.percent,
+    ...compareShare(yourSharePercent, typical.percent),
+    period: typical.period,
+    source: typical.source,
+  };
 }
 
 function benchmarkPhase(facts: PhaseFacts): PhaseBenchmarkDto {
@@ -111,22 +177,14 @@ function benchmarkPhase(facts: PhaseFacts): PhaseBenchmarkDto {
     }
   }
 
+  // Only a tenant has a like-for-like figure: the share of income that households which pay rent spend on it.
+  // Housing costs as a whole blend in owners, so a renter would always look "above average" against them.
   let housingBurden: PhaseBenchmarkDto['housingBurden'] = null;
-  const typical = statistics?.housingCostShare ?? null;
   if (hasIncome) {
-    if (!typical) gaps.push('NO_HOUSING_BASELINE');
-    else {
-      const housingMonthlyMinor = housingCostsMinor(facts.monthlyByCategory);
-      const yourSharePercent = housingShare(housingMonthlyMinor, monthlyIncomeMinor) as number;
-      housingBurden = {
-        housingMonthlyMinor,
-        yourSharePercent,
-        typicalSharePercent: typical.percent,
-        ...compareShare(yourSharePercent, typical.percent),
-        period: typical.period,
-        source: typical.source,
-      };
-    }
+    const typical = facts.tenure === 'RENT' ? (statistics?.rentCostShare ?? null) : null;
+    const yourSharePercent = housingShare(facts.monthlyRentMinor, monthlyIncomeMinor);
+    if (!typical || yourSharePercent === null || facts.monthlyRentMinor === 0) gaps.push('NO_HOUSING_BASELINE');
+    else housingBurden = rentBurden(facts.monthlyRentMinor, yourSharePercent, typical);
   }
 
   let purchasingPower: PhaseBenchmarkDto['purchasingPower'] = null;
@@ -264,20 +322,11 @@ function placeInContinent(facts: PhaseFacts): Placed & { readonly housing: Phase
   const income = statistics?.incomeDistribution;
   if (!statistics || !income) return { standing: null, gap: 'NO_CONTINENT_REFERENCE', housing: null };
 
-  const typical = statistics.housingCostShare;
-  const yourSharePercent = housingShare(housingCostsMinor(facts.monthlyByCategory), facts.monthlyIncomeMinor);
+  const typical = facts.tenure === 'RENT' ? statistics.rentCostShare : null;
+  const yourSharePercent = housingShare(facts.monthlyRentMinor, facts.monthlyIncomeMinor);
   const housing =
-    typical && yourSharePercent !== null
-      ? {
-          housingMonthlyMinor: housingCostsMinor(facts.monthlyByCategory),
-          yourSharePercent,
-          typicalSharePercent: typical.percent,
-          ...compareShare(yourSharePercent, typical.percent),
-          period: typical.period,
-          source: typical.source,
-          areaCode: continent.area.code,
-          areaName: continent.area.name,
-        }
+    typical && yourSharePercent !== null && facts.monthlyRentMinor > 0
+      ? { ...rentBurden(facts.monthlyRentMinor, yourSharePercent, typical), areaCode: continent.area.code, areaName: continent.area.name }
       : null;
 
   const euros = convertAmountMinor(facts.monthlyIncomeMinor, facts.currency, income.currency, facts.rates);

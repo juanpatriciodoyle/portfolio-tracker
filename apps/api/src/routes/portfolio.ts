@@ -2,26 +2,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { handle, noStore, parseRequest, requireUser, userIdOf } from './http';
 import { ResourceNotFoundError } from '../application/errors';
-
-const TRANSACTION_TYPES = ['BOUGHT', 'SOLD', 'DEPOSIT', 'WITHDRAWAL'] as const;
+import type { AmendTransactionCommand, RecordTransactionCommand, RemoveTransactionCommand } from '../application/portfolioService';
+import { recordTransactionRequest, updateTransactionRequest } from '../contracts';
 
 const money = z.coerce.number().refine(Number.isFinite, 'must be a number');
-
-/** The older clients send numbers as strings, so numbers are coerced here once and trusted afterwards. */
-const recordTransactionRequest = z.object({
-  type: z.enum(TRANSACTION_TYPES),
-  symbol: z.string().trim().max(40).optional(),
-  name: z.string().max(200).optional(),
-  assetClass: z.string().max(60).optional(),
-  region: z.string().max(60).optional(),
-  sector: z.string().max(60).optional(),
-  quantity: money.optional(),
-  amount: money,
-  fee: money.optional(),
-  currency: z.string().max(10).optional(),
-  notes: z.string().max(2000).optional(),
-  date: z.string().max(40).optional(),
-});
 
 const updateSettingsRequest = z.object({
   country: z.string().trim().min(1).max(80).optional(),
@@ -30,22 +14,6 @@ const updateSettingsRequest = z.object({
 });
 
 const syncInflationRequest = z.object({ country: z.string().trim().min(1).max(80).default('Spain') });
-
-export interface RecordTransactionCommand {
-  readonly userId: string;
-  readonly type: (typeof TRANSACTION_TYPES)[number];
-  readonly symbol: string;
-  readonly name?: string;
-  readonly assetClass?: string;
-  readonly region?: string;
-  readonly sector?: string;
-  readonly quantity: number;
-  readonly amount: number;
-  readonly fee: number;
-  readonly currency: string;
-  readonly notes?: string;
-  readonly date?: string;
-}
 
 export interface UserSettings {
   readonly country: string;
@@ -56,9 +24,10 @@ export interface UserSettings {
 export interface PortfolioRouterDeps {
   readonly overview: (userId: string) => Promise<unknown>;
   readonly history: (userId: string) => Promise<unknown>;
-  readonly performancePeriods: (userId: string) => Promise<unknown>;
   readonly listTransactions: (userId: string) => Promise<unknown>;
   readonly recordTransaction: (command: RecordTransactionCommand) => Promise<unknown>;
+  readonly updateTransaction: (command: AmendTransactionCommand) => Promise<void>;
+  readonly deleteTransaction: (command: RemoveTransactionCommand) => Promise<void>;
   readonly getSettings: (userId: string) => Promise<(UserSettings & { cashBalance: number }) | null>;
   readonly updateSettings: (userId: string, change: z.output<typeof updateSettingsRequest>) => Promise<UserSettings>;
   readonly syncInflation: (country: string) => Promise<number>;
@@ -74,7 +43,6 @@ export function createPortfolioRouter(deps: PortfolioRouterDeps): Router {
 
   router.get('/portfolio/stats', handle(async (req, res) => void res.json(await deps.overview(userIdOf(req)))));
   router.get('/portfolio/history', handle(async (req, res) => void res.json(await deps.history(userIdOf(req)))));
-  router.get('/portfolio/performance-periods', handle(async (req, res) => void res.json(await deps.performancePeriods(userIdOf(req)))));
   router.get('/transactions', handle(async (req, res) => void res.json(await deps.listTransactions(userIdOf(req)))));
 
   router.post(
@@ -88,8 +56,27 @@ export function createPortfolioRouter(deps: PortfolioRouterDeps): Router {
         quantity: body.quantity || 1,
         fee: body.fee ?? 0,
         currency: body.currency || 'EUR',
+        paidWithCash: body.paidWithCash,
       });
       res.status(201).json({ success: true, message: `Recorded ${body.type} order for ${body.symbol || body.type}`, transaction });
+    })
+  );
+
+  // Commands answer with no content: the screen asks again for the figures the change moved.
+  router.patch(
+    '/transactions/:id',
+    handle(async (req, res) => {
+      const change = parseRequest(updateTransactionRequest, req.body);
+      await deps.updateTransaction({ userId: userIdOf(req), id: String(req.params.id), change });
+      res.status(204).end();
+    })
+  );
+
+  router.delete(
+    '/transactions/:id',
+    handle(async (req, res) => {
+      await deps.deleteTransaction({ userId: userIdOf(req), id: String(req.params.id) });
+      res.status(204).end();
     })
   );
 

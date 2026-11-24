@@ -3,7 +3,7 @@ import express from 'express';
 import request from 'supertest';
 import { CountryStatisticsService } from '../application/countryStatisticsService';
 import type { StatisticsProvider } from '../application/ports';
-import { benchmarksResponse } from '../contracts';
+import { benchmarkPreviewResponse, benchmarksResponse } from '../contracts';
 import { generateToken } from '../lib/auth';
 import { AesGcmFieldCipher } from '../infrastructure/aesGcmFieldCipher';
 import { HmacBillFingerprinter } from '../infrastructure/hmacBillFingerprinter';
@@ -14,7 +14,7 @@ import { InMemoryBillingRecordRepository, InMemoryLivingPhaseRepository, InMemor
 const eurostat: StatisticsProvider = {
   name: 'eurostat',
   supports: (country) => country === 'ES',
-  fetch: async () => ({ housingCostShare: { source: 'EUROSTAT', period: '2025', percent: 16 } }),
+  fetch: async () => ({ housingCostShare: { source: 'EUROSTAT', period: '2025', percent: 16 }, rentCostShare: { source: 'EUROSTAT', period: '2025', percent: 26.7 } }),
 };
 
 function build() {
@@ -63,7 +63,7 @@ describe('GET /api/insights/benchmarks', () => {
     expect(parsed.asOf).toBe('2026-10-31');
     expect(parsed.phases[0]).toMatchObject({
       phaseId: created.id,
-      housingBurden: { housingMonthlyMinor: 120000, yourSharePercent: 37.5, typicalSharePercent: 16, verdict: 'HIGHER' },
+      housingBurden: { housingMonthlyMinor: 120000, yourSharePercent: 37.5, typicalSharePercent: 26.7, verdict: 'HIGHER' },
       gaps: ['NO_DISTRIBUTION', 'NO_PURCHASING_POWER', 'NO_CONTINENT_REFERENCE', 'NO_WORLD_REFERENCE'],
     });
   });
@@ -79,5 +79,33 @@ describe('GET /api/insights/benchmarks', () => {
     const response = await request(build()).get('/api/insights/benchmarks?asOf=tomorrow').set(ALICE);
 
     expect(response.status).toBe(400);
+  });
+});
+
+describe('GET /api/insights/benchmarks/preview', () => {
+  const query = 'countryCode=ES&currency=EUR&monthlyIncomeMinor=320000&monthlyRentMinor=120000';
+
+  it('needs a token and is never cached', async () => {
+    const app = build();
+
+    expect((await request(app).get(`/api/insights/benchmarks/preview?${query}`)).status).toBe(401);
+    expect((await request(app).get(`/api/insights/benchmarks/preview?${query}`).set(ALICE)).headers['cache-control']).toBe('no-store');
+  });
+
+  it('answers before any living phase exists, as the contract says', async () => {
+    const response = await request(build()).get(`/api/insights/benchmarks/preview?${query}`).set(ALICE);
+
+    expect(response.status).toBe(200);
+    const parsed = benchmarkPreviewResponse.parse(response.body);
+    expect(parsed.countryCode).toBe('ES');
+    expect(parsed.rent).toMatchObject({ housingMonthlyMinor: 120000, yourSharePercent: 37.5, typicalSharePercent: 26.7, verdict: 'HIGHER' });
+  });
+
+  it('rejects a country or an amount that is not valid', async () => {
+    const app = build();
+
+    expect((await request(app).get('/api/insights/benchmarks/preview?countryCode=Spain&currency=EUR').set(ALICE)).status).toBe(400);
+    expect((await request(app).get('/api/insights/benchmarks/preview?countryCode=ES&currency=EUR&monthlyIncomeMinor=-5').set(ALICE)).status).toBe(400);
+    expect((await request(app).get('/api/insights/benchmarks/preview?currency=EUR').set(ALICE)).status).toBe(400);
   });
 });

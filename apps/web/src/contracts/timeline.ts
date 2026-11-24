@@ -35,6 +35,8 @@ export const timelineEntryDto = z.object({
     fixedCostCategorySchema,
     z.object({ basis: z.enum(COST_BASES).nullable(), billCount: z.number().int().nonnegative() })
   ),
+  /** What each category would cost per month from the declared rates alone, beside what the bills say. */
+  declaredCostsByCategoryMinor: amountsByCategory,
   /** Months lived in the phase up to the "as of" day (0 for upcoming phases). */
   months: z.number().nonnegative(),
   totalIncomeMinor: signedMinor,

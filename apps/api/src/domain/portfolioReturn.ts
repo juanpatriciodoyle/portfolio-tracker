@@ -18,7 +18,7 @@ export function summarizeReturn(input: {
   readonly dividends: number;
   /** Fees paid when buying: sales already net their own fees. */
   readonly buyFees: number;
-  /** Money put in minus money taken out: what the percentage is measured against. */
+  /** The money put in (see `moneyPutIn` in `cashLedger.ts`): what the percentage is measured against. Dividends are not part of it. */
   readonly contributed: number;
   readonly openPositions: readonly PositionValue[];
 }): ReturnSummary {

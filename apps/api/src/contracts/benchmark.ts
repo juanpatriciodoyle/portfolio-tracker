@@ -131,3 +131,30 @@ export const benchmarksResponse = z.object({
   phases: z.array(phaseBenchmarkSchema),
 });
 export type BenchmarksResponse = z.infer<typeof benchmarksResponse>;
+
+/**
+ * What is already known about a country while a person is still answering the first questions, before any living
+ * phase exists. A query on public statistics only: nothing here is stored.
+ */
+export const benchmarkPreviewQuery = z.object({
+  countryCode: countryCodeSchema,
+  currency: currencyCodeSchema,
+  monthlyIncomeMinor: z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+  monthlyRentMinor: z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
+});
+export type BenchmarkPreviewQuery = z.infer<typeof benchmarkPreviewQuery>;
+
+export const benchmarkPreviewResponse = z.object({
+  countryCode: countryCodeSchema,
+  /** What the person in the middle of the country lives on each month after tax, as the statistics office measures it; null when it publishes no distribution. */
+  typicalMonthlyIncome: z
+    .object({ amountMinor: z.number().int().min(0), currency: currencyCodeSchema, basis: z.enum(['EQUIVALISED', 'PER_CAPITA']), period: z.string(), source: benchmarkSourceSchema })
+    .nullable(),
+  /** Where the income typed sits among people in the country; null without an income or when it cannot be compared. */
+  incomePercentile: incomePercentileSchema.nullable(),
+  /** The rent typed against what households that pay rent spend on it; null without a rent or a figure to compare with. */
+  rent: housingBurdenSchema.nullable(),
+  /** Why something could not be answered, for the parts that were asked for. */
+  gaps: z.array(benchmarkGapSchema),
+});
+export type BenchmarkPreviewResponse = z.infer<typeof benchmarkPreviewResponse>;

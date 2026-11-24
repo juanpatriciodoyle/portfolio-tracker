@@ -4,7 +4,7 @@ import { BenchmarkRefresher, CountryStatisticsService } from '../application/cou
 import { LivingPhaseService } from '../application/livingPhaseService';
 import { ProfileService } from '../application/profileService';
 import type { JobLock, StatisticsFragment, StatisticsProvider } from '../application/ports';
-import { benchmarksResponse, createLivingPhaseRequest } from '../contracts';
+import { benchmarkPreviewResponse, benchmarksResponse, createLivingPhaseRequest } from '../contracts';
 import { AesGcmFieldCipher } from '../infrastructure/aesGcmFieldCipher';
 import { InMemoryCountryStatisticsRepository } from './support/inMemoryCountryStatistics';
 import { InMemoryLivingPhaseRepository, InMemoryProfileRepository } from './support/inMemoryRepositories';
@@ -24,6 +24,7 @@ const spainFragment: StatisticsFragment = {
     },
   },
   housingCostShare: { source: 'EUROSTAT', period: '2025', percent: 16 },
+  rentCostShare: { source: 'EUROSTAT', period: '2025', percent: 26.7 },
 };
 const spainPurchasing: StatisticsFragment = { purchasing: { source: 'WORLD_BANK', period: '2025', lcuPerInternationalDollar: 0.570991, gniPerPersonDollars: 59830 } };
 const argentinaFragment: StatisticsFragment = {
@@ -105,7 +106,7 @@ describe('CountryStatisticsService', () => {
     const first = await statistics.get('JP');
     await statistics.get('JP');
 
-    expect(first?.statistics).toEqual({ countryCode: 'JP', incomeDistribution: null, housingCostShare: null, purchasing: null, regionCode: null, referenceDistribution: null });
+    expect(first?.statistics).toEqual({ countryCode: 'JP', incomeDistribution: null, housingCostShare: null, rentCostShare: null, purchasing: null, regionCode: null, referenceDistribution: null });
     expect(providers[2].fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -256,6 +257,62 @@ const buenosAires = createLivingPhaseRequest.parse({
   fixedCosts: [{ category: 'RENT', cadence: 'MONTHLY', amountMinor: 40_000_000 }],
 });
 
+describe('BenchmarkService.preview (what we already know while the person is still typing)', () => {
+  it('says what the typical person of the country lives on, where an income sits, and how the rent compares with other renters', async () => {
+    const { service } = await benchmarkWorld();
+
+    const result = benchmarkPreviewResponse.parse(await service.preview(USER, { countryCode: 'ES', currency: 'EUR', monthlyIncomeMinor: 320000, monthlyRentMinor: 120000 }));
+
+    expect(result).toMatchObject({
+      countryCode: 'ES',
+      // The 50th percentile of the yearly equivalised income, 20,367 euros, a month: the typical person of the country.
+      typicalMonthlyIncome: { amountMinor: 169725, currency: 'EUR', basis: 'EQUIVALISED', period: '2025', source: 'EUROSTAT' },
+      incomePercentile: { percentile: 88.7, bound: 'EXACT' },
+      rent: { housingMonthlyMinor: 120000, yourSharePercent: 37.5, typicalSharePercent: 26.7, verdict: 'HIGHER' },
+      gaps: [],
+    });
+  });
+
+  it('answers what it can with only the country: the typical income, and why nothing else', async () => {
+    const { service } = await benchmarkWorld();
+
+    const result = await service.preview(USER, { countryCode: 'ES', currency: 'EUR' });
+
+    expect(result.typicalMonthlyIncome?.amountMinor).toBe(169725);
+    expect(result.incomePercentile).toBeNull();
+    expect(result.rent).toBeNull();
+    expect(result.gaps).toEqual([]);
+  });
+
+  it('does not place an income that is not in the currency of the statistics, and does not guess', async () => {
+    const { service } = await benchmarkWorld();
+
+    const result = await service.preview(USER, { countryCode: 'ES', currency: 'ARS', monthlyIncomeMinor: 200_000_000 });
+
+    expect(result.incomePercentile).toBeNull();
+    expect(result.gaps).toContain('CURRENCY_MISMATCH');
+  });
+
+  it('counts the household of the profile', async () => {
+    const { service, profiles } = await benchmarkWorld();
+    await profiles.saveProfile(USER, { fullName: null, birthYear: null, nationalities: [], taxResidence: null, householdAdults: 2, dependentChildren: 2, employmentStatus: null }, '2026-10-31');
+
+    const result = await service.preview(USER, { countryCode: 'ES', currency: 'EUR', monthlyIncomeMinor: 320000 });
+
+    expect(result.incomePercentile!.percentile).toBeLessThan(88.7);
+  });
+
+  it('knows nothing of a country that publishes nothing', async () => {
+    const { service } = await benchmarkWorld();
+
+    const result = await service.preview(USER, { countryCode: 'JP', currency: 'JPY', monthlyIncomeMinor: 300_000 });
+
+    expect(result.typicalMonthlyIncome).toBeNull();
+    expect(result.incomePercentile).toBeNull();
+    expect(result.gaps).toContain('NO_DISTRIBUTION');
+  });
+});
+
 describe('BenchmarkService', () => {
   it('compares each living phase with its country: income percentile, housing burden and purchasing power', async () => {
     const { service, phases } = await benchmarkWorld();
@@ -271,8 +328,8 @@ describe('BenchmarkService', () => {
       countryCode: 'ES',
       household: { adults: 1, children: 0 },
       incomePercentile: { percentile: 88.7, bound: 'EXACT', source: 'EUROSTAT', period: '2025', basis: 'EQUIVALISED' },
-      // rent 1 200 + electricity 48 a month = 1 248 of 3 200
-      housingBurden: { housingMonthlyMinor: 124800, yourSharePercent: 39, typicalSharePercent: 16, differencePoints: 23, verdict: 'HIGHER' },
+      // A renter is compared with households that pay rent, and only rent counts: 1 200 of 3 200.
+      housingBurden: { housingMonthlyMinor: 120000, yourSharePercent: 37.5, typicalSharePercent: 26.7, differencePoints: 10.8, verdict: 'HIGHER' },
       purchasingPower: { internationalDollarsPerMonth: 5604.29, versusPreviousPhase: null, versusNationalAverage: 1.12 },
       // This world publishes no EU or world reference (see benchmarkStanding.test.ts for the full ladder).
       gaps: ['NO_CONTINENT_REFERENCE', 'NO_WORLD_REFERENCE'],
@@ -284,6 +341,17 @@ describe('BenchmarkService', () => {
       purchasingPower: { internationalDollarsPerMonth: 3525.49, versusPreviousPhase: { phaseId: result.phases[0].phaseId, ratio: 0.63 } },
       gaps: ['NO_HOUSING_BASELINE', 'NO_CONTINENT_REFERENCE', 'NO_WORLD_REFERENCE'],
     });
+  });
+
+  it('compares housing only for someone who rents: an owner has no like-for-like figure, so nothing is shown', async () => {
+    const { service, phases } = await benchmarkWorld();
+    await phases.createPhase(USER, { ...madrid, tenure: 'OWN' });
+
+    const [phase] = (await service.benchmarks(USER, '2026-10-31')).phases;
+
+    expect(phase.housingBurden).toBeNull();
+    expect(phase.continentHousing).toBeNull();
+    expect(phase.gaps).toContain('NO_HOUSING_BASELINE');
   });
 
   it('counts the household from the profile', async () => {

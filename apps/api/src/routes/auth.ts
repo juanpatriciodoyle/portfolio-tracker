@@ -5,93 +5,124 @@ import { SignInRejectedError, type SignInRejection } from '../application/errors
 import type { SlidingWindowRateLimiter } from '../application/limits';
 import type { ApiErrorResponse } from '../contracts';
 import { errorName, log } from '../lib/logger';
+import { requireUser, respondWithError, userIdOf } from './http';
 
-const GOOGLE_TOKEN_NEEDED = 'Google did not send a sign-in token. Try signing in again.';
-const TOO_MANY_ATTEMPTS = 'Too many sign-in attempts. Wait a moment and try again.';
-const GOOGLE_SIGN_IN_FAILED = 'Google sign-in failed on our side. Try again in a moment, or sign in with a passkey.';
-const PASSKEY_EMAIL_NEEDED = 'Enter your email so we can find your passkey.';
-const PASSKEY_START_FAILED = 'Could not start the passkey prompt. Try again in a moment.';
-const PASSKEY_PROOF_NEEDED = 'Enter your email and confirm the passkey prompt to sign in.';
-const PASSKEY_VERIFY_FAILED = 'The passkey could not be verified. Try again, or sign in another way.';
+/** How each refusal is answered. The code travels in the body, next to the English sentence. */
+export const REJECTION_STATUS: Record<SignInRejection, number> = {
+  GOOGLE_TOKEN_NEEDED: 400,
+  GOOGLE_TOKEN_UNVERIFIED: 401,
+  GOOGLE_NOT_CONFIGURED: 503,
+  GOOGLE_SIGN_IN_FAILED: 500,
+  REGISTRATION_CLOSED: 403,
+  TOO_MANY_ATTEMPTS: 429,
+  PASSKEY_REQUEST_INVALID: 400,
+  PASSKEY_CHALLENGE_EXPIRED: 400,
+  PASSKEY_UNVERIFIED: 400,
+  PASSKEY_UNKNOWN: 401,
+  PASSKEY_START_FAILED: 500,
+  PASSKEY_NOT_FOR_ADMIN: 403,
+  PASSKEY_NOT_FOR_GUEST: 403,
+  PASSKEY_ALREADY_ADDED: 409,
+  DEMO_UNAVAILABLE: 500,
+  DEMO_BUSY: 503,
+  NOT_A_GUEST: 403,
+  GUEST_SESSION_ENDED: 401,
+};
+
+/** Answers a refusal: its status, its sentence and its code. */
+export function refuse(res: Response, code: SignInRejection): void {
+  res.status(REJECTION_STATUS[code]).json({ error: new SignInRejectedError(code).message, code } satisfies ApiErrorResponse);
+}
 
 /** Only the token Google issued counts. Any identity the browser claims in the body is ignored, so it is never trusted. */
 const googleSignInBody = z.object({ accessToken: z.string().min(1) });
 
-const REJECTION_STATUS: Record<SignInRejection, number> = {
-  GOOGLE_TOKEN_UNVERIFIED: 401,
-  GOOGLE_NOT_CONFIGURED: 503,
-  PASSKEY_NEEDS_SIGN_IN: 403,
-  PASSKEY_NOT_FOR_ADMIN: 403,
-  REGISTRATION_CLOSED: 403,
-};
-
-const passkeyEmailBody = z.object({ email: z.string().min(1) });
-
 /** The prompt's answer. Its inner structure is the authenticator's to check; here it only has to look like one. */
-const passkeyVerifyBody = z.object({
-  email: z.string().min(1),
-  credential: z.looseObject({
-    id: z.string(),
-    rawId: z.string(),
-    type: z.literal('public-key'),
-    response: z.looseObject({}),
-  }),
+const passkeyCredential = z.looseObject({
+  id: z.string(),
+  rawId: z.string(),
+  type: z.literal('public-key'),
+  response: z.looseObject({}),
 });
-
-const reply = (res: Response, status: number, error: string) => res.status(status).json({ error } satisfies ApiErrorResponse);
+const passkeySignInBody = z.object({ challengeId: z.string().min(1), credential: passkeyCredential });
+const passkeyRegisterBody = z.object({ credential: passkeyCredential });
 
 export interface AuthRouterOptions {
-  /** Attempts allowed per address across the three sign-in endpoints. */
+  /** Attempts allowed per address across every sign-in endpoint. */
   readonly limiter: SlidingWindowRateLimiter;
 }
 
-/** Passwordless sign-in: Google and passkeys. Every success answers the session the web app stores. */
-export function createAuthRouter(auth: AuthService, { limiter }: AuthRouterOptions): Router {
-  const router = Router();
-
-  const throttle = (req: Request, res: Response, next: NextFunction) => {
+/** The limit every way of signing in shares (Google, passkeys, the demo): the same allowance per address. */
+export function createThrottle(limiter: SlidingWindowRateLimiter) {
+  return (req: Request, res: Response, next: NextFunction) => {
     const decision = limiter.tryAcquire(req.ip ?? 'unknown');
     if (decision.allowed) return next();
     res.setHeader('Retry-After', String(decision.retryAfterSeconds));
-    reply(res, 429, TOO_MANY_ATTEMPTS);
+    refuse(res, 'TOO_MANY_ATTEMPTS');
+  };
+}
+
+/**
+ * Passwordless sign-in. Google creates and opens accounts; a passkey is added afterwards by someone who is signed in,
+ * and then signs in on its own. Every success answers the session the web app stores; every refusal carries a code.
+ */
+export function createAuthRouter(auth: AuthService, { limiter }: AuthRouterOptions): Router {
+  const router = Router();
+  const throttle = createThrottle(limiter);
+
+  /** A refusal is answered as such; anything else is a failure of ours and is logged by kind only. */
+  const fail = (res: Response, error: unknown, event: string, fallback: SignInRejection | null) => {
+    if (error instanceof SignInRejectedError) return refuse(res, error.code);
+    if (fallback === null) return respondWithError(error, res);
+    log.error(event, { error: errorName(error) });
+    refuse(res, fallback);
   };
 
   router.post('/auth/google', throttle, async (req, res) => {
     const body = googleSignInBody.safeParse(req.body);
-    if (!body.success) return void reply(res, 400, GOOGLE_TOKEN_NEEDED);
+    if (!body.success) return refuse(res, 'GOOGLE_TOKEN_NEEDED');
     try {
-      const signedIn = await auth.signInWithGoogle(body.data.accessToken);
-      res.status(200).json({ success: true, ...signedIn });
+      res.status(200).json({ success: true, ...(await auth.signInWithGoogle(body.data.accessToken)) });
     } catch (error) {
-      if (error instanceof SignInRejectedError) return void reply(res, REJECTION_STATUS[error.code], error.message);
-      log.error('google_sign_in_failed', { error: errorName(error) });
-      reply(res, 500, GOOGLE_SIGN_IN_FAILED);
+      fail(res, error, 'google_sign_in_failed', 'GOOGLE_SIGN_IN_FAILED');
     }
   });
 
-  router.post('/auth/passkey/generate-options', throttle, async (req, res) => {
-    const body = passkeyEmailBody.safeParse(req.body);
-    if (!body.success) return void reply(res, 400, PASSKEY_EMAIL_NEEDED);
+  router.post('/auth/passkey/sign-in/options', throttle, async (_req, res) => {
     try {
-      res.json(await auth.passkeyChallenge(body.data.email));
+      res.json(await auth.passkeySignInChallenge());
     } catch (error) {
-      if (error instanceof SignInRejectedError) return void reply(res, REJECTION_STATUS[error.code], error.message);
-      log.error('passkey_options_failed', { error: errorName(error) });
-      reply(res, 500, PASSKEY_START_FAILED);
+      fail(res, error, 'passkey_sign_in_options_failed', 'PASSKEY_START_FAILED');
     }
   });
 
-  router.post('/auth/passkey/verify', throttle, async (req, res) => {
-    const body = passkeyVerifyBody.safeParse(req.body);
-    if (!body.success) return void reply(res, 400, PASSKEY_PROOF_NEEDED);
+  router.post('/auth/passkey/sign-in/verify', throttle, async (req, res) => {
+    const body = passkeySignInBody.safeParse(req.body);
+    if (!body.success) return refuse(res, 'PASSKEY_REQUEST_INVALID');
     try {
-      const signedIn = await auth.signInWithPasskey(body.data.email, body.data.credential);
-      res.json({ success: true, ...signedIn });
+      res.json({ success: true, ...(await auth.signInWithPasskey(body.data.challengeId, body.data.credential)) });
     } catch (error) {
-      if (error instanceof SignInRejectedError) return void reply(res, REJECTION_STATUS[error.code], error.message);
-      log.error('passkey_verification_failed', { error: errorName(error) });
-      // The authenticator words its refusals for the person ("challenge expired", "verification failed").
-      reply(res, 400, error instanceof Error && error.message ? error.message : PASSKEY_VERIFY_FAILED);
+      fail(res, error, 'passkey_sign_in_failed', 'PASSKEY_UNVERIFIED');
+    }
+  });
+
+  // Saving a passkey is for the account that is signed in: who it is comes from the session, never from the request.
+  router.post('/auth/passkey/register/options', throttle, requireUser, async (req, res) => {
+    try {
+      res.json({ options: await auth.passkeyRegistrationOptions(userIdOf(req)) });
+    } catch (error) {
+      fail(res, error, 'passkey_registration_options_failed', null);
+    }
+  });
+
+  router.post('/auth/passkey/register/verify', throttle, requireUser, async (req, res) => {
+    const body = passkeyRegisterBody.safeParse(req.body);
+    if (!body.success) return refuse(res, 'PASSKEY_REQUEST_INVALID');
+    try {
+      await auth.addPasskey(userIdOf(req), body.data.credential);
+      res.status(204).end();
+    } catch (error) {
+      fail(res, error, 'passkey_registration_failed', null);
     }
   });
 

@@ -23,6 +23,7 @@ describe('EurostatStatisticsProvider', () => {
   const routes = () => ({
     'ilc_di01': () => reply(fixture('eurostat-ilc_di01-ES.json')),
     'ilc_mded01': () => reply(fixture('eurostat-ilc_mded01-ES.json')),
+    'ilc_mded02': () => reply(fixture('eurostat-ilc_mded02-ES.json')),
   });
 
   it('supports the countries Eurostat surveys, and nobody else', () => {
@@ -51,6 +52,9 @@ describe('EurostatStatisticsProvider', () => {
       },
     });
     expect(fragment.housingCostShare).toEqual({ source: 'EUROSTAT', period: '2025', percent: 16 });
+    // The share of rent among households that pay rent: the like-for-like figure for a renter.
+    expect(fragment.rentCostShare).toEqual({ source: 'EUROSTAT', period: '2025', percent: 26.7 });
+    expect(calls.find((url) => url.includes('ilc_mded02'))).toContain('geo=ES');
     expect(calls.find((url) => url.includes('ilc_di01'))).toContain('geo=ES');
     expect(calls.find((url) => url.includes('ilc_di01'))).toContain('unit=NAC');
   });
@@ -79,28 +83,34 @@ describe('EurostatStatisticsProvider', () => {
     const { fetchFn } = fakeFetch({
       ilc_di01: () => reply(fixture('eurostat-unknown-geo.json')),
       ilc_mded01: () => reply(fixture('eurostat-unknown-geo.json')),
+      ilc_mded02: () => reply(fixture('eurostat-unknown-geo.json')),
     });
 
     expect(await new EurostatStatisticsProvider(fetchFn).fetch('ES')).toEqual({});
   });
 
-  it('keeps what it could read when one of the two datasets fails', async () => {
-    const { fetchFn } = fakeFetch({ ilc_di01: () => reply('oops', 503), ilc_mded01: () => reply(fixture('eurostat-ilc_mded01-ES.json')) });
+  it('keeps what it could read when one of the datasets fails', async () => {
+    const { fetchFn } = fakeFetch({
+      ilc_di01: () => reply('oops', 503),
+      ilc_mded01: () => reply(fixture('eurostat-ilc_mded01-ES.json')),
+      ilc_mded02: () => reply('oops', 500),
+    });
 
     const fragment = await new EurostatStatisticsProvider(fetchFn).fetch('ES');
 
     expect(fragment.incomeDistribution).toBeUndefined();
     expect(fragment.housingCostShare?.percent).toBe(16);
+    expect(fragment.rentCostShare).toBeUndefined();
   });
 
   it('fails when nothing could be read, so the caller does not cache an outage as "no data"', async () => {
-    const { fetchFn } = fakeFetch({ ilc_di01: () => reply('oops', 503), ilc_mded01: () => reply('oops', 500) });
+    const { fetchFn } = fakeFetch({ ilc_di01: () => reply('oops', 503), ilc_mded01: () => reply('oops', 500), ilc_mded02: () => reply('oops', 500) });
 
     await expect(new EurostatStatisticsProvider(fetchFn).fetch('ES')).rejects.toThrow();
   });
 
   it('treats a malformed answer as a failure rather than as data', async () => {
-    const { fetchFn } = fakeFetch({ ilc_di01: () => reply('{"nonsense":true}'), ilc_mded01: () => reply('not json') });
+    const { fetchFn } = fakeFetch({ ilc_di01: () => reply('{"nonsense":true}'), ilc_mded01: () => reply('not json'), ilc_mded02: () => reply('not json') });
 
     await expect(new EurostatStatisticsProvider(fetchFn).fetch('ES')).rejects.toThrow();
   });

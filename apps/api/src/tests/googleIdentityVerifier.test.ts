@@ -6,7 +6,8 @@ const AUDIENCE = 'client-123.apps.googleusercontent.com';
 interface Info {
   aud: string;
   email?: string;
-  email_verified?: boolean;
+  /** Google's token-info endpoint answers this as the text "true" / "false"; the library's type says boolean. */
+  email_verified?: boolean | 'true' | 'false';
   sub?: string;
 }
 
@@ -73,6 +74,18 @@ describe('GoogleIdentityVerifier', () => {
       const { verifier } = build({ info: { ...goodInfo, email_verified } });
       await expect(verifier.verify('access-token')).rejects.toThrow(/verified/i);
     }
+  });
+
+  it("accepts Google's real answer, where email_verified arrives as the text 'true'", async () => {
+    const { verifier } = build({ info: { ...goodInfo, email_verified: 'true' } });
+
+    await expect(verifier.verify('access-token')).resolves.toMatchObject({ email: 'ana@example.com', googleId: 'g-1' });
+  });
+
+  it("refuses an email_verified that arrives as the text 'false'", async () => {
+    const { verifier } = build({ info: { ...goodInfo, email_verified: 'false' } });
+
+    await expect(verifier.verify('access-token')).rejects.toThrow(/verified/i);
   });
 
   it('refuses a token that carries no email or no stable Google id', async () => {

@@ -23,7 +23,8 @@ const COUNTRIES: Readonly<Record<string, { geo: string; currency: string; unit?:
 
 /**
  * Eurostat (EU-SILC), free and key-less: the income deciles of a country's equivalised net income per year
- * (`ilc_di01`) and the typical share of disposable income spent on housing (`ilc_mded01`).
+ * (`ilc_di01`), the typical share of disposable income spent on housing (`ilc_mded01`, owners included) and the share
+ * spent on rent by households that pay it (`ilc_mded02`, the like-for-like figure for a tenant).
  */
 export class EurostatStatisticsProvider implements StatisticsProvider {
   readonly name = 'Eurostat';
@@ -39,12 +40,17 @@ export class EurostatStatisticsProvider implements StatisticsProvider {
 
   async fetch(countryCode: string): Promise<StatisticsFragment> {
     const { geo, currency, unit = 'NAC' } = COUNTRIES[countryCode];
-    const [income, housing] = await Promise.allSettled([this.incomeDistribution(geo, currency, unit), this.housingShare(geo)]);
-    if (income.status === 'rejected' && housing.status === 'rejected') throw income.reason;
+    const [income, housing, rent] = await Promise.allSettled([
+      this.incomeDistribution(geo, currency, unit),
+      this.share('ilc_mded01', geo),
+      this.share('ilc_mded02', geo),
+    ]);
+    if (income.status === 'rejected' && housing.status === 'rejected' && rent.status === 'rejected') throw income.reason;
 
     return {
       ...(income.status === 'fulfilled' && income.value ? { incomeDistribution: income.value } : {}),
       ...(housing.status === 'fulfilled' && housing.value ? { housingCostShare: housing.value } : {}),
+      ...(rent.status === 'fulfilled' && rent.value ? { rentCostShare: rent.value } : {}),
     };
   }
 
@@ -69,8 +75,9 @@ export class EurostatStatisticsProvider implements StatisticsProvider {
     return { source: 'EUROSTAT', period: cells[0].coordinates.time, currency, distribution: { period: 'YEAR', basis: 'EQUIVALISED', points } };
   }
 
-  private async housingShare(geo: string): Promise<StatisticsFragment['housingCostShare'] | null> {
-    const [cell] = jsonStatCells(await this.get('ilc_mded01', `geo=${geo}&hhcomp=TOTAL&rskpovth=TOTAL`));
+  /** A share of disposable income, in percent, for all households of a country (`ilc_mded01` and `ilc_mded02` share their dimensions). */
+  private async share(dataset: 'ilc_mded01' | 'ilc_mded02', geo: string): Promise<StatisticsFragment['housingCostShare'] | null> {
+    const [cell] = jsonStatCells(await this.get(dataset, `geo=${geo}&hhcomp=TOTAL&rskpovth=TOTAL`));
     return cell && cell.value > 0 && cell.value < 100 ? { source: 'EUROSTAT', period: cell.coordinates.time, percent: cell.value } : null;
   }
 }

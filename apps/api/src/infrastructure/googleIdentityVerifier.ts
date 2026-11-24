@@ -1,4 +1,3 @@
-import type { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
 import { GoogleNotConfiguredError } from '../application/errors';
 import type { IdentityVerifier, VerifiedGoogleIdentity } from '../application/ports';
@@ -12,6 +11,17 @@ export type ProfileFetch = (
   init: { headers: Record<string, string>; signal?: AbortSignal }
 ) => Promise<{ ok: boolean; json(): Promise<unknown> }>;
 
+/**
+ * What we rely on in Google's token-info answer. The library types `email_verified` as a boolean, but the endpoint
+ * sends the text "true" or "false"; both are read, and anything else counts as not verified.
+ */
+const tokenInfoSchema = z.object({
+  aud: z.string(),
+  sub: z.string().optional(),
+  email: z.string().optional(),
+  email_verified: z.union([z.boolean(), z.enum(['true', 'false']).transform((text) => text === 'true')]).optional().catch(false),
+});
+
 const profileSchema = z.object({ name: z.string().optional(), picture: z.string().optional() });
 
 /**
@@ -21,7 +31,7 @@ const profileSchema = z.object({ name: z.string().optional(), picture: z.string(
  */
 export class GoogleIdentityVerifier implements IdentityVerifier {
   constructor(
-    private readonly client: Pick<OAuth2Client, 'getTokenInfo'>,
+    private readonly client: { getTokenInfo(accessToken: string): Promise<unknown> },
     private readonly audience: string | undefined,
     private readonly fetchProfile: ProfileFetch = fetch
   ) {}
@@ -29,7 +39,7 @@ export class GoogleIdentityVerifier implements IdentityVerifier {
   async verify(accessToken: string): Promise<VerifiedGoogleIdentity> {
     if (!this.audience) throw new GoogleNotConfiguredError();
 
-    const info = await this.client.getTokenInfo(accessToken);
+    const info = tokenInfoSchema.parse(await this.client.getTokenInfo(accessToken));
     if (info.aud !== this.audience) throw new Error('The token was issued to another application (audience mismatch).');
     if (info.email_verified !== true) throw new Error('Google has not verified the email of this account.');
     if (!info.email || !info.sub) throw new Error('The token does not identify the person.');

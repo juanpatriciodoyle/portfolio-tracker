@@ -226,6 +226,7 @@ describe('response shapes', () => {
       averageSavingsRate: 0.53125,
       fixedCostsByCategoryMinor: amounts,
       costBasisByCategory: basis,
+      declaredCostsByCategoryMinor: amounts,
       months: 14.2,
       totalIncomeMinor: 4544000,
       totalFixedCostsMinor: 2130000,
@@ -236,6 +237,12 @@ describe('response shapes', () => {
       timelineResponse.safeParse({
         asOf: '2026-10-31',
         entries: [{ ...entry, fixedCostsByCategoryMinor: { RENT: 1 } }],
+      }).success
+    ).toBe(false);
+    expect(
+      timelineResponse.safeParse({
+        asOf: '2026-10-31',
+        entries: [{ ...entry, declaredCostsByCategoryMinor: { RENT: 1 } }],
       }).success
     ).toBe(false);
   });

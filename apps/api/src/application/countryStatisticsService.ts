@@ -17,7 +17,7 @@ export interface CountryStatisticsServiceDeps {
   readonly failureCooldownMs?: number;
 }
 
-const PARTS = ['incomeDistribution', 'housingCostShare', 'purchasing', 'regionCode', 'referenceDistribution'] as const;
+const PARTS = ['incomeDistribution', 'housingCostShare', 'rentCostShare', 'purchasing', 'regionCode', 'referenceDistribution'] as const;
 
 /** What is published for each country, cached and refreshed about monthly. Public data: nothing here is personal. */
 export class CountryStatisticsService {

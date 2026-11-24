@@ -70,3 +70,34 @@ export class InsufficientHoldingsError extends DomainError {
     );
   }
 }
+
+/** A purchase paid with cash asks for more cash than the person holds in that currency. */
+export class InsufficientCashError extends DomainError {
+  readonly code = 'INSUFFICIENT_CASH';
+  /** What the person holds in `currency`, in minor units (cents), so the screen can say it without rounding. */
+  readonly availableMinor: number;
+
+  constructor(
+    readonly currency: string,
+    readonly requested: number,
+    available: number
+  ) {
+    super(
+      available > 0
+        ? `You hold ${available.toFixed(2)} ${currency} in cash and this purchase needs ${requested.toFixed(2)} ${currency}.`
+        : `You hold no ${currency} in cash, so this purchase cannot be paid with cash.`
+    );
+    this.availableMinor = Math.round(Math.max(0, available) * 100);
+  }
+}
+
+/** Changing or removing a transaction would leave a later one without what it needs: the units it sells, or the cash it pays with. */
+export class TransactionRequiredByLaterError extends DomainError {
+  readonly code = 'TRANSACTION_REQUIRED_BY_LATER';
+
+  constructor(
+    readonly dependent: { readonly id: string; readonly type: 'BOUGHT' | 'SOLD' | 'DEPOSIT' | 'WITHDRAWAL'; readonly symbol: string; readonly date: string }
+  ) {
+    super(`Another transaction depends on this one (${dependent.type} ${dependent.symbol}, ${dependent.date}), so it cannot be changed this way.`);
+  }
+}

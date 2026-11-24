@@ -1,3 +1,4 @@
+import { incomeReferenceDay } from '../contracts/incomeGaps';
 import type { CalendarDate, FixedCostCategory, PhaseStatus } from '../contracts/vocabulary';
 import { AVERAGE_DAYS_PER_MONTH, compareCalendarDates, daysInclusive } from './calendarDate';
 import { InvalidLivingPhaseError } from './errors';
@@ -129,15 +130,22 @@ export interface TimelineEntry {
   readonly fixedCostsByCategoryMinor: Readonly<Record<FixedCostCategory, number>>;
   /** Where each category's monthly cost comes from: what was declared, or the bills received. */
   readonly costBasisByCategory: Readonly<Record<FixedCostCategory, Pick<CategoryCost, 'basis' | 'billCount'>>>;
+  /** What each category would cost per month from the declared rates alone, to set beside what the bills say. */
+  readonly declaredCostsByCategoryMinor: Readonly<Record<FixedCostCategory, number>>;
   readonly months: number;
   readonly totalIncomeMinor: number;
   readonly totalFixedCostsMinor: number;
 }
 
-/** The day whose income stands for a phase: the as-of day, held inside the phase's own days. */
-function referenceDay(phase: DateRange, asOf: CalendarDate): CalendarDate {
-  if (asOf < phase.startDate) return phase.startDate;
-  return phase.endDate !== null && asOf > phase.endDate ? phase.endDate : asOf;
+/** The rates the person declared for a phase, as the cost maths reads them. */
+function declaredCostsOf(phase: LivingPhase) {
+  return phase.fixedCosts.map(({ category, cadence, amountMinor, label, endDate }) => ({
+    category,
+    cadence,
+    amountMinor,
+    label: label ?? null,
+    endDate: endDate ?? null,
+  }));
 }
 
 /**
@@ -149,18 +157,8 @@ export function phaseSnapshot(
   phase: LivingPhase,
   asOf: CalendarDate
 ): PhaseSnapshot & { readonly savingsRate: number | null; readonly costBasisByCategory: TimelineEntry['costBasisByCategory'] } {
-  const costs = effectiveMonthlyCosts({
-    declared: phase.fixedCosts.map(({ category, cadence, amountMinor, label, endDate }) => ({
-      category,
-      cadence,
-      amountMinor,
-      label: label ?? null,
-      endDate: endDate ?? null,
-    })),
-    bills: phase.bills ?? [],
-    asOf,
-  });
-  const monthlyIncomeMinor = monthlyIncomeOn(phase.incomeStreams, referenceDay(phase, asOf));
+  const costs = effectiveMonthlyCosts({ declared: declaredCostsOf(phase), bills: phase.bills ?? [], asOf });
+  const monthlyIncomeMinor = monthlyIncomeOn(phase.incomeStreams, incomeReferenceDay(phase, asOf));
   const { capacityMinor, savingsRate } = baselineSavingsCapacity({
     monthlyIncomeMinor,
     monthlyFixedCostsMinor: costs.monthlyFixedCostsMinor,
@@ -178,6 +176,12 @@ export function phaseSnapshot(
       byCategory.map(([category, { basis, billCount }]) => [category, { basis, billCount }])
     ) as TimelineEntry['costBasisByCategory'],
   };
+}
+
+/** What each category costs per month when only the declared rates count and no bill has replaced them. */
+function declaredMonthlyByCategory(phase: LivingPhase, asOf: CalendarDate): Record<FixedCostCategory, number> {
+  const { byCategory } = effectiveMonthlyCosts({ declared: declaredCostsOf(phase), bills: [], asOf });
+  return Object.fromEntries(Object.entries(byCategory).map(([category, { monthlyMinor }]) => [category, monthlyMinor])) as Record<FixedCostCategory, number>;
 }
 
 /** The chapters of a life, oldest first, each with its monthly burn, savings capacity and totals so far. */
@@ -200,6 +204,7 @@ export function buildTimeline(phases: readonly LivingPhase[], asOf: CalendarDate
       startDate: phase.startDate,
       endDate: phase.endDate,
       status: phaseStatus(phase, asOf),
+      declaredCostsByCategoryMinor: declaredMonthlyByCategory(phase, asOf),
       months,
       totalIncomeMinor: earnedIncomeMinor(span, asOf),
       ...average,

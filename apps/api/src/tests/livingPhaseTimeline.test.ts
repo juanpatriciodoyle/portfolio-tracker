@@ -241,3 +241,26 @@ describe('determinism', () => {
     expect(buildTimeline([lived], '2026-10-31')).toEqual(expected);
   });
 });
+
+describe('declared costs next to the costs worked out from bills', () => {
+  const internet = createFixedCost({ id: 'c1', category: 'INTERNET', cadence: 'MONTHLY', amountMinor: 4500 });
+  const bill = (periodStart: string, periodEnd: string, amountMinor: number) =>
+    ({ category: 'INTERNET', cadence: 'MONTHLY', periodStart, periodEnd, amountMinor, vendor: 'Movistar' }) as const;
+
+  it('keeps what was declared when the bills have taken over the cost', () => {
+    const [entry] = buildTimeline([phase({ id: 'a', fixedCosts: [internet], bills: [bill('2026-09-01', '2026-09-30', 5200)] })], '2026-11-24');
+    expect(entry.fixedCostsByCategoryMinor.INTERNET).toBe(5200);
+    expect(entry.declaredCostsByCategoryMinor.INTERNET).toBe(4500);
+  });
+
+  it('is zero for a category nothing was declared for, and always has every category', () => {
+    const [entry] = buildTimeline([phase({ id: 'a', fixedCosts: [internet], bills: [bill('2026-09-01', '2026-09-30', 5200)] })], '2026-11-24');
+    expect(entry.declaredCostsByCategoryMinor.GAS).toBe(0);
+    expect(Object.keys(entry.declaredCostsByCategoryMinor).sort()).toEqual([...FIXED_COST_CATEGORIES].sort());
+  });
+
+  it('matches the monthly cost when nothing was billed', () => {
+    const [entry] = buildTimeline([phase({ id: 'a', fixedCosts: [internet] })], '2026-11-24');
+    expect(entry.declaredCostsByCategoryMinor.INTERNET).toBe(entry.fixedCostsByCategoryMinor.INTERNET);
+  });
+});

@@ -1,31 +1,41 @@
 import { AdminIdentities } from '../application/adminIdentities';
-import { AuthService, passkeyDisplayName, type AuthServiceDeps } from '../application/authService';
-import { GoogleNotConfiguredError, SignInRejectedError } from '../application/errors';
-import type { PasskeyAuthenticator, PasskeyChallenge } from '../application/ports';
+import { AuthService, type AuthServiceDeps } from '../application/authService';
+import { GoogleNotConfiguredError, ResourceNotFoundError, SignInRejectedError } from '../application/errors';
+import type { AuthUser, PasskeyAuthenticator } from '../application/ports';
 import { NEW_USER_DEFAULTS } from '../domain/newUser';
 import { InMemoryUserRepository } from './support/inMemoryUsers';
 
 const SIGNED_IN_AT = new Date('2026-11-22T10:30:00.000Z');
+const hash = (raw: string) => `hash:${raw}`;
 
-const challenge: PasskeyChallenge = { isRegistration: false, options: { challenge: 'abc' }, userHash: 'hash:ana@example.com' };
-
-function build(overrides: Partial<AuthServiceDeps> = {}) {
-  const users = new InMemoryUserRepository();
-  const verified: string[] = [];
-  const passkeyCalls: { email: string; credential: unknown }[] = [];
-  const challengesMade: string[] = [];
-  const claimsSeen: unknown[] = [];
-
-  const passkeys: PasskeyAuthenticator = {
-    challengeFor: async (email) => {
-      challengesMade.push(email);
-      return challenge;
+/** A passkey authenticator that records what it was asked, and answers the account the test arranged. */
+function fakePasskeys(result: () => Promise<AuthUser>) {
+  const calls: string[] = [];
+  const authenticator: PasskeyAuthenticator = {
+    signInChallenge: async () => {
+      calls.push('signInChallenge');
+      return { challengeId: 'challenge-1', options: { challenge: 'abc' } };
     },
-    verify: async (email, credential) => {
-      passkeyCalls.push({ email, credential });
-      return { id: 'user-passkey', country: 'Spain', hasPasskey: true };
+    verifySignIn: async (challengeId) => {
+      calls.push(`verifySignIn:${challengeId}`);
+      return result();
+    },
+    registrationOptions: async (userId) => {
+      calls.push(`registrationOptions:${userId}`);
+      return { challenge: 'reg' };
+    },
+    register: async (userId) => {
+      calls.push(`register:${userId}`);
     },
   };
+  return { authenticator, calls };
+}
+
+function build(overrides: Partial<AuthServiceDeps> = {}, passkeyResult: () => Promise<AuthUser> = async () => ({ id: 'user-1', country: 'Spain', hasPasskey: true, isGuest: false })) {
+  const users = new InMemoryUserRepository();
+  const verified: string[] = [];
+  const claimsSeen: unknown[] = [];
+  const { authenticator, calls } = fakePasskeys(passkeyResult);
 
   const deps: AuthServiceDeps = {
     users,
@@ -35,15 +45,15 @@ function build(overrides: Partial<AuthServiceDeps> = {}) {
         return { email: 'verified@example.com', name: 'Verified Person', googleId: 'g-verified', avatarUrl: 'https://img/v.png' };
       },
     },
-    passkeys,
-    hashIdentity: (raw) => `hash:${raw}`,
+    passkeys: authenticator,
+    hashIdentity: hash,
     issueToken: (userId, claims) => (claimsSeen.push(claims), `token-for-${userId}`),
-    admins: new AdminIdentities([], (raw) => `hash:${raw}`),
+    admins: new AdminIdentities([], hash),
     allowRegistration: true,
     now: () => SIGNED_IN_AT,
     ...overrides,
   };
-  return { service: new AuthService(deps), users, verified, passkeyCalls, challengesMade, claimsSeen };
+  return { service: new AuthService(deps), users, verified, passkeyCalls: calls, claimsSeen };
 }
 
 describe('AuthService.signInWithGoogle', () => {
@@ -55,11 +65,18 @@ describe('AuthService.signInWithGoogle', () => {
     expect(verified).toEqual(['access-token']);
     expect(signedIn).toEqual({
       token: 'token-for-user-1',
-      user: { id: 'user-1', email: 'verified@example.com', name: 'Verified Person', avatarUrl: 'https://img/v.png', country: 'Spain', isAdmin: false },
+      user: {
+        id: 'user-1',
+        email: 'verified@example.com',
+        name: 'Verified Person',
+        avatarUrl: 'https://img/v.png',
+        country: 'Spain',
+        isAdmin: false,
+        hasPasskey: false,
+        isGuest: false,
+      },
     });
-    expect(users.createdWith).toEqual([
-      { userHash: 'hash:verified@example.com', defaults: { country: 'Spain', baseCurrency: 'EUR', annualInflationRate: 2.8 } },
-    ]);
+    expect(users.createdWith).toEqual([{ userHash: 'hash:verified@example.com', defaults: { country: 'Spain', baseCurrency: 'EUR', annualInflationRate: 2.8 } }]);
   });
 
   it('never stores the email: the account is found by the hash of it', async () => {
@@ -78,10 +95,17 @@ describe('AuthService.signInWithGoogle', () => {
     expect(users.size).toBe(1);
   });
 
+  it('tells the web app when the account already has a passkey', async () => {
+    const { service, users } = build();
+    await users.createWithPasskey('hash:verified@example.com', NEW_USER_DEFAULTS);
+
+    const signedIn = await service.signInWithGoogle('access-token');
+
+    expect(signedIn.user.hasPasskey).toBe(true);
+  });
+
   it('fills in a neutral name when Google shares none', async () => {
-    const { service } = build({
-      googleIdentities: { verify: async () => ({ email: 'ana@example.com', googleId: 'g-1' }) },
-    });
+    const { service } = build({ googleIdentities: { verify: async () => ({ email: 'ana@example.com', googleId: 'g-1' }) } });
 
     const signedIn = await service.signInWithGoogle('access-token');
 
@@ -113,109 +137,117 @@ describe('AuthService.signInWithGoogle', () => {
       },
     });
 
-    await expect(service.signInWithGoogle('access-token')).rejects.toMatchObject({
-      code: 'GOOGLE_NOT_CONFIGURED',
-      message: 'Google sign-in is not set up on this server. Use a passkey.',
-    });
+    await expect(service.signInWithGoogle('access-token')).rejects.toMatchObject({ code: 'GOOGLE_NOT_CONFIGURED' });
     expect(users.size).toBe(0);
   });
 });
 
-describe('passkeyDisplayName', () => {
-  it.each([
-    ['juan@portfolio.local', 'Juan'],
-    ['ana.maria@example.com', 'Ana.maria'],
-    ['user@example.com', 'Investor'],
-    ['USER@example.com', 'Investor'],
-    ['Passkey@example.com', 'Investor'],
-    ['x@example.com', 'X'],
-  ])('names %s "%s"', (email, expected) => {
-    expect(passkeyDisplayName(email)).toBe(expected);
-  });
-});
-
-describe('AuthService passkey sign-in', () => {
-  it('hands the challenge of the authenticator back unchanged', async () => {
+describe('AuthService: signing in with a passkey', () => {
+  it('hands the authenticator’s question back unchanged', async () => {
     const { service } = build();
-    await expect(service.passkeyChallenge('ana@example.com')).resolves.toBe(challenge);
+    await expect(service.passkeySignInChallenge()).resolves.toEqual({ challengeId: 'challenge-1', options: { challenge: 'abc' } });
   });
 
-  it('signs in whoever the authenticator verifies, with the display name made from the email', async () => {
-    const { service, passkeyCalls } = build();
+  it('signs in whoever owns the passkey, with no email, and says the account has one', async () => {
+    const { service, users, passkeyCalls } = build();
+    const account = await users.createWithPasskey('hash:ana@example.com', NEW_USER_DEFAULTS);
     const credential = { id: 'cred-1', type: 'public-key' };
+    const withAccount = build({ users }, async () => account);
 
-    const signedIn = await service.signInWithPasskey('ana@example.com', credential);
+    const signedIn = await withAccount.service.signInWithPasskey('challenge-1', credential);
 
-    expect(passkeyCalls).toEqual([{ email: 'ana@example.com', credential }]);
     expect(signedIn).toEqual({
-      token: 'token-for-user-passkey',
-      user: { id: 'user-passkey', email: 'ana@example.com', name: 'Ana', country: 'Spain', isAdmin: false },
+      token: `token-for-${account.id}`,
+      user: { id: account.id, name: 'Investor', country: 'Spain', isAdmin: false, hasPasskey: true, isGuest: false },
     });
-    expect(signedIn.user).not.toHaveProperty('avatarUrl');
+    expect(signedIn.user).not.toHaveProperty('email');
+    expect(passkeyCalls).toEqual([]);
+    expect(withAccount.passkeyCalls).toEqual(['verifySignIn:challenge-1']);
   });
 
-  it('lets the reason a passkey failed reach the caller', async () => {
-    const { service } = build({
-      passkeys: {
-        challengeFor: async () => challenge,
-        verify: async () => {
-          throw new Error('Authentication challenge expired or invalid.');
-        },
-      },
+  it('records the sign-in, and never makes it an administrator session', async () => {
+    const users = new InMemoryUserRepository();
+    const account = await users.createWithPasskey('hash:ana@example.com', NEW_USER_DEFAULTS);
+    const { service, claimsSeen } = build({ users, admins: new AdminIdentities(['boss@example.test'], hash) }, async () => account);
+
+    await service.signInWithPasskey('challenge-1', { id: 'x' });
+
+    expect(users.lastLoginOf(account.id)).toEqual(SIGNED_IN_AT);
+    expect(claimsSeen).toEqual([{ admin: false }]);
+  });
+
+  it('lets the reason the authenticator refused reach the caller, and records nothing', async () => {
+    const users = new InMemoryUserRepository();
+    const { service } = build({ users }, async () => {
+      throw new SignInRejectedError('PASSKEY_CHALLENGE_EXPIRED');
     });
 
-    await expect(service.signInWithPasskey('ana@example.com', {})).rejects.toThrow('Authentication challenge expired or invalid.');
+    await expect(service.signInWithPasskey('old', { id: 'x' })).rejects.toMatchObject({ code: 'PASSKEY_CHALLENGE_EXPIRED' });
+    expect(users.size).toBe(0);
+  });
+
+  it('refuses a passkey that belongs to the administrator’s identity, whatever it proves', async () => {
+    const users = new InMemoryUserRepository();
+    const account = await users.createWithPasskey('hash:boss@example.test', NEW_USER_DEFAULTS);
+    const { service, claimsSeen } = build({ users, admins: new AdminIdentities(['boss@example.test'], hash) }, async () => account);
+
+    await expect(service.signInWithPasskey('challenge-1', { id: 'x' })).rejects.toMatchObject({ code: 'PASSKEY_NOT_FOR_ADMIN' });
+    expect(claimsSeen).toEqual([]);
+    expect(users.lastLoginOf(account.id)).toBeNull();
   });
 });
 
-describe('AuthService: a passkey cannot be added to an account that already exists', () => {
-  async function withGoogleAccount() {
-    const built = build();
-    await built.users.create('hash:ana@example.com', NEW_USER_DEFAULTS);
-    return built;
-  }
+describe('AuthService: adding a passkey to the signed-in account', () => {
+  const admins = new AdminIdentities(['boss@example.test'], hash);
 
-  it('refuses to start a registration for an account created without a passkey (for example with Google)', async () => {
-    const { service, challengesMade } = await withGoogleAccount();
+  it('starts and finishes the registration for an ordinary account that has no passkey yet', async () => {
+    const { service, users, passkeyCalls } = build();
+    const account = await users.create('hash:ana@example.com', NEW_USER_DEFAULTS);
+    const credential = { id: 'new-cred' };
 
-    await expect(service.passkeyChallenge('ana@example.com')).rejects.toMatchObject({
-      name: 'SignInRejectedError',
-      code: 'PASSKEY_NEEDS_SIGN_IN',
-      message: 'This account was created with Google. Sign in with Google first.',
-    });
-    expect(challengesMade).toEqual([]);
+    await expect(service.passkeyRegistrationOptions(account.id)).resolves.toEqual({ challenge: 'reg' });
+    await service.addPasskey(account.id, credential);
+
+    expect(passkeyCalls).toEqual([`registrationOptions:${account.id}`, `register:${account.id}`]);
   });
 
-  it('refuses to finish one, and never asks the authenticator to register', async () => {
-    const { service, passkeyCalls } = await withGoogleAccount();
+  it('refuses an account that does not exist, before the authenticator is asked anything', async () => {
+    const { service, passkeyCalls } = build();
 
-    await expect(service.signInWithPasskey('ana@example.com', { id: 'attacker-cred' })).rejects.toMatchObject({
-      code: 'PASSKEY_NEEDS_SIGN_IN',
-    });
+    await expect(service.passkeyRegistrationOptions('ghost')).rejects.toBeInstanceOf(ResourceNotFoundError);
+    await expect(service.addPasskey('ghost', { id: 'x' })).rejects.toBeInstanceOf(ResourceNotFoundError);
     expect(passkeyCalls).toEqual([]);
   });
 
-  it('still lets a brand-new email register its first passkey', async () => {
-    const { service, challengesMade, passkeyCalls } = build();
+  it('refuses a demo guest: a passkey would outlive the account it belongs to', async () => {
+    const { service, users, passkeyCalls } = build();
+    users.addGuest('guest-1');
 
-    await expect(service.passkeyChallenge('new@example.com')).resolves.toBe(challenge);
-    await expect(service.signInWithPasskey('new@example.com', { id: 'cred' })).resolves.toMatchObject({ token: 'token-for-user-passkey' });
-    expect(challengesMade).toEqual(['new@example.com']);
-    expect(passkeyCalls).toHaveLength(1);
+    await expect(service.passkeyRegistrationOptions('guest-1')).rejects.toMatchObject({ code: 'PASSKEY_NOT_FOR_GUEST' });
+    await expect(service.addPasskey('guest-1', { id: 'x' })).rejects.toMatchObject({ code: 'PASSKEY_NOT_FOR_GUEST' });
+    expect(passkeyCalls).toEqual([]);
   });
 
-  it('still lets an account that has a passkey sign in with it', async () => {
-    const { service, users, passkeyCalls } = build();
-    await users.createWithPasskey('hash:ana@example.com', NEW_USER_DEFAULTS);
+  it('refuses the administrator’s identity, so a passkey can never open that account', async () => {
+    const { service, users, passkeyCalls } = build({ admins });
+    const boss = await users.create('hash:boss@example.test', NEW_USER_DEFAULTS);
 
-    await expect(service.passkeyChallenge('ana@example.com')).resolves.toBe(challenge);
-    await expect(service.signInWithPasskey('ana@example.com', { id: 'cred' })).resolves.toBeDefined();
-    expect(passkeyCalls).toHaveLength(1);
+    await expect(service.passkeyRegistrationOptions(boss.id)).rejects.toMatchObject({ code: 'PASSKEY_NOT_FOR_ADMIN' });
+    await expect(service.addPasskey(boss.id, { id: 'x' })).rejects.toMatchObject({ code: 'PASSKEY_NOT_FOR_ADMIN' });
+    expect(passkeyCalls).toEqual([]);
+  });
+
+  it('refuses an account that already has one', async () => {
+    const { service, users, passkeyCalls } = build();
+    const account = await users.createWithPasskey('hash:ana@example.com', NEW_USER_DEFAULTS);
+
+    await expect(service.passkeyRegistrationOptions(account.id)).rejects.toMatchObject({ code: 'PASSKEY_ALREADY_ADDED' });
+    expect(passkeyCalls).toEqual([]);
   });
 });
 
 describe('AuthService: the administrator', () => {
-  const admins = new AdminIdentities(['boss@example.test'], (raw) => `hash:${raw}`);
+  const admins = new AdminIdentities(['boss@example.test'], hash);
   const boss = async () => ({ email: 'boss@example.test', name: 'Boss', googleId: 'g-boss' });
 
   it('is the administrator only after Google confirms their email, and the session says so', async () => {
@@ -235,36 +267,12 @@ describe('AuthService: the administrator', () => {
     expect(signedIn.user.isAdmin).toBe(false);
     expect(claimsSeen).toEqual([{ admin: false }]);
   });
-
-  it('never makes a passkey sign-in an administrator', async () => {
-    const { service, claimsSeen } = build({ admins });
-
-    const signedIn = await service.signInWithPasskey('ana@example.test', { id: 'x' });
-
-    expect(signedIn.user.isAdmin).toBe(false);
-    expect(claimsSeen).toEqual([{ admin: false }]);
-  });
-
-  it('refuses passkeys for the administrator identity, so nobody can claim it by registering one', async () => {
-    const { service, passkeyCalls, challengesMade } = build({ admins });
-
-    await expect(service.passkeyChallenge('boss@example.test')).rejects.toMatchObject({ code: 'PASSKEY_NOT_FOR_ADMIN' });
-    await expect(service.signInWithPasskey('boss@example.test', { id: 'x' })).rejects.toMatchObject({ code: 'PASSKEY_NOT_FOR_ADMIN' });
-    expect(challengesMade).toEqual([]);
-    expect(passkeyCalls).toEqual([]);
-  });
 });
 
 describe('AuthService: last sign-in', () => {
   it('records when a customer signed in with Google', async () => {
     const { service, users } = build();
     const signedIn = await service.signInWithGoogle('access-token');
-    expect(users.lastLoginOf(signedIn.user.id)).toEqual(SIGNED_IN_AT);
-  });
-
-  it('records when a customer signed in with a passkey', async () => {
-    const { service, users } = build();
-    const signedIn = await service.signInWithPasskey('ana@example.test', { id: 'x' });
     expect(users.lastLoginOf(signedIn.user.id)).toEqual(SIGNED_IN_AT);
   });
 
@@ -283,7 +291,7 @@ describe('AuthService: last sign-in', () => {
 
 describe('AuthService: closed registration', () => {
   const closed = { allowRegistration: false };
-  const admins = new AdminIdentities(['boss@example.test'], (raw) => `hash:${raw}`);
+  const admins = new AdminIdentities(['boss@example.test'], hash);
 
   it('lets someone who already has an account sign in with Google', async () => {
     const { service, users } = build(closed);
@@ -309,30 +317,6 @@ describe('AuthService: closed registration', () => {
 
     expect(signedIn.user.isAdmin).toBe(true);
     expect(users.size).toBe(1);
-  });
-
-  it('refuses a passkey for an email with no account, before the authenticator is asked anything', async () => {
-    const { service, challengesMade, passkeyCalls } = build(closed);
-
-    await expect(service.passkeyChallenge('new@example.test')).rejects.toMatchObject({ code: 'REGISTRATION_CLOSED' });
-    await expect(service.signInWithPasskey('new@example.test', { id: 'x' })).rejects.toMatchObject({ code: 'REGISTRATION_CLOSED' });
-
-    expect(challengesMade).toEqual([]);
-    expect(passkeyCalls).toEqual([]);
-  });
-
-  it('lets an account that already has a passkey sign in with it', async () => {
-    const { service, users } = build(closed);
-    await users.createWithPasskey('hash:ana@example.test', NEW_USER_DEFAULTS);
-
-    await expect(service.signInWithPasskey('ana@example.test', { id: 'x' })).resolves.toMatchObject({ user: { id: 'user-passkey' } });
-  });
-
-  it('keeps saying "sign in with Google first" for an account made that way', async () => {
-    const { service, users } = build(closed);
-    await users.create('hash:ana@example.test', NEW_USER_DEFAULTS);
-
-    await expect(service.passkeyChallenge('ana@example.test')).rejects.toMatchObject({ code: 'PASSKEY_NEEDS_SIGN_IN' });
   });
 
   it('records no sign-in for a refused one', async () => {

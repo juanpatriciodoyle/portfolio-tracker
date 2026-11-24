@@ -11,8 +11,21 @@ export class InMemoryUserRepository implements UserRepository {
     return this.byHash.get(userHash) ?? null;
   }
 
+  async findById(userId: string): Promise<AuthUser | null> {
+    return [...this.byHash.values(), ...this.guests.values()].find((user) => user.id === userId) ?? null;
+  }
+
+  private readonly guests = new Map<string, AuthUser>();
+
+  /** Arrange: a demo guest account (it has no identity hash, like the real ones). */
+  addGuest(id: string): AuthUser {
+    const guest: AuthUser = { id, country: 'Spain', hasPasskey: false, isGuest: true };
+    this.guests.set(id, guest);
+    return guest;
+  }
+
   async create(userHash: string, defaults: NewUserDefaults): Promise<AuthUser> {
-    const user: AuthUser = { id: `user-${this.byHash.size + 1}`, country: defaults.country, hasPasskey: false };
+    const user: AuthUser = { id: `user-${this.byHash.size + 1}`, country: defaults.country, hasPasskey: false, isGuest: false };
     this.byHash.set(userHash, user);
     this.createdWith.push({ userHash, defaults });
     return user;
