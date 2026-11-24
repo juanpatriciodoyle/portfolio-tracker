@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 260" role="img" aria-label="Portfolio Tracker: a calm place to see everything you own">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B0B12"/><stop offset="1" stop-color="#171127"/>
+    </linearGradient>
+    <linearGradient id="hot" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#8B5CF6"><animate attributeName="stop-color" values="#8B5CF6;#FF4DA6;#22D3EE;#8B5CF6" dur="8s" repeatCount="indefinite"/></stop>
+      <stop offset="1" stop-color="#22D3EE"><animate attributeName="stop-color" values="#22D3EE;#B6F36B;#FF4DA6;#22D3EE" dur="8s" repeatCount="indefinite"/></stop>
+    </linearGradient>
+    <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8B5CF6" stop-opacity=".35"/><stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="260" rx="20" fill="url(#bg)"/>
+  <circle cx="780" cy="40" r="90" fill="#FF4DA6" opacity=".10"><animate attributeName="r" values="80;110;80" dur="6s" repeatCount="indefinite"/></circle>
+  <circle cx="90" cy="230" r="80" fill="#22D3EE" opacity=".10"><animate attributeName="r" values="70;100;70" dur="7s" repeatCount="indefinite"/></circle>
+  <path d="M470 200 L520 168 L570 182 L620 130 L670 148 L720 92 L770 108 L830 56 L830 230 L470 230 Z" fill="url(#fill)">
+    <animate attributeName="opacity" values="0;1" dur="2.4s" fill="freeze"/>
+  </path>
+  <path d="M470 200 L520 168 L570 182 L620 130 L670 148 L720 92 L770 108 L830 56" fill="none" stroke="url(#hot)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="520" stroke-dashoffset="520">
+    <animate attributeName="stroke-dashoffset" from="520" to="0" dur="2.4s" fill="freeze" calcMode="spline" keySplines=".2 .7 .2 1" keyTimes="0;1"/>
+  </path>
+  <circle cx="830" cy="56" r="7" fill="#B6F36B"><animate attributeName="opacity" values="0;0;1" keyTimes="0;.9;1" dur="2.6s" fill="freeze"/></circle>
+  <circle cx="830" cy="56" r="7" fill="none" stroke="#B6F36B" stroke-width="2"><animate attributeName="r" values="7;22" dur="2s" begin="2.6s" repeatCount="indefinite"/><animate attributeName="opacity" values=".9;0" dur="2s" begin="2.6s" repeatCount="indefinite"/></circle>
+  <text x="48" y="104" fill="#fff" font-family="Inter,system-ui,sans-serif" font-size="46" font-weight="800">Portfolio Tracker</text>
+  <text x="48" y="146" fill="#C4B5FD" font-family="Inter,system-ui,sans-serif" font-size="19">See everything you own in one calm place.</text>
+  <g font-family="Inter,system-ui,sans-serif" font-size="14" font-weight="700">
+    <rect x="48" y="176" width="108" height="30" rx="15" fill="#8B5CF6"/><text x="102" y="196" fill="#fff" text-anchor="middle">No passwords</text>
+    <rect x="166" y="176" width="124" height="30" rx="15" fill="#FF4DA6"/><text x="228" y="196" fill="#fff" text-anchor="middle">Private by design</text>
+    <rect x="300" y="176" width="92" height="30" rx="15" fill="#22D3EE"/><text x="346" y="196" fill="#08323A" text-anchor="middle">€0 hosting</text>
+  </g>
+</svg>
