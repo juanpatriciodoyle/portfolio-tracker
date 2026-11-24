@@ -1,6 +1,6 @@
 import { useTranslation } from '../../i18n/useTranslation';
 import { useMemo, useState } from 'react';
-import type { CreateFixedCostRequest, LivingPhaseDto } from '../../contracts';
+import type { LivingPhaseDto } from '../../contracts';
 import { useStepDraft } from '../../hooks/useStepDraft';
 import type { MutationResult } from '../../lib/apiErrors';
 import WizardModal from '../wizard/WizardModal';
@@ -9,7 +9,8 @@ import { carriedStreams, carryCandidates } from './carryOver';
 import { initialPhaseForm, phaseDraftSchema, validatePhaseForm, type PhaseFormState, type PhasePayload } from './phaseForm';
 import { phaseFailureFeedback } from './phaseFailure';
 import PhaseStepFields from './PhaseStepFields';
-import { PHASE_STEP_COPY, type PhaseFlowStepId } from './phaseStepCopy';
+import { PHASE_STEP_COPY } from './phaseStepCopy';
+import { PHASE_STEP_FIELDS, type PhaseStepId } from './phaseForm';
 import { firstStepWithError, usePhaseFormFeedback } from './usePhaseFormFeedback';
 import { useSubmitOnce } from '../../hooks/useSubmitOnce';
 
@@ -27,26 +28,25 @@ interface PhaseWizardProps {
   onSubmit: (payload: PhasePayload) => Promise<MutationResult<unknown>>;
 }
 
-/** Adding a home asks for its bills too; changing one leaves them to the home's own page. */
-const stepsFor = (editing: boolean): PhaseFlowStepId[] => (editing ? ['place', 'dates', 'money'] : ['place', 'dates', 'money', 'bills']);
+/** The questions of a home, in order. Its bills are added through "Add expense" and never asked here. */
+const STEP_IDS = Object.keys(PHASE_STEP_FIELDS) as PhaseStepId[];
 
 /** Add or change a living phase, one question at a time, in the middle of the screen. */
 export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCurrency, today, onClose, onSubmit }: PhaseWizardProps) {
   const { t } = useTranslation();
-  const stepIds = useMemo(() => stepsFor(phase !== null), [phase]);
+  const stepIds = STEP_IDS;
   const steps = stepIds.map((id) => ({ id, label: t(PHASE_STEP_COPY[id].label) }));
   const { values, setValues, step, setStep, resumedAtStep, discard } = useStepDraft(
     `phase:${phase?.id ?? 'new'}`,
     phaseDraftSchema,
-    () => ({ form: initialPhaseForm(phase, { currency: defaultCurrency, stillLivingHere: !hasCurrentPhase }), costs: [], carry: { unticked: [], amounts: {} } }),
+    () => ({ form: initialPhaseForm(phase, { currency: defaultCurrency, stillLivingHere: !hasCurrentPhase }), carry: { unticked: [], amounts: {} } }),
     stepIds.length
   );
-  const { form, costs, carry } = values;
+  const { form, carry } = values;
   // A new home can keep the jobs the previous one had; changing a home never touches its income.
   const candidates = useMemo(() => (phase === null ? carryCandidates(phases, form.startDate, form.currency) : []), [phase, phases, form.startDate, form.currency]);
   const feedback = usePhaseFormFeedback(form, today);
   const { run, pending: saving } = useSubmitOnce();
-  const [addingBill, setAddingBill] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const stepId = stepIds[step];
@@ -57,7 +57,6 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
     feedback.clearServerErrors();
     setFormError(null);
   };
-  const changeCosts = (next: CreateFixedCostRequest[]) => setValues((previous) => ({ ...previous, costs: next }));
 
   const submit = async () => {
     const carried = carriedStreams(candidates, carry, form.startDate, (text) => parseMajorToMinor(text, form.currency), t);
@@ -66,7 +65,7 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
       setStep(stepIds.indexOf('money'));
       return;
     }
-    const result = validatePhaseForm(form, today, costs, carried.streams);
+    const result = validatePhaseForm(form, today, [], carried.streams);
     if (!result.ok) {
       feedback.tryEverything();
       const failing = firstStepWithError(result.errors);
@@ -92,7 +91,7 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
   };
 
   const next = () => {
-    if (stepId !== 'bills' && Object.keys(feedback.tryStep(stepId)).length > 0) return;
+    if (Object.keys(feedback.tryStep(stepId)).length > 0) return;
     if (step < stepIds.length - 1) setStep(step + 1);
     else void submit();
   };
@@ -106,22 +105,18 @@ export default function PhaseWizard({ phase, phases, hasCurrentPhase, defaultCur
       resumed={resumedAtStep === step}
       error={formError}
       busy={saving}
-      hideNext={addingBill}
       finishLabel={phase ? t('phaseWizard.save') : t('profile.addPhase')}
       onBack={() => setStep(step - 1)}
       onNext={next}
       onClose={onClose}
     >
       <PhaseStepFields
-        onAddingBillChange={setAddingBill}
         step={stepId}
         idPrefix={`phase-${phase?.id ?? 'new'}`}
         form={form}
         onChange={change}
         feedback={feedback}
         today={today}
-        costs={costs}
-        onCostsChange={changeCosts}
         includeIncome={phase === null}
         carry={phase === null ? { candidates, choice: carry, onChange: (choice) => setValues((previous) => ({ ...previous, carry: choice })) } : undefined}
       />

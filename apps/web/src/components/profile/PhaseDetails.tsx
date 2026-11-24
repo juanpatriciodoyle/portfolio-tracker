@@ -1,17 +1,14 @@
 import { useTranslation } from '../../i18n/useTranslation';
-import { CalendarX, FileText, Pencil, Trash2 } from 'lucide-react';
+import { CalendarX, Pencil, Trash2 } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
-import type { CreateBillingRecordRequest, CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest } from '../../contracts';
+import type { CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import { formatMonths } from '../../lib/duration';
 import { clampDateYear } from '../../lib/inputFilters';
 import { formatCalendarDate, formatMinor } from '../../lib/money';
 import { useSubmitOnce } from '../../hooks/useSubmitOnce';
-import BillsLedger from './BillsLedger';
-import type { BillFormContext } from './billForm';
 import type { BillingView } from './billingView';
 import { describeCostBasis, describeDeclaredCadence } from './describeCosts';
-import ExpenseWizard from './ExpenseWizard';
 import { describeFailure } from './failureMessage';
 import FixedCostEditor from './FixedCostEditor';
 import { CADENCE_LABELS, CATEGORY_GROUPS, CATEGORY_LABELS } from './labels';
@@ -21,21 +18,17 @@ interface PhaseDetailsProps {
   entry: TimelineEntryDto | undefined;
   onUpdateCost: (phaseId: string, costId: string, input: UpdateFixedCostRequest) => Promise<MutationResult<unknown>>;
   onDeleteCost: (phaseId: string, costId: string) => Promise<MutationResult<unknown>>;
-  /** The bills received for this phase; absent where bills are not shown. */
+  /** What the card knows about today: the last day offered when ending a cost. */
   billing?: BillingView;
   /** Tells screen readers what just happened. */
   announce: (message: string) => void;
 }
-
-type Dialog = 'ledger' | null;
 
 /** What opens up when a phase card is expanded: the income, the monthly costs, and how to change them. */
 export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost, billing, announce }: PhaseDetailsProps) {
   const words = useTranslation();
   const { t } = words;
   const id = useId();
-  const [dialog, setDialog] = useState<Dialog>(null);
-  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [endingId, setEndingId] = useState<string | null>(null);
@@ -59,19 +52,6 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
       }))
       .filter((row) => row.amountMinor !== 0 || row.declared.length > 0 || row.note !== null),
   })).filter((group) => group.rows.length > 0);
-
-  const context: BillFormContext = { today: billing?.asOf ?? null, countryCode: phase.countryCode, history: billing?.history ?? [] };
-
-  const saveFromDocument = async (input: CreateBillingRecordRequest) => {
-    const result = await billing?.onAdd(input);
-    if (result?.ok) announce(t('details.billLogged'));
-    return result ?? { ok: false as const, failure: { kind: 'unknown' as const, message: t('details.noBills') } };
-  };
-
-  const pickPdfs = (files: File[]) => {
-    setDialog(null);
-    setPdfFiles(files);
-  };
 
   const updateCost = (costId: string) => async (input: CreateFixedCostRequest) => {
     const result = await onUpdateCost(phase.id, costId, input);
@@ -182,14 +162,6 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
             <dt>{t('details.timeHere')}</dt>
             <dd>{formatMonths(entry.months, t)}</dd>
           </div>
-          <div>
-            <dt>{t('details.earned')}</dt>
-            <dd>{formatMinor(entry.totalIncomeMinor, entry.currency)}</dd>
-          </div>
-          <div>
-            <dt>{t('details.fixedCostsPaid')}</dt>
-            <dd>{formatMinor(entry.totalFixedCostsMinor, entry.currency)}</dd>
-          </div>
         </dl>
       )}
 
@@ -198,13 +170,6 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
           <h4 className="phase-details__heading" id={`${id}-breakdown`}>
             {t('details.fixedCostsPerMonth')}
           </h4>
-          {billing && (
-            <div className="phase-details__actions">
-              <button type="button" className="profile-text-button" onClick={() => setDialog('ledger')}>
-                <FileText size={14} aria-hidden="true" /> {t('details.manageBills')}
-              </button>
-            </div>
-          )}
         </div>
 
         {breakdown.length > 0 && (
@@ -226,7 +191,7 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
                             <span className="category-dot" aria-hidden="true" />
                             <span className="phase-breakdown__name">
                               <span>{t(CATEGORY_LABELS[row.category])}</span>
-                              {cadence && <span className="phase-breakdown__note">{cadence}</span>}
+                              {(cadence ?? row.note) && <span className="phase-breakdown__note">{cadence ?? row.note}</span>}
                             </span>
                             {!sole?.endDate && <span className="phase-breakdown__amount">{formatMinor(row.amountMinor, phase.currency)}</span>}
                             {sole && costControls(sole)}
@@ -282,31 +247,6 @@ export default function PhaseDetails({ phase, entry, onUpdateCost, onDeleteCost,
         )}
       </section>
 
-
-      {billing && dialog === 'ledger' && (
-        <BillsLedger
-          phase={phase}
-          records={billing.recordsFor(phase.id)}
-          context={context}
-          onUpdate={billing.onUpdate}
-          onDelete={billing.onDelete}
-          onPickPdfs={pickPdfs}
-          onClose={() => setDialog(null)}
-          announce={announce}
-        />
-      )}
-      {billing && pdfFiles.length > 0 && (
-        <ExpenseWizard
-          initialFiles={pdfFiles}
-          phases={billing.phases ?? [phase]}
-          context={context}
-          openedFromPhaseId={phase.id}
-          onSubmitReceipt={saveFromDocument}
-          // PDFs are always bills that arrived: nothing here is stored as a rate.
-          onSubmitRate={async () => ({ ok: false as const, failure: { kind: 'unknown' as const, message: t('details.noRateFromPdf') } })}
-          onClose={() => setPdfFiles([])}
-        />
-      )}
     </div>
   );
 }

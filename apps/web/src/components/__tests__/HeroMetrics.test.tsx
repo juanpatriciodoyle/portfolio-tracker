@@ -10,8 +10,8 @@ const figures: HeroFigures = {
   netWorth: 559342.51,
   realNetWorth: 480000,
   cashBalance: 64500,
+  moneyPutIn: 340450,
   openMarketValue: 494842.51,
-  openCostBasis: 340450,
   openProfit: 154392.51,
   realOpenProfit: 100000,
   soldProfit: 44900,
@@ -31,7 +31,6 @@ const props = {
   period: 'All' as const,
   periodGain: 0,
   periodPercent: 0,
-  periodWindow: '1 Jan – 11 Nov 2026',
   currency: 'EUR',
   isRealInflationMode: false,
   country: 'Spain',
@@ -41,7 +40,7 @@ describe('HeroMetrics: one answer to "how am I doing?"', () => {
   it('leads with the total value and says what it is', () => {
     render(<HeroMetrics {...props} />);
     expect(screen.getByText('Total value')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: '€559,342.51' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '€559,343' })).toBeInTheDocument();
   });
 
   it('has no more than one big figure and one gain: the three-card layout is gone', () => {
@@ -55,7 +54,7 @@ describe('HeroMetrics: one answer to "how am I doing?"', () => {
   it('says what it has earned, with the percentage and the period in plain words', () => {
     render(<HeroMetrics {...props} />);
     expect(figuresBlock().getByText('Total profit')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: '+€199,171.51' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '+€199,172' })).toBeInTheDocument();
     expect(screen.getByText('+70.25%')).toBeInTheDocument();
     expect(screen.getByText(/since you started/)).toBeInTheDocument();
   });
@@ -68,38 +67,72 @@ describe('HeroMetrics: one answer to "how am I doing?"', () => {
     expect(figures[1]).toHaveTextContent('Total profit');
   });
 
-  it('shows without opening anything what the holdings have gained now and what selling already made', () => {
+  it('does not repeat the split of the profit on the figure: the fold-out holds it', () => {
     render(<HeroMetrics {...props} />);
-    expect(figuresBlock().getByText('Still invested').nextSibling).toHaveTextContent('+€154,392.51');
-    expect(figuresBlock().getByText('Already sold').nextSibling).toHaveTextContent('+€44,900.00');
+    expect(figuresBlock().queryByText('Still held')).not.toBeInTheDocument();
+    expect(figuresBlock().queryByText('Already sold')).not.toBeInTheDocument();
   });
 
-  it('says "None yet" when nothing was sold, instead of a zero that looks like a result', () => {
-    render(<HeroMetrics {...props} figures={{ ...figures, soldProfit: 0, totalGain: 154271.51 }} />);
-    expect(figuresBlock().getByText('Already sold').nextSibling).toHaveTextContent('None yet');
+  it('writes the story of the profit under the profit, in the fourth row of its figure', () => {
+    render(<HeroMetrics {...props} story="Apple and Vanguard made €94,000. Nvidia is down €44,000." />);
+    const profit = document.querySelector('.hero__figure--profit')!;
+    const story = within(profit as HTMLElement).getByText('Apple and Vanguard made €94,000. Nvidia is down €44,000.');
+    expect(story).toHaveClass('hero__story');
+    expect(profit.children).toHaveLength(4);
   });
 
-  it('with inflation on, shows the adjusted parts', () => {
-    render(<HeroMetrics {...props} isRealInflationMode />);
-    expect(figuresBlock().getByText('Still invested').nextSibling).toHaveTextContent('+€100,000.00');
-    expect(figuresBlock().getByText('Already sold').nextSibling).toHaveTextContent('+€20,000.00');
-  });
-
-  it('shows no split for a window', () => {
-    render(<HeroMetrics {...props} period="YTD" periodGain={10} periodPercent={1} />);
-    expect(screen.queryByText('Still invested')).not.toBeInTheDocument();
-    expect(screen.queryByText('Already sold')).not.toBeInTheDocument();
-  });
-
-  it('splits the total into what is invested and what is cash', () => {
+  it('keeps four rows when there is no story, so the baselines of both figures still line up', () => {
     render(<HeroMetrics {...props} />);
-    expect(screen.getByText('Invested').nextSibling).toHaveTextContent('€494,842.51');
-    expect(screen.getByText('Cash').nextSibling).toHaveTextContent('€64,500.00');
+    expect(document.querySelector('.hero__figure--profit')!.children).toHaveLength(4);
+    expect(document.querySelector('.hero__figure:not(.hero__figure--profit)')!.children).toHaveLength(4);
+  });
+
+  it('says what the profit is before and after inflation, with where the rate comes from on hover', () => {
+    render(<HeroMetrics {...props} inflation={{ before: 38.4, after: 9.6 }} inflationRate={2.9} />);
+    const line = screen.getByText('+38.40% before inflation, +9.60% after inflation');
+    expect(line).toHaveAttribute('title', expect.stringContaining('Spain'));
+    expect(line).toHaveAttribute('title', expect.stringContaining('2.9%'));
+    expect(document.querySelector('.hero__figure--profit')!.children).toHaveLength(4);
+  });
+
+  it('with the inflation switch on, does not say the adjusted figure twice: only what it was before', () => {
+    render(<HeroMetrics {...props} isRealInflationMode inflation={{ before: 38.4, after: 9.6 }} inflationRate={2.9} />);
+    expect(screen.getByText('+38.40% before inflation')).toBeInTheDocument();
+    expect(screen.queryByText(/after inflation,/)).not.toBeInTheDocument();
+  });
+
+  it('has no inflation line unless it is given one', () => {
+    render(<HeroMetrics {...props} />);
+    expect(screen.queryByText(/before inflation,/)).not.toBeInTheDocument();
+  });
+
+  it('splits the total into the value of the holdings and cash, which add up to it', () => {
+    render(<HeroMetrics {...props} />);
+    expect(screen.getByText('Holdings value').nextSibling).toHaveTextContent('€494,843');
+    expect(screen.getByText('Cash').nextSibling).toHaveTextContent('€64,500');
+    expect(screen.queryByText('Invested')).not.toBeInTheDocument();
+  });
+
+  it('says what was put in under the total value, so value and contribution are never confused', () => {
+    render(<HeroMetrics {...props} />);
+    expect(figuresBlock().getByText('Money you put in: €340,450')).toBeInTheDocument();
+    expect(screen.queryByText('What you own today')).not.toBeInTheDocument();
+  });
+
+  it('shows no percentage before any money was put in, only the words', () => {
+    render(<HeroMetrics {...props} figures={{ ...figures, moneyPutIn: 0, totalGain: 120, totalGainPercent: 0 }} />);
+    expect(screen.queryByText(/0\.00%/)).not.toBeInTheDocument();
+    expect(figuresBlock().getByText(/since you started/)).toBeInTheDocument();
+  });
+
+  it('keeps cents under 1,000 and drops them from 1,000 up', () => {
+    render(<HeroMetrics {...props} figures={{ ...figures, totalFees: 121.5, totalGain: 950.4 }} />);
+    expect(screen.getByRole('img', { name: '+€950.40' })).toBeInTheDocument();
   });
 
   it('marks a loss as negative', () => {
     render(<HeroMetrics {...props} figures={{ ...figures, totalGain: -1200, totalGainPercent: -3.5 }} />);
-    expect(screen.getByRole('img', { name: '-€1,200.00' }).closest('.hero__figure--profit')).toHaveClass('is-negative');
+    expect(screen.getByRole('img', { name: '-€1,200' }).closest('.hero__figure--profit')).toHaveClass('is-negative');
     expect(screen.getByText('-3.50%')).toBeInTheDocument();
   });
 });
@@ -125,10 +158,10 @@ describe('HeroMetrics: how this adds up', () => {
       row.querySelector('.hero__part-amount')!.textContent,
     ]);
     expect(rows).toEqual([
-      ['Still invested', '+€154,392.51'],
-      ['Sold', '+€44,900.00'],
+      ['Still held', '+€154,393'],
+      ['From sales', '+€44,900'],
       ['Fees', '-€121.00'],
-      ['Total profit', '+€199,171.51'],
+      ['Total profit', '+€199,172'],
     ]);
     expect(panel).toHaveTextContent('It only becomes yours when you sell');
   });
@@ -140,17 +173,18 @@ describe('HeroMetrics: how this adds up', () => {
 });
 
 describe('HeroMetrics: periods', () => {
-  it('shows the gain of the window, names it in words and shows its dates', () => {
+  it('shows the gain of the window and names it in words: the dates sit with the picker, above the chart', () => {
     render(<HeroMetrics {...props} period="YTD" periodGain={117670.76} periodPercent={41.51} />);
-    expect(screen.getByRole('img', { name: '+€117,670.76' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '+€117,671' })).toBeInTheDocument();
     expect(screen.getByText('+41.51%')).toBeInTheDocument();
     expect(screen.getByText(/this year/)).toBeInTheDocument();
-    expect(screen.getByText('1 Jan – 11 Nov 2026')).toBeInTheDocument();
+    expect(screen.queryByText(/1 Jan/)).not.toBeInTheDocument();
   });
 
-  it('does not repeat the dates when the period is everything', () => {
+  it('holds no period picker: it belongs to the chart it filters', () => {
     render(<HeroMetrics {...props} />);
-    expect(screen.queryByText('1 Jan – 11 Nov 2026')).not.toBeInTheDocument();
+    expect(document.querySelector('.hero__controls')).toBeNull();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
   });
 });
 
@@ -158,14 +192,14 @@ describe('HeroMetrics: inflation', () => {
   it('shows the total in today\'s purchasing power and the nominal one under it', () => {
     render(<HeroMetrics {...props} isRealInflationMode figures={{ ...figures, totalGain: 117670.76, totalGainPercent: 41.51 }} />);
     expect(screen.getByText('Total value, after inflation')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: '€480,000.00' })).toBeInTheDocument();
-    expect(screen.getByText('Before inflation: €559,342.51')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '€480,000' })).toBeInTheDocument();
+    expect(screen.getByText('Before inflation: €559,343')).toBeInTheDocument();
     expect(screen.getByText(/since you started, after inflation/)).toBeInTheDocument();
   });
 
-  it('drops the invested and cash split, which would not add up to the adjusted total', () => {
+  it('drops the holdings and cash split, which would not add up to the adjusted total', () => {
     render(<HeroMetrics {...props} isRealInflationMode />);
-    expect(screen.queryByText('Invested')).not.toBeInTheDocument();
+    expect(screen.queryByText('Holdings value')).not.toBeInTheDocument();
     expect(screen.queryByText('Cash')).not.toBeInTheDocument();
   });
 
@@ -185,21 +219,5 @@ describe('HeroMetrics: states', () => {
     render(<HeroMetrics {...props} loading />);
     expect(screen.getByRole('region', { name: 'Your portfolio' })).toHaveAttribute('aria-busy', 'true');
     expect(screen.queryByRole('img')).not.toBeInTheDocument();
-  });
-
-  it('invites a first transaction on an empty account instead of showing zeros as results', () => {
-    const empty = { ...figures, netWorth: 0, realNetWorth: 0, cashBalance: 0, openMarketValue: 0, openCostBasis: 0, totalGain: 0, totalGainPercent: 0, openProfit: 0, soldProfit: 0, totalFees: 0 };
-    render(<HeroMetrics {...props} figures={empty} />);
-    expect(screen.getByText('Nothing here yet')).toBeInTheDocument();
-    expect(screen.queryByText(/since you started/)).not.toBeInTheDocument();
-  });
-
-  it('puts the period picker under the figures it changes', () => {
-    render(
-      <HeroMetrics {...props}>
-        <nav aria-label="Reporting period" />
-      </HeroMetrics>,
-    );
-    expect(screen.getByRole('navigation', { name: 'Reporting period' })).toBeInTheDocument();
   });
 });

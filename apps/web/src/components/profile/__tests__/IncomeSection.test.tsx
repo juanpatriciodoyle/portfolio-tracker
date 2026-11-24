@@ -199,3 +199,45 @@ describe('IncomeSection', () => {
     });
   });
 });
+
+describe('IncomeSection in a home the person has left', () => {
+  const left = makePhase({
+    startDate: '2021-02-01',
+    endDate: '2023-02-28',
+    incomeStreams: [
+      { label: 'Junior designer', amountMinor: 240000, startDate: '2021-02-01', endDate: '2022-06-30', endReason: 'OTHER' as const },
+      { label: 'Designer', amountMinor: 290000, startDate: '2022-07-01', endDate: null },
+    ],
+  });
+
+  it('never says a job is "Paying now": the home is over, so every job in it is in the past', () => {
+    render(<IncomeSection phase={left} asOf="2026-11-24" onUpdatePhase={vi.fn().mockResolvedValue(ok)} announce={vi.fn()} />);
+
+    expect(screen.queryByText('Paying now')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('says a job without an end date stopped on the day the person moved out, and cannot be "brought back"', () => {
+    render(<IncomeSection phase={left} asOf="2026-11-24" onUpdatePhase={vi.fn().mockResolvedValue(ok)} announce={vi.fn()} />);
+
+    const designer = screen.getByText('Designer').closest('li') as HTMLElement;
+    expect(designer).toHaveTextContent('Jul 1, 2022 – Feb 28, 2023');
+    expect(designer).toHaveTextContent('Until you moved out · Feb 28, 2023');
+    expect(within(designer).queryByRole('button', { name: /Bring back/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps the reason a person gave for a job they ended themselves', () => {
+    render(<IncomeSection phase={left} asOf="2026-11-24" onUpdatePhase={vi.fn().mockResolvedValue(ok)} announce={vi.fn()} />);
+
+    const junior = screen.getByText('Junior designer').closest('li') as HTMLElement;
+    expect(junior).toHaveTextContent('ended Jun 30, 2022');
+    expect(within(junior).getByRole('button', { name: /Bring back/ })).toBeInTheDocument();
+  });
+
+  it('still shows a job as paying in the home lived in today', () => {
+    const current = makePhase({ startDate: '2023-03-01', endDate: null, incomeStreams: [{ label: 'Senior designer', amountMinor: 340000, startDate: '2024-09-01', endDate: null }] });
+    render(<IncomeSection phase={current} asOf="2026-11-24" onUpdatePhase={vi.fn().mockResolvedValue(ok)} announce={vi.fn()} />);
+
+    expect(screen.getByRole('list', { name: 'Paying now' })).toHaveTextContent('Senior designer');
+  });
+});

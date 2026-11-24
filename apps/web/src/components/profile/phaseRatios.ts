@@ -27,3 +27,11 @@ export function incomeFigures(entry: TimelineEntryDto, view: IncomeView): Income
 export function burnRateMinor({ incomeMinor, savingsCapacityMinor }: IncomeFigures): number | null {
   return incomeMinor === 0 && savingsCapacityMinor < 0 ? -savingsCapacityMinor : null;
 }
+
+/** Pay that differs by less than one currency unit is rounding left over from dividing by days, not a change in income. */
+const SAME_INCOME_WITHIN_MINOR = 100;
+
+/** Whether the average month of the stay says anything the pay of today does not: false for steady income, where both views would agree. */
+export function incomeViewsDiffer(entry: Pick<TimelineEntryDto, 'monthlyIncomeMinor' | 'averageMonthlyIncomeMinor'>): boolean {
+  return Math.abs(entry.monthlyIncomeMinor - entry.averageMonthlyIncomeMinor) >= SAME_INCOME_WITHIN_MINOR;
+}

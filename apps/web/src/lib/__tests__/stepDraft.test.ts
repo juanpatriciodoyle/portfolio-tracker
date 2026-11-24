@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createMemoryStorage } from '../../test/memoryStorage';
-import { clearAllDrafts, clearDraft, loadDraft, saveDraft } from '../stepDraft';
+import { clearAllDrafts, clearDraft, loadDraft, markClosed, markOpen, saveDraft, wasOpen } from '../stepDraft';
 
 const schema = z.object({ name: z.string(), count: z.number() });
 
@@ -67,5 +67,39 @@ describe('step drafts', () => {
     };
 
     expect(() => saveDraft(storage, 'a', { step: 0, values: { name: 'A', count: 1 } })).not.toThrow();
+  });
+
+  describe('which flow was open', () => {
+    it('remembers that a flow was open until it is closed on purpose, so a refresh can bring it back', () => {
+      const storage = createMemoryStorage();
+      expect(wasOpen(storage, 'onboarding')).toBe(false);
+
+      markOpen(storage, 'onboarding');
+      expect(wasOpen(storage, 'onboarding')).toBe(true);
+      expect(wasOpen(storage, 'other')).toBe(false);
+
+      markClosed(storage, 'onboarding');
+      expect(wasOpen(storage, 'onboarding')).toBe(false);
+    });
+
+    it('is forgotten with the drafts when the session ends', () => {
+      const storage = createMemoryStorage({ auth_token: 'abc' });
+      markOpen(storage, 'onboarding');
+
+      clearAllDrafts(storage);
+
+      expect(wasOpen(storage, 'onboarding')).toBe(false);
+      expect(storage.getItem('auth_token')).toBe('abc');
+    });
+
+    it('carries on when the storage refuses', () => {
+      const storage = createMemoryStorage();
+      storage.setItem = () => {
+        throw new Error('quota');
+      };
+
+      expect(() => markOpen(storage, 'a')).not.toThrow();
+      expect(wasOpen(storage, 'a')).toBe(false);
+    });
   });
 });

@@ -48,20 +48,52 @@ function currencyDisplayFor(currency: string, locale: string): 'symbol' | 'narro
   return choice;
 }
 
+/** The sign written before an amount in this currency ("€", "$", "US$" where "$" means pesos); the code itself when the currency is unknown. */
+export function currencySign(currency: string, locale: string = displayLocale()): string {
+  try {
+    const parts = new Intl.NumberFormat(locale, { style: 'currency', currency, currencyDisplay: currencyDisplayFor(currency, locale) }).formatToParts(0);
+    return parts.find((part) => part.type === 'currency')?.value ?? currency;
+  } catch {
+    return currency;
+  }
+}
+
+/** From this size up an amount is read in whole units: the cents are noise next to thousands. */
+export const CENTS_HIDDEN_FROM = 1000;
+
+const hidesCents = (amount: number): boolean => Math.abs(amount) >= CENTS_HIDDEN_FROM;
+
 function formatCurrency(amountMinor: number, currency: string, locale: string, signed: boolean): string {
   const exponent = currencyExponent(currency);
   const isWhole = amountMinor % 10 ** exponent === 0;
+  const digits = isWhole || hidesCents(amountMinor / 10 ** exponent) ? 0 : exponent;
   return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency,
     currencyDisplay: currencyDisplayFor(currency, locale),
-    minimumFractionDigits: isWhole ? 0 : exponent,
-    maximumFractionDigits: exponent,
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
     signDisplay: signed ? 'exceptZero' : 'auto',
   }).format(amountMinor / 10 ** exponent);
 }
 
-/** "€1,200" for whole amounts, "€1,200.50" when there are cents. */
+/**
+ * "€468,414" / "€93.40" / "-€1,800": an amount in whole currency units as the home screen writes it. Under 1,000 it keeps its cents,
+ * from 1,000 up it has none, and a loss is always "-€1,800" (the sign first), never "€-1,800". `signed` adds "+" to a gain.
+ */
+export function formatMoney(amount: number, currency: string, { signed = false, locale = displayLocale() }: { signed?: boolean; locale?: string } = {}): string {
+  const digits = hidesCents(amount) ? 0 : currencyExponent(currency);
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency,
+    currencyDisplay: currencyDisplayFor(currency, locale),
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+    signDisplay: signed ? 'exceptZero' : 'auto',
+  }).format(amount);
+}
+
+/** "€1,200" for whole amounts, "€12.50" when there are cents; from 1,000 up there are never cents. */
 export function formatMinor(amountMinor: number, currency: string, locale: string = displayLocale()): string {
   return formatCurrency(amountMinor, currency, locale, false);
 }

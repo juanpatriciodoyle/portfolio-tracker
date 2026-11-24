@@ -8,29 +8,32 @@ interface ReportingPeriodBarProps {
   activePeriod: ReportingPeriod;
   onPeriodChange: (period: ReportingPeriod, customRange?: DateRange) => void;
   customRange?: DateRange;
+  /** The windows real readings cover (see `lib/periodAvailability.ts`). Nothing else is offered. */
+  available: readonly ReportingPeriod[];
+  /** The first day with a real reading, "YYYY-MM-DD": a custom range cannot start before it. */
+  realFrom?: string | null;
 }
 
-const PERIODS: { key: ReportingPeriod; label: MessageKey; tooltip: MessageKey }[] = [
+const PERIODS: { key: Exclude<ReportingPeriod, 'Custom'>; label: MessageKey; tooltip: MessageKey }[] = [
   { key: 'All', label: 'period.all', tooltip: 'period.tip.all' },
-  { key: 'YTD', label: 'period.ytd', tooltip: 'period.tip.ytd' },
   { key: '1Y', label: 'period.1y', tooltip: 'period.tip.1y' },
-  { key: 'MTD', label: 'period.mtd', tooltip: 'period.tip.mtd' },
+  { key: 'YTD', label: 'period.ytd', tooltip: 'period.tip.ytd' },
+  { key: '3M', label: 'period.3m', tooltip: 'period.tip.3m' },
   { key: '1M', label: 'period.1m', tooltip: 'period.tip.1m' },
-  { key: '1W', label: 'period.1w', tooltip: 'period.tip.1w' },
-  { key: '1D', label: 'period.1d', tooltip: 'period.tip.1d' },
-  { key: 'Last year', label: 'period.lastYear', tooltip: 'period.tip.lastYear' },
-  { key: 'Last month', label: 'period.lastMonth', tooltip: 'period.tip.lastMonth' },
 ];
 
 export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
   activePeriod,
   onPeriodChange,
   customRange,
+  available,
+  realFrom = null,
 }) => {
   const { t } = useTranslation();
+  const today = new Date().toISOString().split('T')[0];
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [fromDate, setFromDate] = useState(customRange?.fromDate || '2020-01-01');
-  const [toDate, setToDate] = useState(customRange?.toDate || new Date().toISOString().split('T')[0]);
+  const [fromDate, setFromDate] = useState(customRange?.fromDate || realFrom || today);
+  const [toDate, setToDate] = useState(customRange?.toDate || today);
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleApplyCustom = (e: React.FormEvent) => {
@@ -49,11 +52,16 @@ export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
     onPeriodChange('Custom', { fromDate, toDate });
   };
 
+  // With nothing to choose between ("All" is the only true window), there is no picker to show.
+  const offered = PERIODS.filter((p) => available.includes(p.key));
+  const canPickRange = available.includes('Custom');
+  if (offered.length <= 1 && !canPickRange) return null;
+
   return (
     <div className="reporting-period-container">
       <div className="reporting-period-rail">
         <nav className="segmented-control-rail" aria-label={t('period.label')}>
-          {PERIODS.map((p) => {
+          {offered.map((p) => {
             const isActive = activePeriod === p.key;
             return (
               <button
@@ -69,6 +77,7 @@ export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
             );
           })}
 
+          {canPickRange && (
           <button
             type="button"
             id="open-custom-reporting-period-modal"
@@ -81,6 +90,7 @@ export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
             {t('period.custom')}
             {activePeriod === 'Custom' && customRange ? ` (${customRange.fromDate} → ${customRange.toDate})` : ''}
           </button>
+          )}
         </nav>
       </div>
 
@@ -111,6 +121,8 @@ export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
                       type="date"
                       id="custom-from-date"
                       value={fromDate}
+                      min={realFrom ?? undefined}
+                      max={today}
                       onChange={(e) => {
                         setFromDate(e.target.value);
                         setErrorMessage('');
@@ -128,6 +140,8 @@ export const ReportingPeriodBar: React.FC<ReportingPeriodBarProps> = ({
                       type="date"
                       id="custom-to-date"
                       value={toDate}
+                      min={realFrom ?? undefined}
+                      max={today}
                       onChange={(e) => {
                         setToDate(e.target.value);
                         setErrorMessage('');

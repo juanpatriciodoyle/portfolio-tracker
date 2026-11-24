@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { NO_CARRY_CHOICE } from './carryOver';
 import {
   HOUSING_TENURES,
-  createFixedCostRequest,
   createLivingPhaseRequest,
   updateLivingPhaseRequest,
   type CreateFixedCostRequest,
@@ -30,10 +29,9 @@ export const phaseFormSchema = z.object({
 });
 export type PhaseFormState = z.infer<typeof phaseFormSchema>;
 
-/** A new phase as it is kept between visits: the answers and the bills added so far. */
+/** A new phase as it is kept between visits: the answers so far. Drafts from before bills left this flow still read: their bills are dropped. */
 export const phaseDraftSchema = z.object({
   form: phaseFormSchema,
-  costs: z.array(createFixedCostRequest),
   /** The jobs of the previous home the person unticked, and the amounts they re-typed. Drafts from before this existed read as nothing chosen. */
   carry: z.object({ unticked: z.array(z.string()), amounts: z.record(z.string(), z.string()) }).default(NO_CARRY_CHOICE),
 });

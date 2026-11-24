@@ -12,6 +12,11 @@ vi.mock('../../../lib/prefersReducedMotion', () => ({ prefersReducedMotion: () =
 const ready = { status: 'ready' as const, message: null, analytics: makeUsageAnalytics(), onRetry: vi.fn() };
 
 describe('UsageAnalytics', () => {
+  it('says it is the admin area, so nobody mistakes the figures for their own', () => {
+    render(<UsageAnalytics {...ready} />);
+    expect(screen.getByText('Admin area: only administrators see this.')).toBeInTheDocument();
+  });
+
   it('shows how many customers there are and how many are active, side by side', () => {
     render(<UsageAnalytics {...ready} />);
 

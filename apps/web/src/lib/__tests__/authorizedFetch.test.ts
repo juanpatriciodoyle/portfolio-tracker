@@ -54,3 +54,34 @@ describe('authorizedFetch', () => {
     expect(sentHeaders().has('Authorization')).toBe(false);
   });
 });
+
+describe('authorizedFetch: a demo guest whose hour is over', () => {
+  const reload = vi.fn();
+
+  beforeEach(() => {
+    reload.mockClear();
+    vi.stubGlobal('localStorage', createMemoryStorage({ auth_token: 'guest-token', auth_user: '{}' }));
+    vi.stubGlobal('sessionStorage', createMemoryStorage());
+    vi.stubGlobal('location', { reload });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('is taken back to the sign-in screen when the server says the demo session ended', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'ended', code: 'GUEST_SESSION_ENDED' }), { status: 401 })));
+
+    const response = await authorizedFetch('/api/portfolio/stats');
+
+    expect(response.status).toBe(401);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem('auth_token')).toBeNull();
+  });
+
+  it('is left alone for any other 401', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'You are signed out.' }), { status: 401 })));
+
+    await authorizedFetch('/api/portfolio/stats');
+
+    expect(reload).not.toHaveBeenCalled();
+    expect(localStorage.getItem('auth_token')).toBe('guest-token');
+  });
+});

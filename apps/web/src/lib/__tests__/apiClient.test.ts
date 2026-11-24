@@ -288,3 +288,24 @@ describe('classifyApiError: server failures read as plain advice', () => {
     expect(failure.message).not.toMatch(RAW);
   });
 });
+
+describe('apiRequest: a demo guest whose hour is over', () => {
+  const reload = vi.fn();
+
+  beforeEach(() => {
+    reload.mockClear();
+    vi.stubGlobal('localStorage', createMemoryStorage({ auth_token: 'guest-token' }));
+    vi.stubGlobal('sessionStorage', createMemoryStorage());
+    vi.stubGlobal('location', { reload });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('is taken back to the sign-in screen, and the call still fails as a signed-out one', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, statusText: 'Unauthorized', json: async () => ({ error: 'ended', code: 'GUEST_SESSION_ENDED' }) }));
+
+    await expect(apiRequest('/api/profile', idResponse)).rejects.toBeInstanceOf(ApiError);
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem('auth_token')).toBeNull();
+  });
+});

@@ -10,6 +10,8 @@ interface ModalProps {
   onClose: () => void;
   /** Room for two columns, such as a form beside a document preview. */
   wide?: boolean;
+  /** Dim and blur the page behind more than usual: for a first-run dialog that must be the only thing to look at. */
+  calm?: boolean;
   children: ReactNode;
 }
 
@@ -17,7 +19,7 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /** A dialog in the middle of the screen: Escape or the backdrop closes it, and Tab stays inside it. */
-export default function Modal({ label, onClose, wide = false, children }: ModalProps) {
+export default function Modal({ label, onClose, wide = false, calm = false, children }: ModalProps) {
   const panel = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
 
@@ -56,7 +58,7 @@ export default function Modal({ label, onClose, wide = false, children }: ModalP
 
   return createPortal(
     <div
-      className="dialog-backdrop"
+      className={`dialog-backdrop${calm ? ' dialog-backdrop--calm' : ''}`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}

@@ -1,4 +1,4 @@
-import { INCOME_END_REASONS, calendarDateSchema, type IncomeEndReason, type IncomeStreamDto } from '../../contracts';
+import { INCOME_END_REASONS, calendarDateSchema, lastPayDay, type IncomeEndReason, type IncomeStreamDto } from '../../contracts';
 import { currentTranslator, type Translate } from '../../i18n/translate';
 import type { MessageKey } from '../../i18n/catalogs';
 import { formatCalendarDate, minorToInputString, parseMajorToMinor } from '../../lib/money';
@@ -91,11 +91,22 @@ export function describeIncomeStream(stream: IncomeStreamDto, locale?: string, t
   return stream.endDate === null ? t('income.fromDate', { date: start }) : `${start} – ${formatCalendarDate(stream.endDate, locale)}`;
 }
 
-/** "Laid off · ended Mar 31, 2026", or "Ended Mar 31, 2026" when no reason was given; null for a job that has not ended. */
-export function describeIncomeEnd(stream: IncomeStreamDto, locale?: string, t: Translate = currentTranslator()): string | null {
+/**
+ * "Laid off · ended Mar 31, 2026", or "Ended Mar 31, 2026" when no reason was given; "Until you moved out · Feb 28, 2026" for a job
+ * that stopped only because the home did; null for a job that has not ended.
+ */
+export function describeIncomeEnd(stream: IncomeStreamDto, locale?: string, t: Translate = currentTranslator(), endsWithHome = false): string | null {
   if (stream.kind === 'ONE_TIME' || stream.endDate === null) return null;
   const ended = formatCalendarDate(stream.endDate, locale);
+  if (endsWithHome) return t('income.untilMovedOut', { date: ended });
   return stream.endReason ? t('income.endedWithReason', { reason: t(END_REASON_LABELS[stream.endReason]), date: ended }) : t('details.ended', { date: ended });
+}
+
+/** The stream without the reason its job ended: a job that pays again, or is ended anew, has no old reason. */
+export function withoutEndReason(stream: IncomeStreamDto): IncomeStreamDto {
+  const copy: IncomeStreamDto = { ...stream };
+  delete copy.endReason;
+  return copy;
 }
 
 export type EndJobResult = { ok: true; stream: IncomeStreamDto } | { ok: false; error: string };
@@ -105,20 +116,22 @@ export function endJob(stream: IncomeStreamDto, lastDay: string, reason: IncomeE
   if (!calendarDateSchema.safeParse(lastDay).success) return { ok: false, error: t('income.errLastPaid') };
   if (lastDay < stream.startDate) return { ok: false, error: t('income.errBeforeStarted') };
   if (phase.endDate !== null && lastDay > phase.endDate) return { ok: false, error: t('income.errWhileHere') };
-  const { endReason: _previous, ...rest } = stream;
-  return { ok: true, stream: { ...rest, endDate: lastDay, ...(reason !== '' ? { endReason: reason } : {}) } };
+  return { ok: true, stream: { ...withoutEndReason(stream), endDate: lastDay, ...(reason !== '' ? { endReason: reason } : {}) } };
 }
 
 /** Brings an ended job back: it pays again, with no end and no reason. */
 export function reopenJob(stream: IncomeStreamDto): IncomeStreamDto {
-  const { endReason: _reason, ...rest } = stream;
-  return { ...rest, endDate: null };
+  return { ...withoutEndReason(stream), endDate: null };
 }
 
 export interface IncomeRow {
   stream: IncomeStreamDto;
   /** Where the stream sits in the list the rows were made from, so a change can find it again. */
   index: number;
+  /** The last day it pays: its own end date, or the day the home ended; null while it goes on. */
+  lastDay: string | null;
+  /** True when it stopped only because the person left the home: no end date or reason was ever given. */
+  endsWithHome: boolean;
 }
 
 export interface IncomeGroups {
@@ -129,14 +142,16 @@ export interface IncomeGroups {
 
 /**
  * Splits income for the list: jobs still paying (or about to), jobs that ended before `today`, and one-time
- * deposits. With no `today` a job counts as ended only when it has an end date. Dates compare as text.
+ * deposits. A job does not outlive its home: in a home the person has left, a job with no end date ended the day the home
+ * did (the rule lives in `lastPayDay`). With no `today` a job counts as ended only when it has an end date. Dates compare as text.
  */
-export function groupIncome(streams: readonly IncomeStreamDto[], today: string | undefined): IncomeGroups {
+export function groupIncome(streams: readonly IncomeStreamDto[], today: string | undefined, home?: { startDate: string; endDate: string | null }): IncomeGroups {
   const groups: IncomeGroups = { paying: [], ended: [], oneTime: [] };
   streams.forEach((stream, index) => {
-    const row = { stream, index };
-    if (stream.kind === 'ONE_TIME') groups.oneTime.push(row);
-    else if (stream.endDate !== null && (today === undefined || stream.endDate < today)) groups.ended.push(row);
+    const lastDay = today !== undefined && home ? lastPayDay(stream, home, today) : stream.endDate;
+    const row: IncomeRow = { stream, index, lastDay, endsWithHome: stream.endDate === null && lastDay !== null };
+    if (stream.kind === 'ONE_TIME') groups.oneTime.push({ ...row, lastDay: null, endsWithHome: false });
+    else if (lastDay !== null && (today === undefined || lastDay < today)) groups.ended.push(row);
     else groups.paying.push(row);
   });
   return groups;

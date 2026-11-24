@@ -37,6 +37,8 @@ function Summary({ profile, onEdit }: { profile: ProfileData; onEdit: () => void
       ? `${t('demographics.adults', { count: profile.householdAdults })}, ${t('demographics.children', { count: profile.dependentChildren })}`
       : t('demographics.adults', { count: profile.householdAdults });
   const empty = isProfileEmpty(profile);
+  // The first-time flow asks very little: what it left out is invited here, where it can be answered whenever the person likes.
+  const thin = !empty && profile.birthYear === null && profile.nationalities.length === 0 && profile.taxResidence === null && profile.employmentStatus === null;
 
   return (
     <>
@@ -53,12 +55,13 @@ function Summary({ profile, onEdit }: { profile: ProfileData; onEdit: () => void
             <ChevronDown className="profile-disclosure__chevron" size={16} aria-hidden="true" />
           </button>
         </h2>
-        {open && (
+        {(open || thin) && (
           <button type="button" className="profile-text-button" onClick={onEdit}>
-            <Pencil size={14} aria-hidden="true" /> {empty ? t('demographics.addDetails') : t('common.edit')}
+            <Pencil size={14} aria-hidden="true" /> {empty || thin ? t('demographics.addDetails') : t('common.edit')}
           </button>
         )}
       </div>
+      {thin && !open && <p className="profile-section__hint">{t('demographics.later')}</p>}
       <div id={`${id}-facts`} hidden={!open}>
         {empty ? (
           <p className="profile-section__hint">

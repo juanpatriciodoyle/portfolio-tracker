@@ -45,6 +45,8 @@ export default function UsageAnalytics({ status, message, analytics, onRetry }: 
 
   return (
     <section className="usage-analytics" aria-label={t('analytics.label')} aria-busy={status === 'loading'}>
+      <p className="usage-analytics__admin-note">{t('analytics.adminNote')}</p>
+
       {failed && (
         <div className="profile-banner profile-banner--error" role="alert">
           <p>{message ?? t('profile.errorFallback')}</p>

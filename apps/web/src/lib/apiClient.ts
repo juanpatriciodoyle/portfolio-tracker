@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import { apiErrorResponse } from '../contracts';
 import { readAuthToken } from './authorizedFetch';
+import { leaveEndedGuestSession } from './guestSession';
 
 /** The server answered with an error status. `body` is whatever JSON it sent, unparsed. */
 export class ApiError extends Error {
@@ -60,6 +61,8 @@ async function send(
 
   if (!response.ok) {
     const errorBody: unknown = await response.json().catch(() => null);
+    // A demo guest whose hour is over is taken back to the sign-in screen, wherever in the app they were.
+    leaveEndedGuestSession(response.status, errorBody);
     const parsed = apiErrorResponse.safeParse(errorBody);
     throw new ApiError(response.status, parsed.success ? parsed.data.error : response.statusText || 'Request failed', errorBody);
   }

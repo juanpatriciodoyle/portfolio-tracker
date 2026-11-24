@@ -12,6 +12,7 @@ import IncomeSection from '../IncomeSection';
 import IncomeStreamEditor from '../IncomeStreamEditor';
 import LivingPhaseCard from '../LivingPhaseCard';
 import PhaseDetails from '../PhaseDetails';
+import PhaseBills from '../PhaseBills';
 import ProfileForm from '../ProfileForm';
 
 const ok = { ok: true as const, value: undefined };
@@ -187,8 +188,8 @@ describe('tapping twice deletes once', () => {
     it('a bill', async () => {
       const records = [makeBill({ id: 'b2', vendor: 'Endesa', category: 'GAS', cadence: 'MONTHLY', periodStart: '2026-09-15', periodEnd: '2026-10-14', amountMinor: 4000 })];
       const onDelete = vi.fn().mockResolvedValue(ok2);
-      render(<PhaseDetails phase={makePhase()} entry={makeEntry()} onUpdateCost={vi.fn()} onDeleteCost={vi.fn()} billing={billing({ recordsFor: () => records, onDelete })} announce={vi.fn()} />);
-      fireEvent.click(screen.getByRole('button', { name: /Manage bills & documents/ }));
+      render(<PhaseBills phase={makePhase()} entry={makeEntry()} billing={billing({ recordsFor: () => records, onDelete })} open onClose={vi.fn()} announce={vi.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: /Gas/ }));
       fireEvent.click(screen.getByRole('button', { name: 'Remove Gas bill from Endesa' }));
 
       tapTwice(screen.getByRole('button', { name: 'Remove' }));

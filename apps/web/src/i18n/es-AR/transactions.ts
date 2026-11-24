@@ -1,0 +1,32 @@
+import type { Translated } from '../types';
+import type { transactions as english } from '../en/transactions';
+
+export const transactions: Translated<typeof english> = {
+  'tx.editTitle': 'Editar transacción',
+  'tx.saveChanges': 'Guardar cambios',
+  'tx.saving': 'Guardando...',
+  'tx.lockedHint': 'Lo que se operó y el tipo de transacción no se pueden cambiar. Eliminala y registrá una nueva.',
+  'tx.cashAvailable': 'Disponible: {amount}',
+  'tx.kind.bought': 'compra',
+  'tx.kind.sold': 'venta',
+  'tx.kind.deposit': 'depósito',
+  'tx.kind.withdraw': 'retiro',
+  'error.requiredByLater': 'No se puede cambiar así: una transacción posterior depende de esta ({kind} de {symbol}, {date}). Cambiá o eliminá primero esa.',
+  'error.requiredByLaterCash': 'No se puede cambiar así: una transacción posterior depende de esta ({kind}, {date}). Cambiá o eliminá primero esa.',
+  'history.col.actions': 'Acciones',
+  'history.editRow': 'Editar {action}',
+  'history.deleteRow': 'Eliminar {action}',
+  'history.deleteTitle': '¿Eliminar esta transacción?',
+  'history.deleteBought': 'Esto elimina la compra de {units} {name} del {date}. Tus tenencias y tu ganancia se recalculan.',
+  'history.deleteSold': 'Esto elimina la venta de {units} {name} del {date}. Tus tenencias, tu efectivo y tu ganancia se recalculan.',
+  'history.deleteDeposit': 'Esto elimina el depósito de {amount} del {date}. Tu efectivo y tu ganancia se recalculan.',
+  'history.deleteWithdrawal': 'Esto elimina el retiro de {amount} del {date}. Tu efectivo se recalcula.',
+  'history.deleteConfirm': 'Eliminar',
+  'history.deleting': 'Eliminando...',
+  'history.deleteCancel': 'Cancelar',
+  'history.updated': 'Transacción actualizada.',
+  'history.deleted': 'Transacción eliminada.',
+  'history.gone': 'Esta transacción ya no existe. Actualizamos la lista.',
+  'history.changeFailed': 'No se guardó el cambio. Probá de nuevo en un momento.',
+  'history.changeNetwork': 'No pudimos comunicarnos con el servidor, así que no cambió nada. Revisá tu conexión y probá de nuevo.',
+};

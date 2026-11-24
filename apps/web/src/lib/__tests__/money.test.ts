@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   currencyExponent,
+  currencySign,
   displayLocale,
   formatCalendarDate,
   formatCount,
@@ -8,6 +9,7 @@ import {
   formatUpTo,
   monthNames,
   formatMinor,
+  formatMoney,
   formatMonthYear,
   formatPercent,
   formatPhaseRange,
@@ -33,13 +35,54 @@ describe('currencyExponent', () => {
   });
 });
 
+describe('formatMoney: the amounts of the home screen', () => {
+  it('keeps the cents under 1,000', () => {
+    expect(formatMoney(93.4, 'EUR', { locale: 'en-US' })).toBe('€93.40');
+    expect(formatMoney(999.99, 'EUR', { locale: 'en-US' })).toBe('€999.99');
+  });
+
+  it('shows no cents from 1,000 up, rounding the amount to the nearest unit', () => {
+    expect(formatMoney(1000, 'EUR', { locale: 'en-US' })).toBe('€1,000');
+    expect(formatMoney(468414.03, 'EUR', { locale: 'en-US' })).toBe('€468,414');
+    expect(formatMoney(1234.56, 'EUR', { locale: 'en-US' })).toBe('€1,235');
+  });
+
+  it('writes a loss with the sign first, in one format whatever the size', () => {
+    expect(formatMoney(-1800, 'EUR', { locale: 'en-US' })).toBe('-€1,800');
+    expect(formatMoney(-88171.4, 'EUR', { locale: 'en-US' })).toBe('-€88,171');
+    expect(formatMoney(-12.5, 'EUR', { locale: 'en-US' })).toBe('-€12.50');
+  });
+
+  it('adds a plus to a gain only when asked, and never to zero', () => {
+    expect(formatMoney(108365.2, 'EUR', { signed: true, locale: 'en-US' })).toBe('+€108,365');
+    expect(formatMoney(-50, 'EUR', { signed: true, locale: 'en-US' })).toBe('-€50.00');
+    expect(formatMoney(0, 'EUR', { signed: true, locale: 'en-US' })).toBe('€0.00');
+  });
+
+  it('follows the language: Argentine Spanish groups with dots and puts the sign first', () => {
+    expect(formatMoney(1234.56, 'EUR', { locale: 'es-AR' })).toMatch(/^€\s?1\.235$/);
+    expect(formatMoney(-1800, 'EUR', { locale: 'es-AR' })).toMatch(/^-€\s?1\.800$/);
+  });
+
+  it('uses the currency of the account and its own number of decimals', () => {
+    expect(formatMoney(93.4, 'USD', { locale: 'en-US' })).toBe('$93.40');
+    expect(formatMoney(5000, 'JPY', { locale: 'en-US' })).toBe('¥5,000');
+  });
+});
+
 describe('formatMinor', () => {
+  it('has no cents from 1,000 up, the same rule as the home screen', () => {
+    expect(formatMinor(143285_15, 'EUR', 'en-US')).toBe('€143,285');
+    expect(formatMinor(999_50, 'EUR', 'en-US')).toBe('€999.50');
+  });
+
   it('drops the cents on whole amounts', () => {
     expect(formatMinor(120000, 'EUR', 'en-US')).toBe('€1,200');
   });
 
-  it('keeps the cents when there are some', () => {
-    expect(formatMinor(120050, 'EUR', 'en-US')).toBe('€1,200.50');
+  it('keeps the cents when there are some and the amount is under 1,000', () => {
+    expect(formatMinor(80050, 'EUR', 'en-US')).toBe('€800.50');
+    expect(formatMinor(120050, 'EUR', 'en-US')).toBe('€1,201');
   });
 
   it('respects currencies without decimals', () => {
@@ -226,7 +269,7 @@ describe('formatFixed, formatUpTo and monthNames follow the language', () => {
 describe('currency signs in Argentine Spanish', () => {
   it('writes the sign people write, where the language only knows the code', () => {
     expect(formatMinor(90000, 'EUR', 'es-AR')).toMatch(/^€\s900$/);
-    expect(formatMinor(123450, 'GBP', 'es-AR')).toMatch(/^£\s1\.234,50$/);
+    expect(formatMinor(12345, 'GBP', 'es-AR')).toMatch(/^£\s123,45$/);
   });
 
   it('keeps US$ for dollars and $ for pesos, never confusing the two', () => {
@@ -237,5 +280,23 @@ describe('currency signs in Argentine Spanish', () => {
   it('leaves English as it was', () => {
     expect(formatMinor(90000, 'EUR', 'en-US')).toBe('€900');
     expect(formatSignedMinor(15000, 'EUR', 'en-US')).toBe('+€150');
+  });
+});
+
+describe('currencySign: the sign people write before an amount', () => {
+  it.each([
+    ['EUR', 'en-US', '€'],
+    ['USD', 'en-US', '$'],
+    ['GBP', 'en-US', '£'],
+    ['EUR', 'es-AR', '€'],
+    // Where "$" means pesos, a dollar amount keeps its "US$".
+    ['USD', 'es-AR', 'US$'],
+  ])('%s in %s is %s', (currency, locale, sign) => {
+    expect(currencySign(currency, locale)).toBe(sign);
+  });
+
+  it('falls back to the code for a currency it does not know', () => {
+    expect(currencySign('XXX', 'en-US')).toBeTruthy();
+    expect(currencySign('not a currency', 'en-US')).toBe('not a currency');
   });
 });

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const PREFIX = 'draft:';
+const OPEN_PREFIX = 'open:';
 
 export interface StepDraft<T> {
   /** The step the person was on. */
@@ -42,11 +43,39 @@ export function clearDraft(storage: Storage, key: string): void {
   }
 }
 
+/**
+ * Notes that a flow is on screen. Closing it on purpose (Cancel or Finish) takes the note away, so after a refresh
+ * the flow comes back only if it was open when the page went; a visit made later does not open it unasked.
+ */
+export function markOpen(storage: Storage, key: string): void {
+  try {
+    storage.setItem(`${OPEN_PREFIX}${key}`, '1');
+  } catch {
+    // See saveDraft.
+  }
+}
+
+export function markClosed(storage: Storage, key: string): void {
+  try {
+    storage.removeItem(`${OPEN_PREFIX}${key}`);
+  } catch {
+    // See saveDraft.
+  }
+}
+
+export function wasOpen(storage: Storage, key: string): boolean {
+  try {
+    return storage.getItem(`${OPEN_PREFIX}${key}`) !== null;
+  } catch {
+    return false;
+  }
+}
+
 /** Forgets every draft, for when the session ends: personal answers should not outlive it. */
 export function clearAllDrafts(storage: Storage): void {
   try {
     const keys = Array.from({ length: storage.length }, (_, position) => storage.key(position));
-    for (const key of keys) if (key?.startsWith(PREFIX)) storage.removeItem(key);
+    for (const key of keys) if (key?.startsWith(PREFIX) || key?.startsWith(OPEN_PREFIX)) storage.removeItem(key);
   } catch {
     // See saveDraft.
   }

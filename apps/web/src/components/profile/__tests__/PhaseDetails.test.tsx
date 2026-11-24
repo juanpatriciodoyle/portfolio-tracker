@@ -1,9 +1,8 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { formatCalendarDate } from '../../../lib/money';
-import { makeBill, makeCost, makeEntry, makePhase, noBasis } from '../../../test/fixtures';
-import { createMemoryStorage } from '../../../test/memoryStorage';
+import { makeCost, makeEntry, makePhase, noBasis } from '../../../test/fixtures';
 import type { BillingView } from '../billingView';
 import PhaseDetails from '../PhaseDetails';
 
@@ -35,19 +34,13 @@ function renderDetails(overrides: Partial<React.ComponentProps<typeof PhaseDetai
   return { props, ...view };
 }
 
-describe('managing the bills of a home', () => {
-  it('offers "Manage bills & documents" and no way to add costs from the card: that is one action for the whole page', () => {
+describe('the details of a home', () => {
+  it('leave bills to the card: no ledger button and no way to add costs from here', () => {
     renderDetails();
 
-    expect(screen.getAllByRole('button', { name: /Manage bills & documents/ })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /Manage bills|Bills & costs/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add an expense|Add a cost|Add a bill|Log a bill/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Your bills|Bills received/i })).not.toBeInTheDocument();
-  });
-
-  it('is hidden where bills are not available', () => {
-    renderDetails({ billing: undefined });
-
-    expect(screen.queryByRole('button', { name: /Manage bills & documents/ })).not.toBeInTheDocument();
   });
 });
 
@@ -65,17 +58,20 @@ describe('the monthly breakdown', () => {
     expect(screen.getByText('Utilities')).toBeInTheDocument();
   });
 
-  it('keeps where a number comes from out of sight, in a tooltip', () => {
+  it('says where a number comes from beside its name, the same way for a declared cost and for bills', () => {
     const { container } = renderDetails({
+      phase: makePhase({ fixedCosts: [makeCost({ id: 'c1', label: 'Landlord' })] }),
       entry: makeEntry({
         costBasisByCategory: noBasis({ ELECTRICITY: { basis: 'BILLS', billCount: 3 }, INTERNET: { basis: 'BILLS', billCount: 2 } }),
       }),
     });
 
-    expect(screen.queryByText('Average of 3 bills')).not.toBeInTheDocument();
-    expect(screen.queryByText('From your latest 2 bills')).not.toBeInTheDocument();
+    const noteOf = (category: string) => container.querySelector(`[data-category="${category}"] .phase-breakdown__row .phase-breakdown__note`)?.textContent;
+    expect(noteOf('ELECTRICITY')).toBe('Average of 3 bills');
+    expect(noteOf('INTERNET')).toBe('From your latest 2 bills');
+    // A declared rent reads the same way: what it is, then what it comes from.
+    expect(noteOf('RENT')).toBe('Monthly');
     expect(container.querySelector('[data-category="ELECTRICITY"] .phase-breakdown__row')).toHaveAttribute('title', 'Average of 3 bills');
-    expect(container.querySelector('[data-category="INTERNET"] .phase-breakdown__row')).toHaveAttribute('title', 'From your latest 2 bills');
   });
 
   it('crosses out a declared cost the bills have replaced, without hiding it', () => {
@@ -126,102 +122,6 @@ describe('the monthly breakdown', () => {
     const row = screen.getByRole('button', { name: 'Edit Rent Landlord' }).closest('.phase-breakdown__row');
     expect(row).not.toBeNull();
     expect(row?.querySelector('.cost-row__actions')).toContainElement(screen.getByRole('button', { name: 'Remove Rent Landlord' }));
-  });
-});
-
-describe('manage bills & documents', () => {
-  const records = [
-    makeBill({ id: 'b1', vendor: 'Iberdrola', periodEnd: '2026-09-14' }),
-    makeBill({ id: 'b2', vendor: 'Endesa', category: 'GAS', cadence: 'MONTHLY', periodStart: '2026-09-15', periodEnd: '2026-10-14', amountMinor: 4000 }),
-  ];
-
-  it('lists every bill logged, newest first, in a dialog of its own', () => {
-    renderDetails({ billing: makeBilling({ recordsFor: () => records }) });
-
-    fireEvent.click(screen.getByRole('button', { name: /Manage bills & documents/ }));
-
-    const list = within(screen.getByRole('dialog', { name: 'Manage bills and documents' })).getByRole('list', { name: 'Bills received' });
-    const items = within(list).getAllByRole('listitem');
-    expect(items[0]).toHaveTextContent('Endesa');
-    expect(items[1]).toHaveTextContent('Iberdrola');
-    expect(items[1]).toHaveTextContent('€96 every 2 months');
-  });
-
-  it('corrects a bill from its row', async () => {
-    const billing = makeBilling({ recordsFor: () => records });
-    const { props } = renderDetails({ billing });
-    fireEvent.click(screen.getByRole('button', { name: /Manage bills & documents/ }));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Electricity bill from Iberdrola' }));
-    fireEvent.change(screen.getByLabelText('Total on the bill'), { target: { value: '99' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    await waitFor(() => expect(billing.onUpdate).toHaveBeenCalledWith('b1', expect.objectContaining({ amountMinor: 9900, vendor: 'Iberdrola' })));
-    await waitFor(() => expect(props.announce).toHaveBeenCalledWith('Bill updated'));
-  });
-
-  it('removes a bill only after confirming', async () => {
-    const billing = makeBilling({ recordsFor: () => records });
-    renderDetails({ billing });
-    fireEvent.click(screen.getByRole('button', { name: /Manage bills & documents/ }));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Gas bill from Endesa' }));
-    expect(billing.onDelete).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
-
-    await waitFor(() => expect(billing.onDelete).toHaveBeenCalledWith('b2'));
-  });
-
-  it('invites the first bill when there are none', () => {
-    renderDetails();
-
-    fireEvent.click(screen.getByRole('button', { name: /Manage bills & documents/ }));
-
-    expect(screen.getByText(/No bills yet/)).toBeInTheDocument();
-  });
-});
-
-describe('adding bills from PDFs', () => {
-  beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => undefined)));
-    vi.stubGlobal('localStorage', createMemoryStorage({ auth_token: 'tok' }));
-    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() }));
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  const pdf = (name: string) => new File([new Uint8Array(10)], name, { type: 'application/pdf' });
-
-  it('accepts several PDFs picked at once and reviews them one after another', () => {
-    renderDetails();
-    fireEvent.click(screen.getByRole('button', { name: /Manage bills & documents/ }));
-
-    const input = screen.getByLabelText('Choose bill PDFs') as HTMLInputElement;
-    expect(input).toHaveAttribute('multiple');
-    fireEvent.change(input, { target: { files: [pdf('enero.pdf'), pdf('febrero.pdf')] } });
-
-    expect(screen.getByRole('dialog', { name: 'Add bills from PDFs' })).toBeInTheDocument();
-    expect(screen.getByText('Bill 1 of 2 · enero.pdf')).toBeInTheDocument();
-    expect(screen.queryByRole('dialog', { name: 'Manage bills and documents' })).not.toBeInTheDocument();
-  });
-
-  it('accepts PDFs dropped onto the drop zone, and ignores other files', () => {
-    renderDetails();
-    fireEvent.click(screen.getByRole('button', { name: /Manage bills & documents/ }));
-
-    const zone = screen.getByText(/Have the PDFs\?/).closest('.pdf-picker') as HTMLElement;
-    fireEvent.drop(zone, { dataTransfer: { files: [pdf('a.pdf'), new File(['x'], 'photo.png', { type: 'image/png' }), pdf('b.pdf')] } });
-
-    expect(screen.getByText('Bill 1 of 2 · a.pdf')).toBeInTheDocument();
-  });
-
-  it('does nothing when only other kinds of file are dropped', () => {
-    renderDetails();
-    fireEvent.click(screen.getByRole('button', { name: /Manage bills & documents/ }));
-
-    const zone = screen.getByText(/Have the PDFs\?/).closest('.pdf-picker') as HTMLElement;
-    fireEvent.drop(zone, { dataTransfer: { files: [new File(['x'], 'photo.png', { type: 'image/png' })] } });
-
-    expect(screen.queryByRole('dialog', { name: /from PDFs?|from a PDF/ })).not.toBeInTheDocument();
   });
 });
 

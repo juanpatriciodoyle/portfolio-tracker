@@ -1,5 +1,6 @@
 import { jobsToCarry, type IncomeStreamDto, type LivingPhaseDto } from '../../contracts';
 import { currentTranslator, type Translate } from '../../i18n/translate';
+import { withoutEndReason } from './incomeForm';
 
 /** A job of the previous home that could carry on in the new one. */
 export interface CarryCandidate {
@@ -52,8 +53,7 @@ export function carriedStreams(
     const amountMinor = sameCurrency ? stream.amountMinor : parseAmount(choice.amounts[key] ?? '');
     if (amountMinor === null) return { ok: false, message: t('carry.enterAmount', { label: stream.label }) };
     // A job that ends before the new home starts cannot be carried, and the filter above leaves none; a kept end date stays.
-    const { endReason: _reason, ...rest } = stream;
-    streams.push({ ...rest, amountMinor, startDate: newStart });
+    streams.push({ ...withoutEndReason(stream), amountMinor, startDate: newStart });
   }
   return { ok: true, streams };
 }

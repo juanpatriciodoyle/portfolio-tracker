@@ -7,9 +7,7 @@ const point = (date: string, value: number, cashflow = 0): ChartDataPoint => ({
   portfolio_value_in_reporting_currency: value,
   cumulative_cost_in_reporting_currency: 0,
   cashflow_in_reporting_currency: cashflow,
-  benchmark_value_in_reporting_currency: 0,
-  cumulative_time_weighted_return_rate: 0,
-  cumulative_benchmark_time_weighted_return_rate: 0,
+  benchmark_value_in_reporting_currency: null,
 });
 
 const to = new Date('2025-01-01T00:00:00.000Z');

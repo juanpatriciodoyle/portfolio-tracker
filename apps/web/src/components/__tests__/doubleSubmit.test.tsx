@@ -11,10 +11,10 @@ import SecondSalaryCard from '../SecondSalaryCard';
 import TransactionForm from '../TransactionForm';
 
 vi.mock('@react-oauth/google', () => ({ useGoogleLogin: () => vi.fn() }));
-// This server has the sneak peek, and this deployment has Google sign-in.
+// This server has the demo, and this deployment has Google sign-in.
 vi.mock('../../hooks/useAppConfig', () => ({ useAppConfig: () => ({ demoEnabled: true }) }));
 vi.mock('../../lib/googleConfig', () => ({ GOOGLE_CLIENT_ID: 'test-client', isGoogleSignInConfigured: () => true }));
-vi.mock('@simplewebauthn/browser', () => ({ startRegistration: vi.fn(), startAuthentication: vi.fn() }));
+vi.mock('@simplewebauthn/browser', () => ({ browserSupportsWebAuthn: () => true, startRegistration: vi.fn(), startAuthentication: vi.fn() }));
 
 const ok = { ok: true as const, value: undefined };
 const respond = (body: unknown, status = 200) => ({ ok: status < 400, json: async () => body }) as Response;
@@ -99,26 +99,26 @@ describe('tapping twice records one transaction', () => {
 });
 
 describe('tapping twice signs in once', () => {
-  it('on the sneak peek', async () => {
+  it('on the demo', async () => {
     const request = pendingRequest<Response>();
     const sent = vi.fn().mockReturnValue(request.promise);
     vi.stubGlobal('fetch', sent);
     render(<LoginModal onSuccess={vi.fn()} />);
 
-    tapTwice(screen.getByRole('button', { name: /sneak peek/i }));
+    tapTwice(screen.getByRole('button', { name: /Try the demo/i }));
 
     expect(sent).toHaveBeenCalledTimes(1);
-    await act(async () => request.settle(respond({ success: true, token: 't', user: { id: 'd', email: 'demo@portfolio.local' } })));
+    await act(async () => request.settle(respond({ success: true, token: 't', user: { id: 'd', email: 'demo@portfolio.local', name: 'Joe', country: 'Spain', isAdmin: false, hasPasskey: false, isGuest: true } })));
   });
 
-  it('on the passkey, and not at the same time as the sneak peek', async () => {
+  it('on the passkey, and not at the same time as the demo', async () => {
     const request = pendingRequest<Response>();
     const sent = vi.fn().mockReturnValue(request.promise);
     vi.stubGlobal('fetch', sent);
     render(<LoginModal onSuccess={vi.fn()} />);
 
-    tapTwice(screen.getByRole('button', { name: /Passkey/ }));
-    tapTwice(screen.getByRole('button', { name: /sneak peek/i }));
+    tapTwice(screen.getByRole('button', { name: /passkey/i }));
+    tapTwice(screen.getByRole('button', { name: /Try the demo/i }));
 
     expect(sent).toHaveBeenCalledTimes(1);
     await act(async () => request.settle(respond({ error: 'no' }, 400)));

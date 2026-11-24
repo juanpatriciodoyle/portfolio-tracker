@@ -134,3 +134,41 @@ describe('groupIncome', () => {
     expect(groups.ended.map((row) => row.stream.label)).toEqual(['Ended', 'Ends soon']);
   });
 });
+
+describe('income in a home that is over', () => {
+  const finished = { startDate: '2021-02-01', endDate: '2023-02-28' };
+  const lasting = { startDate: '2023-03-01', endDate: null };
+  const junior = { label: 'Junior designer', amountMinor: 240000, startDate: '2021-02-01', endDate: '2022-06-30', endReason: 'OTHER' as const };
+  const designer = { label: 'Designer', amountMinor: 290000, startDate: '2022-07-01', endDate: null };
+  const today = '2026-11-24';
+
+  it('never lists a job as paying now in a home the person has left, even without an end date', () => {
+    const groups = groupIncome([junior, designer], today, finished);
+    expect(groups.paying).toEqual([]);
+    expect(groups.ended.map((row) => row.stream.label)).toEqual(['Junior designer', 'Designer']);
+  });
+
+  it('says which jobs stopped only because the home did, and the day they stopped', () => {
+    const groups = groupIncome([junior, designer], today, finished);
+    expect(groups.ended.map((row) => [row.stream.label, row.endsWithHome, row.lastDay])).toEqual([
+      ['Junior designer', false, '2022-06-30'],
+      ['Designer', true, '2023-02-28'],
+    ]);
+  });
+
+  it('keeps a job in the home lived in today paying', () => {
+    const groups = groupIncome([{ ...designer, startDate: '2023-03-01' }], today, lasting);
+    expect(groups.paying).toHaveLength(1);
+    expect(groups.paying[0]).toMatchObject({ endsWithHome: false, lastDay: null });
+  });
+
+  it('still lists a job as paying on the last day of the home', () => {
+    expect(groupIncome([designer], '2023-02-28', finished).paying).toHaveLength(1);
+  });
+
+  it('words a job that stopped with the home, in place of a reason nobody gave', () => {
+    const closed = { ...designer, endDate: '2023-02-28' };
+    expect(describeIncomeEnd(closed, 'en-US', undefined, true)).toBe('Until you moved out · Feb 28, 2023');
+    expect(describeIncomeStream(closed, 'en-US')).toBe('Jul 1, 2022 – Feb 28, 2023');
+  });
+});

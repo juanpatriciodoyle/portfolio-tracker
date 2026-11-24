@@ -52,6 +52,8 @@ export default function PhaseTimeline({
 }: PhaseTimelineProps) {
   const { t } = useTranslation();
   const entryById = new Map(entries.map((entry) => [entry.phaseId, entry]));
+  /** The home lived in just before another: the last one that started earlier. */
+  const previousOf = (phase: LivingPhaseDto) => entries.filter((entry) => entry.startDate < phase.startDate).sort((a, b) => b.startDate.localeCompare(a.startDate))[0];
 
   return (
     <ol className={`phase-timeline${compareIds.length > 0 ? ' is-comparing' : ''}`} aria-label={t('profile.livingPhases')}>
@@ -60,6 +62,7 @@ export default function PhaseTimeline({
           <LivingPhaseCard
             phase={phase}
             entry={entryById.get(phase.id)}
+            previousEntry={previousOf(phase)}
             expanded={expandedId === phase.id}
             compareSelected={phases.length > 1 && compareIds.includes(phase.id)}
             onToggleExpanded={() => onToggleExpanded(phase.id)}

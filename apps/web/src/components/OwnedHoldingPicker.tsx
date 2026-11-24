@@ -67,7 +67,9 @@ export default function OwnedHoldingPicker({ positions, selected, onSelect, inpu
           } else if (e.key === 'Enter' && open && matches[highlighted]) {
             e.preventDefault();
             choose(matches[highlighted]);
-          } else if (e.key === 'Escape') {
+          } else if (e.key === 'Escape' && open) {
+            // The list closes first; the dialog only closes on the next press.
+            e.preventDefault();
             setOpen(false);
           }
         }}
@@ -116,8 +118,8 @@ export default function OwnedHoldingPicker({ positions, selected, onSelect, inpu
               }}
             >
               <span style={{ fontWeight: 700 }}>{p.symbol}</span>
-              <span style={{ marginLeft: '8px', fontSize: '12px', opacity: 0.8 }}>{p.name}</span>
-              <span style={{ float: 'right', fontSize: '12px' }}>{t('tx.available', { units: formatUnits(p.quantity) })}</span>
+              <span style={{ marginLeft: '8px', fontSize: 'var(--text-xs)', opacity: 0.8 }}>{p.name}</span>
+              <span style={{ float: 'right', fontSize: 'var(--text-xs)' }}>{t('tx.available', { units: formatUnits(p.quantity) })}</span>
             </li>
           ))}
         </ul>

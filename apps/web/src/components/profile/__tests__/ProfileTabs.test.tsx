@@ -2,6 +2,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import ProfileTabs from '../ProfileTabs';
+import { LocaleProvider } from '../../../i18n/LocaleProvider';
 import { readProfileTab, storeProfileTab } from '../../../lib/profileTab';
 
 describe('ProfileTabs', () => {
@@ -77,7 +78,41 @@ describe('the admin tab', () => {
 
   it('is the third tab for the admin', () => {
     render(<ProfileTabs active="living" onChange={vi.fn()} isAdmin />);
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Living Costs & Career', 'Milestones & Positioning', 'Analytics']);
+    expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('id'))).toEqual(['profile-tab-living', 'profile-tab-milestones', 'profile-tab-analytics']);
+    expect(screen.getByRole('tab', { name: 'Analytics' })).toBeInTheDocument();
+  });
+
+  it('stands apart from the two regular tabs: after a divider, with an Admin badge, and a class of its own', () => {
+    const { container } = render(<ProfileTabs active="living" onChange={vi.fn()} isAdmin />);
+
+    const analytics = screen.getByRole('tab', { name: 'Analytics' });
+    expect(analytics).toHaveClass('profile-tabs__tab--admin');
+    expect(analytics.querySelector('.profile-tabs__badge')?.textContent).toBe('Admin');
+    // The badge is a visual cue; the tab keeps its plain name for screen readers.
+    expect(analytics.querySelector('.profile-tabs__badge')).toHaveAttribute('aria-hidden', 'true');
+
+    const divider = container.querySelector('.profile-tabs__divider');
+    expect(divider).not.toBeNull();
+    expect(divider).toHaveAttribute('aria-hidden', 'true');
+    expect(divider?.nextElementSibling).toBe(analytics);
+    expect(screen.getByRole('tab', { name: 'Milestones & Positioning' })).not.toHaveClass('profile-tabs__tab--admin');
+  });
+
+  it('shows no divider and no badge to anyone else', () => {
+    const { container } = render(<ProfileTabs active="living" onChange={vi.fn()} />);
+
+    expect(container.querySelector('.profile-tabs__divider')).toBeNull();
+    expect(container.querySelector('.profile-tabs__badge')).toBeNull();
+  });
+
+  it('says in Spanish too that it is the admin area', () => {
+    const { container } = render(
+      <LocaleProvider initial="es-AR">
+        <ProfileTabs active="living" onChange={vi.fn()} isAdmin />
+      </LocaleProvider>,
+    );
+
+    expect(container.querySelector('.profile-tabs__badge')?.textContent).toBe('Admin');
   });
 
   it('opens on click', () => {

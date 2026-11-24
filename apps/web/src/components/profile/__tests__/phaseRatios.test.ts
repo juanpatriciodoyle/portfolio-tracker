@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { makeEntry } from '../../../test/fixtures';
-import { burnRateMinor, housingBurden, incomeFigures } from '../phaseRatios';
+import { burnRateMinor, housingBurden, incomeFigures, incomeViewsDiffer } from '../phaseRatios';
 
 describe('housingBurden', () => {
   it('is rent and utilities over income', () => {
@@ -52,5 +52,23 @@ describe('burnRateMinor', () => {
 
   it('is null with neither income nor costs', () => {
     expect(burnRateMinor({ incomeMinor: 0, savingsCapacityMinor: 0, savingsRate: null })).toBeNull();
+  });
+});
+
+describe('incomeViewsDiffer', () => {
+  it('is true when the average month of the stay is not what is paid today', () => {
+    expect(incomeViewsDiffer(makeEntry({ monthlyIncomeMinor: 340000, averageMonthlyIncomeMinor: 316000 }))).toBe(true);
+  });
+
+  it('is false for steady income, where both views would say the same', () => {
+    expect(incomeViewsDiffer(makeEntry({ monthlyIncomeMinor: 340000, averageMonthlyIncomeMinor: 340000 }))).toBe(false);
+  });
+
+  it('ignores the rounding left over from dividing by days', () => {
+    expect(incomeViewsDiffer(makeEntry({ monthlyIncomeMinor: 340000, averageMonthlyIncomeMinor: 339998 }))).toBe(false);
+  });
+
+  it('is false with no income at all', () => {
+    expect(incomeViewsDiffer(makeEntry({ monthlyIncomeMinor: 0, averageMonthlyIncomeMinor: 0 }))).toBe(false);
   });
 });

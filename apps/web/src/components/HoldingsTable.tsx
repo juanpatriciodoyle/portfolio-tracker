@@ -1,43 +1,22 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Columns3, HelpCircle, X, ChevronUp, ChevronDown, Search } from 'lucide-react';
-import { formatCurrency } from '../data/sampleChartData';
+import React, { useMemo, useState } from 'react';
+import { ChevronDown, ChevronUp, Search } from 'lucide-react';
+import { useHoldingsColumns } from '../hooks/useHoldingsColumns';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { useTranslation } from '../i18n/useTranslation';
-import { formatFixed, formatUpTo } from '../lib/money';
-import { matchesHoldingsQuery } from '../lib/holdingsSearch';
+import { NARROW_SCREEN_QUERY } from '../lib/breakpoints';
+import { COLUMN_KEYS, type ColumnKey } from '../lib/holdingsColumns';
 import { EMPTY_FILTERS, matchesHoldingsFilters, type HoldingsFilters } from '../lib/holdingsFilter';
+import { buildHoldingRows, sortHoldingRows, type PositionItem, type SoldAssetItem, type SortDirection, type SortKey } from '../lib/holdingsRows';
+import { matchesHoldingsQuery } from '../lib/holdingsSearch';
+import HelpTip from './HelpTip';
 import HoldingsFilterMenu from './HoldingsFilterMenu';
+import { COLUMN_HELP, COLUMN_LABEL } from './holdings/columns';
+import { holdingFigure } from './holdings/figures';
+import HoldingsCards from './holdings/HoldingsCards';
+import HoldingsColumnMenu from './holdings/HoldingsColumnMenu';
+import { SecurityLogo } from './holdings/SecurityLogo';
 
-export interface PositionItem {
-  id: string;
-  symbol: string;
-  name: string;
-  assetClass: string;
-  region: string;
-  sector: string;
-  quantity: number;
-  investedAmount: number;
-  costPerShare?: number;
-  currentPrice?: number;
-  currentValue?: number;
-  holdingDays?: number;
-  createdAt?: string;
-}
-
-export interface SoldAssetItem {
-  id: string;
-  symbol: string;
-  assetClass: string;
-  region: string;
-  sector: string;
-  investedAmount: number;
-  returnedAmount: number;
-  soldProfit: number;
-  soldProfitPercent: number;
-  holdingInflationPercent: number;
-  realProfitEuros: number;
-  holdingDays?: number;
-  date: string;
-}
+export type { PositionItem, SoldAssetItem };
 
 interface HoldingsTableProps {
   positions: PositionItem[];
@@ -47,214 +26,82 @@ interface HoldingsTableProps {
   isRealInflationMode?: boolean;
 }
 
-type SortKey =
-  | 'security_name'
-  | 'position'
-  | 'holding_period'
-  | 'net_cash_invested'
-  | 'net_cash_invested_per_share'
-  | 'value'
-  | 'price_per_share'
-  | 'money_weighted_return'
-  | 'net_profit_loss'
-  | 'allocation';
+/** The first click on a column sorts the biggest first; a name starts at A. */
+const firstDirection = (key: SortKey): SortDirection => (key === 'name' ? 'asc' : 'desc');
 
-type SortDirection = 'asc' | 'desc';
-
-interface TableHoldingRow {
-  id: string;
-  security_name: string;
-  symbol: string;
-  assetClass: string;
-  sector: string;
-  region: string;
-  position: number;
-  holding_period: number;
-  net_cash_invested: number;
-  net_cash_invested_per_share: number;
-  value: number;
-  price_per_share: number;
-  money_weighted_return: number;
-  net_profit_loss: number;
-  allocation: number;
-  isOpen: boolean;
-}
-
-export const HoldingsTable: React.FC<HoldingsTableProps> = ({
-  positions,
-  soldAssets,
-  netWorth,
-  currency = 'EUR',
-  isRealInflationMode = false,
-}) => {
+export const HoldingsTable: React.FC<HoldingsTableProps> = ({ positions, soldAssets, netWorth, currency = 'EUR', isRealInflationMode = false }) => {
   const { t } = useTranslation();
-  const [sortKey, setSortKey] = useState<SortKey>('allocation');
+  const isNarrow = useMediaQuery(NARROW_SCREEN_QUERY);
+  const { choice, toggle } = useHoldingsColumns();
+  const [sortKey, setSortKey] = useState<SortKey>('share');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [showClosed, setShowClosed] = useState(false);
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState<HoldingsFilters>(EMPTY_FILTERS);
-  const [isColumnMenuOpen, setIsColumnMenuOpen] = useState(false);
-  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
-  const columnMenuRef = useRef<HTMLDivElement | null>(null);
-
-  // Close column menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (columnMenuRef.current && !columnMenuRef.current.contains(event.target as Node)) {
-        setIsColumnMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Column visibility state
-  const [visibleColumns, setVisibleColumns] = useState({
-    position: true,
-    netCash: true,
-    value: true,
-    return: true,
-  });
-
-  const toggleColumn = (col: keyof typeof visibleColumns) => {
-    setVisibleColumns((prev) => ({ ...prev, [col]: !prev[col] }));
-  };
-
-  const handleSort = (key: SortKey) => {
+  const sortBy = (key: SortKey) => {
     if (sortKey === key) {
-      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortKey(key);
-      setSortDirection(key === 'security_name' ? 'asc' : 'desc');
+      setSortDirection(firstDirection(key));
     }
   };
 
-  // What the filter can offer: every holding shown in the table, before any filter is applied.
-  const filterableRows = useMemo(
-    () => [...positions, ...(showClosed ? soldAssets : [])].map((h) => ({ assetClass: h.assetClass || 'Stock', sector: h.sector || '', region: h.region || '' })),
-    [positions, soldAssets, showClosed]
+  const allRows = useMemo(
+    () => buildHoldingRows({ positions, soldAssets, netWorth, showClosed, isRealInflationMode }),
+    [positions, soldAssets, netWorth, showClosed, isRealInflationMode]
   );
 
-  // Convert positions and soldAssets into unified holding rows
-  const holdingRows = useMemo(() => {
-    const rows: TableHoldingRow[] = [];
+  // What the filter can offer: every holding shown in the table, before any filter is applied.
+  const rows = useMemo(
+    () =>
+      sortHoldingRows(
+        allRows.filter((row) => matchesHoldingsFilters(row, filters) && matchesHoldingsQuery({ symbol: row.symbol, name: row.name, sector: row.sector }, query)),
+        sortKey,
+        sortDirection
+      ),
+    [allRows, filters, query, sortKey, sortDirection]
+  );
 
-    // Open positions
-    positions.forEach((p) => {
-      const quantity = p.quantity || 0;
-      const invested = p.investedAmount || 0;
-      const costPerShare = p.costPerShare || (quantity > 0 ? invested / quantity : 0);
-      const currentPrice = p.currentPrice || costPerShare;
-      const val = p.currentValue !== undefined ? p.currentValue : invested;
-      const netProfit = val - invested;
-      const mwr = invested > 0 ? (netProfit / invested) * 100 : 0;
-      const alloc = netWorth > 0 ? (val / netWorth) * 100 : 0;
+  const shownColumns = COLUMN_KEYS.filter((key) => choice[key]);
 
-      rows.push({
-        id: `pos-${p.id}`,
-        security_name: p.name || p.symbol,
-        symbol: p.symbol,
-        assetClass: p.assetClass || 'Stock',
-        sector: p.sector || '',
-        region: p.region || '',
-        position: quantity,
-        holding_period: p.holdingDays || 1,
-        net_cash_invested: invested,
-        net_cash_invested_per_share: costPerShare,
-        value: val,
-        price_per_share: currentPrice,
-        money_weighted_return: mwr,
-        net_profit_loss: netProfit,
-        allocation: alloc,
-        isOpen: true,
-      });
-    });
-
-    // Closed / sold positions if enabled
-    if (showClosed) {
-      soldAssets.forEach((s) => {
-        const invested = s.investedAmount || 0;
-        const profit = isRealInflationMode ? s.realProfitEuros : s.soldProfit;
-        const mwr = isRealInflationMode
-          ? invested > 0 ? (s.realProfitEuros / invested) * 100 : 0
-          : s.soldProfitPercent;
-
-        rows.push({
-          id: `sold-${s.id}`,
-          security_name: s.symbol,
-          symbol: s.symbol,
-          assetClass: s.assetClass || 'Stock',
-          sector: s.sector || '',
-          region: s.region || '',
-          position: 0,
-          holding_period: s.holdingDays || 1,
-          net_cash_invested: invested,
-          net_cash_invested_per_share: 0,
-          value: s.returnedAmount || 0,
-          price_per_share: 0,
-          money_weighted_return: mwr,
-          net_profit_loss: profit,
-          allocation: 0,
-          isOpen: false,
-        });
-      });
-    }
-
-    // Search then sort rows
-    return rows.filter((row) => matchesHoldingsFilters(row, filters) && matchesHoldingsQuery({ symbol: row.symbol, name: row.security_name, sector: row.sector }, query)).sort((a, b) => {
-      let valA = a[sortKey];
-      let valB = b[sortKey];
-
-      if (typeof valA === 'string' && typeof valB === 'string') {
-        return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
-      }
-
-      const numA = Number(valA) || 0;
-      const numB = Number(valB) || 0;
-      return sortDirection === 'asc' ? numA - numB : numB - numA;
-    });
-  }, [positions, soldAssets, netWorth, showClosed, sortKey, sortDirection, isRealInflationMode, query, filters]);
-
-  // Logo fallback badge helper
-  const renderSecurityLogo = (name: string, symbol: string, assetClass: string) => {
-    let initial = (symbol || name || 'S').charAt(0).toUpperCase();
-    let badgeClass = 'security-logo--stock';
-
-    if (assetClass.toLowerCase().includes('crypto') || symbol.includes('BTC') || symbol.includes('ETH')) {
-      badgeClass = 'security-logo--crypto';
-      if (symbol.includes('BTC')) initial = '₿';
-      else if (symbol.includes('ETH')) initial = 'Ξ';
-    } else if (assetClass.toLowerCase().includes('etf') || symbol.includes('.DE') || symbol.includes('IE00')) {
-      badgeClass = 'security-logo--etf';
-    }
-
-    return (
-      <div className={`security-logo ${badgeClass}`}>
-        <span className="security-logo__text">{initial}</span>
+  const heading = (key: SortKey, label: string, help?: string, align: 'left' | 'right' = 'right') => (
+    <th
+      key={key}
+      scope="col"
+      className={`dashboard-table-heading dashboard-table__head-cell dashboard-table__head-cell--${align}`}
+      aria-sort={sortKey === key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <div className={`holdings-heading holdings-heading--${align}`}>
+        <button type="button" className="holdings-sort" onClick={() => sortBy(key)}>
+          <span>{label}</span>
+          <span className={`holdings-sort__icon ${sortKey === key ? 'is-active' : ''}`} aria-hidden="true">
+            {sortKey === key && sortDirection === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </span>
+        </button>
+        {help && <HelpTip term={label} text={help} />}
       </div>
-    );
-  };
+    </th>
+  );
 
-  const renderSortIndicator = (key: SortKey) => {
-    if (sortKey !== key) {
-      return (
-        <span className="sort-icon-neutral">
-          <ChevronUp size={10} />
-        </span>
-      );
-    }
-    return (
-      <span className="sort-icon-active">
-        {sortDirection === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-      </span>
-    );
-  };
+  const empty = (
+    <>
+      {query.trim() ? (
+        t('holdings.noMatch')
+      ) : (
+        <>
+          {t('holdings.emptyBefore')}
+          <strong>{t('header.logTransaction')}</strong>
+          {t('holdings.emptyAfter')}
+        </>
+      )}
+    </>
+  );
 
   return (
     <section className="portfolio-dashboard__section dashboard-section dashboard-section--flush" id="holdings">
       <div className="dashboard-panel">
-        {/* Header */}
         <div className="dashboard-panel-header">
           <h2 className="dashboard-panel-title">{t('holdings.title')}</h2>
         </div>
@@ -274,407 +121,73 @@ export const HoldingsTable: React.FC<HoldingsTableProps> = ({
           </label>
 
           <div className="holdings-toolbar__actions">
-            <HoldingsFilterMenu rows={filterableRows} filters={filters} onChange={setFilters} />
-
-            <div className="dashboard-table-column-menu" ref={columnMenuRef}>
-              <button
-                type="button"
-                className="dashboard-icon-button"
-                onClick={() => setIsColumnMenuOpen(!isColumnMenuOpen)}
-                aria-label={t('holdings.customizeColumns')}
-                title={t('holdings.customizeColumns')}
-                aria-expanded={isColumnMenuOpen}
-              >
-                <Columns3 size={18} />
-              </button>
-
-            {isColumnMenuOpen && (
-              <div className="dashboard-table-column-menu__menu">
-                <ul>
-                  <li className="table-column-menu__item">
-                    <input
-                      type="checkbox"
-                      id="col-pos"
-                      checked={visibleColumns.position}
-                      onChange={() => toggleColumn('position')}
-                      className="table-column-menu__checkbox"
-                    />
-                    <label htmlFor="col-pos" className="table-column-menu__label">
-                      {t('holdings.col.position')}
-                    </label>
-                  </li>
-                  <li className="table-column-menu__item">
-                    <input
-                      type="checkbox"
-                      id="col-netcash"
-                      checked={visibleColumns.netCash}
-                      onChange={() => toggleColumn('netCash')}
-                      className="table-column-menu__checkbox"
-                    />
-                    <label htmlFor="col-netcash" className="table-column-menu__label">
-                      {t('holdings.col.netCash')}
-                    </label>
-                  </li>
-                  <li className="table-column-menu__item">
-                    <input
-                      type="checkbox"
-                      id="col-val"
-                      checked={visibleColumns.value}
-                      onChange={() => toggleColumn('value')}
-                      className="table-column-menu__checkbox"
-                    />
-                    <label htmlFor="col-val" className="table-column-menu__label">
-                      {t('holdings.col.value')}
-                    </label>
-                  </li>
-                  <li className="table-column-menu__item">
-                    <input
-                      type="checkbox"
-                      id="col-ret"
-                      checked={visibleColumns.return}
-                      onChange={() => toggleColumn('return')}
-                      className="table-column-menu__checkbox"
-                    />
-                    <label htmlFor="col-ret" className="table-column-menu__label">
-                      {t('holdings.col.return')}
-                    </label>
-                  </li>
-                </ul>
-              </div>
-            )}
-            </div>
+            <HoldingsFilterMenu rows={allRows} filters={filters} onChange={setFilters} />
+            {!isNarrow && <HoldingsColumnMenu choice={choice} onToggle={toggle} />}
           </div>
         </div>
 
-        {/* Holdings Table */}
-        <div className="dashboard-table-scroll dashboard-table-scroll--holdings">
-          <div className="dashboard-table-wrapper dashboard-table-wrapper--holdings">
-            <table id="holdings-table" className="dashboard-table dashboard-table--holdings">
-              <thead>
-                <tr>
-                  {/* Column 1: Security */}
-                  <th className="dashboard-table-heading dashboard-table__head-cell dashboard-table__head-cell--left">
-                    <div
-                      className="dashboard-table-sort-header"
-                      onClick={() => handleSort('security_name')}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <span>{t('holdings.col.security')}</span>
-                      {renderSortIndicator('security_name')}
-                    </div>
-                  </th>
-
-                  {/* Column 2: Position & Holding period */}
-                  {visibleColumns.position && (
-                    <th className="dashboard-table-heading dashboard-table__head-cell dashboard-table__head-cell--right">
-                      <div
-                        className="dashboard-table-sort-header dashboard-table-sort-header--right"
-                        onClick={() => handleSort('position')}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <span>{t('holdings.col.position')}</span>
-                        {renderSortIndicator('position')}
-                      </div>
-                      <div
-                        className="dashboard-table-sort-header dashboard-table-sort-header--right dashboard-table__subhead"
-                        onClick={() => handleSort('holding_period')}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <span>{t('holdings.col.holdingPeriod')}</span>
-                        {renderSortIndicator('holding_period')}
-                      </div>
-                    </th>
-                  )}
-
-                  {/* Column 3: Net Cash Invested */}
-                  {visibleColumns.netCash && (
-                    <th className="dashboard-table-heading dashboard-table__head-cell dashboard-table__head-cell--right">
-                      <div className="dashboard-table-heading__label-row">
-                        <div
-                          className="dashboard-table-sort-header dashboard-table-sort-header--right"
-                          onClick={() => handleSort('net_cash_invested')}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          <span>{t('holdings.col.netCash')}</span>
-                          {renderSortIndicator('net_cash_invested')}
-                        </div>
-                        <div
-                          className="metric-tile__help-wrapper"
-                          onMouseEnter={() => setActiveTooltip('netCash')}
-                          onMouseLeave={() => setActiveTooltip(null)}
-                        >
-                          <button
-                            type="button"
-                            className="metric-tile__help-button"
-                            onClick={() =>
-                              setActiveTooltip(activeTooltip === 'netCash' ? null : 'netCash')
-                            }
-                            onFocus={() => setActiveTooltip('netCash')}
-                            onBlur={() => setActiveTooltip(null)}
-                            aria-label={t('holdings.learnNetCash')}
-                          >
-                            <HelpCircle size={14} />
-                          </button>
-                          {activeTooltip === 'netCash' && (
-                            <div className="metric-tile__popover metric-tile__popover--table" role="tooltip">
-                              <div className="metric-tile__popover-header">
-                                <span>{t('holdings.netCashTitle')}</span>
-                                <button type="button" onClick={() => setActiveTooltip(null)}>
-                                  <X size={12} />
-                                </button>
-                              </div>
-                              <p>{t('holdings.netCashText')}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div
-                        className="dashboard-table-sort-header dashboard-table-sort-header--right dashboard-table__subhead"
-                        onClick={() => handleSort('net_cash_invested_per_share')}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <span>{t('holdings.col.perShare')}</span>
-                        {renderSortIndicator('net_cash_invested_per_share')}
-                      </div>
-                    </th>
-                  )}
-
-                  {/* Column 4: Value */}
-                  {visibleColumns.value && (
-                    <th className="dashboard-table-heading dashboard-table__head-cell dashboard-table__head-cell--right">
-                      <div
-                        className="dashboard-table-sort-header dashboard-table-sort-header--right"
-                        onClick={() => handleSort('value')}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <span>{t('holdings.col.value')}</span>
-                        {renderSortIndicator('value')}
-                      </div>
-                      <div
-                        className="dashboard-table-sort-header dashboard-table-sort-header--right dashboard-table__subhead"
-                        onClick={() => handleSort('price_per_share')}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <span>{t('holdings.col.perShare')}</span>
-                        {renderSortIndicator('price_per_share')}
-                      </div>
-                    </th>
-                  )}
-
-                  {/* Column 5: Holding Return (MWR) & Net profit/loss */}
-                  {visibleColumns.return && (
-                    <th className="dashboard-table-heading dashboard-table__head-cell dashboard-table__head-cell--right">
-                      <div className="dashboard-table-heading__label-row">
-                        <div
-                          className="dashboard-table-sort-header dashboard-table-sort-header--right"
-                          onClick={() => handleSort('money_weighted_return')}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          <span>{t('holdings.col.return')}</span>
-                          {renderSortIndicator('money_weighted_return')}
-                        </div>
-                        <div
-                          className="metric-tile__help-wrapper"
-                          onMouseEnter={() => setActiveTooltip('mwr')}
-                          onMouseLeave={() => setActiveTooltip(null)}
-                        >
-                          <button
-                            type="button"
-                            className="metric-tile__help-button"
-                            onClick={() =>
-                              setActiveTooltip(activeTooltip === 'mwr' ? null : 'mwr')
-                            }
-                            onFocus={() => setActiveTooltip('mwr')}
-                            onBlur={() => setActiveTooltip(null)}
-                            aria-label={t('holdings.learnReturn')}
-                          >
-                            <HelpCircle size={14} />
-                          </button>
-                          {activeTooltip === 'mwr' && (
-                            <div className="metric-tile__popover metric-tile__popover--table" role="tooltip">
-                              <div className="metric-tile__popover-header">
-                                <span>{t('holdings.returnTitle')}</span>
-                                <button type="button" onClick={() => setActiveTooltip(null)}>
-                                  <X size={12} />
-                                </button>
-                              </div>
-                              <p>{t('holdings.returnText')}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div
-                        className="dashboard-table-sort-header dashboard-table-sort-header--right dashboard-table__subhead"
-                        onClick={() => handleSort('net_profit_loss')}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <span>{t('holdings.col.netProfitLoss')}</span>
-                        {renderSortIndicator('net_profit_loss')}
-                      </div>
-                    </th>
-                  )}
-
-                  {/* Column 6: Allocation % */}
-                  <th className="dashboard-table-heading dashboard-table__head-cell dashboard-table__head-cell--right">
-                    <div
-                      className="dashboard-table-sort-header dashboard-table-sort-header--right"
-                      onClick={() => handleSort('allocation')}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <span>{t('holdings.col.allocation')}</span>
-                      {renderSortIndicator('allocation')}
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="dashboard-table__body">
-                {holdingRows.length === 0 ? (
+        {isNarrow ? (
+          rows.length === 0 ? (
+            <p className="holdings-empty">{empty}</p>
+          ) : (
+            <HoldingsCards rows={rows} currency={currency} />
+          )
+        ) : (
+          <div className="dashboard-table-scroll dashboard-table-scroll--holdings">
+            <div className="dashboard-table-wrapper dashboard-table-wrapper--holdings">
+              <table id="holdings-table" className="dashboard-table dashboard-table--holdings">
+                <thead>
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="dashboard-table__cell dashboard-table__cell--empty"
-                      style={{ textAlign: 'center', padding: '36px 16px', color: 'var(--text-muted)' }}
-                    >
-                      {query.trim() ? (
-                        t('holdings.noMatch')
-                      ) : (
-                        <>
-                          {t('holdings.emptyBefore')}
-                          <strong>{t('header.logTransaction')}</strong>
-                          {t('holdings.emptyAfter')}
-                        </>
-                      )}
-                    </td>
+                    {heading('name', t('holdings.col.name'), undefined, 'left')}
+                    {shownColumns.map((key: ColumnKey) => heading(key, t(COLUMN_LABEL[key]), COLUMN_HELP[key] && t(COLUMN_HELP[key]!)))}
                   </tr>
-                ) : (
-                  holdingRows.map((row) => {
-                    const isPositive = row.net_profit_loss >= 0;
-                    return (
+                </thead>
+
+                <tbody className="dashboard-table__body">
+                  {rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={1 + shownColumns.length} className="dashboard-table__cell dashboard-table__cell--empty holdings-empty">
+                        {empty}
+                      </td>
+                    </tr>
+                  ) : (
+                    rows.map((row) => (
                       <tr key={row.id} className={row.isOpen ? 'table-row--active' : 'table-row--closed'}>
-                        {/* 1. Security */}
                         <td className="dashboard-table__cell dashboard-table__cell--asset">
                           <div className="dashboard-table__inline-start">
-                            {renderSecurityLogo(row.security_name, row.symbol, row.assetClass)}
+                            <SecurityLogo name={row.name} symbol={row.symbol} assetClass={row.assetClass} />
                             <div className="dashboard-table-asset__body">
                               <div className="dashboard-table-asset__name">
-                                {row.security_name}
-                                {!row.isOpen && <span className="holding-badge-closed">{t('holdings.closed')}</span>}
+                                {row.name}
+                                {!row.isOpen && <span className="holding-badge-sold">{t('holdings.sold')}</span>}
                               </div>
-                              <div className="dashboard-table-asset__meta">{row.symbol}</div>
-                              <div className="dashboard-table-bar" aria-hidden="true">
-                                <span
-                                  className="dashboard-table-bar__fill"
-                                  style={{ width: `${Math.min(100, Math.max(0, row.allocation))}%` }}
-                                />
-                              </div>
+                              {row.isOpen && <div className="dashboard-table-asset__meta">{row.symbol}</div>}
                             </div>
                           </div>
                         </td>
-
-                        {/* 2. Position & Holding period */}
-                        {visibleColumns.position && (
-                          <td className="dashboard-table__cell dashboard-table__cell--numeric dashboard-table__cell--muted">
-                            <div className="dashboard-table__value">
-                              {row.isOpen
-                                ? row.position >= 1
-                                  ? formatUpTo(row.position, 2)
-                                  : formatUpTo(row.position, 6)
-                                : t('holdings.zeroClosed')}
-                            </div>
-                            <div className="dashboard-table__subvalue">{t('holdings.days', { count: row.holding_period })}</div>
-                          </td>
-                        )}
-
-                        {/* 3. Net cash invested */}
-                        {visibleColumns.netCash && (
-                          <td className="dashboard-table__cell dashboard-table__cell--numeric">
-                            <div className="currency dashboard-table__value">
-                              {formatCurrency(row.net_cash_invested, currency)}
-                            </div>
-                            <div className="dashboard-table__subvalue">
-                              <span className="currency">
-                                {row.isOpen && row.position > 0
-                                  ? t('holdings.perShare', { amount: formatCurrency(row.net_cash_invested_per_share, currency) })
-                                  : '—'}
-                              </span>
-                            </div>
-                          </td>
-                        )}
-
-                        {/* 4. Value */}
-                        {visibleColumns.value && (
-                          <td className="dashboard-table__cell dashboard-table__cell--numeric">
-                            <div className="currency dashboard-table__value">
-                              {formatCurrency(row.value, currency)}
-                            </div>
-                            <div className="dashboard-table__subvalue">
-                              <span className="currency">
-                                {row.isOpen && row.position > 0
-                                  ? t('holdings.perShare', { amount: formatCurrency(row.price_per_share, currency) })
-                                  : '—'}
-                              </span>
-                            </div>
-                          </td>
-                        )}
-
-                        {/* 5. Holding Return (MWR) & Net profit/loss */}
-                        {visibleColumns.return && (
-                          <td className="dashboard-table__cell dashboard-table__cell--numeric">
-                            <div
-                              className={`dashboard-table__value dashboard-table__value--medium ${
-                                isPositive ? 'dashboard-table__cell--positive' : 'dashboard-table__cell--negative'
-                              }`}
-                            >
-                              {t('holdings.perYear', {
-                                percent: `${row.money_weighted_return >= 0 ? '+' : ''}${formatFixed(row.money_weighted_return, 2)}%`,
-                              })}
-                            </div>
-                            <div className="dashboard-table__subvalue">
-                              <span
-                                className={`currency ${
-                                  isPositive ? 'dashboard-table__cell--positive' : 'dashboard-table__cell--negative'
-                                }`}
-                              >
-                                {row.net_profit_loss >= 0 ? '+' : ''}
-                                {formatCurrency(row.net_profit_loss, currency)}
-                              </span>
-                            </div>
-                          </td>
-                        )}
-
-                        {/* 6. Allocation % */}
-                        <td className="dashboard-table__cell dashboard-table__cell--numeric dashboard-table__cell--muted">
-                          {formatFixed(row.allocation, 2)}%
-                        </td>
+                        {shownColumns.map((key) => {
+                          const figure = holdingFigure(key, row, currency, t);
+                          const tone = figure.tone === 'profit' ? 'dashboard-table__cell--positive' : figure.tone === 'loss' ? 'dashboard-table__cell--negative' : '';
+                          return (
+                            <td key={key} className="dashboard-table__cell dashboard-table__cell--numeric">
+                              <div className={`dashboard-table__value ${tone}`}>{figure.text}</div>
+                              {figure.sub && <div className={`dashboard-table__subvalue ${tone}`}>{figure.sub}</div>}
+                            </td>
+                          );
+                        })}
                       </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Footer actions */}
         <nav className="dashboard-section-footer" aria-label={t('holdings.actions')}>
           <div className="dashboard-section-footer__meta" />
           <div className="dashboard-section-footer__actions">
-            <button
-              type="button"
-              className="dashboard-flat-button"
-              onClick={() => setShowClosed(!showClosed)}
-            >
+            <button type="button" className="dashboard-flat-button" onClick={() => setShowClosed(!showClosed)}>
               {showClosed ? t('holdings.showOpenOnly') : t('holdings.showAll')}
             </button>
           </div>

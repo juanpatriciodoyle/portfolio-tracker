@@ -53,10 +53,11 @@ describe('housing burden KPI', () => {
   it('shows the share against the typical one, and keeps the amount and sources in the note', () => {
     const { housing } = describeIt();
 
-    expect(housing?.value).toBe('42.8% housing burden');
-    expect(housing?.sub).toBe('vs. 16% typical');
+    expect(housing?.label).toBe('Rent');
+    expect(housing?.value).toBe('42.8% of your income');
+    expect(housing?.sub).toBe('vs. 26.7% for people who rent');
     expect(housing?.note).toBe(
-      'Rent, utilities and property taxes come to €1,371 a month. A typical household in Spain spends 16%. 2025 · Eurostat'
+      'Your rent comes to €1,371 a month. Households that pay rent in Spain typically spend 26.7% of their income on it. 2025 · Eurostat'
     );
     expect(housing?.verdict).toBe('HIGHER');
   });
@@ -107,22 +108,22 @@ describe('positioning', () => {
     const { badges } = describeIt().positioning;
 
     expect(badges).toEqual([
-      { scope: 'COUNTRY', text: 'Top 11% in Spain' },
-      { scope: 'CONTINENT', text: 'Top 15% in the EU' },
-      { scope: 'WORLD', text: 'Top 2% in the world' },
+      { scope: 'COUNTRY', text: 'Top 11% of people in Spain' },
+      { scope: 'CONTINENT', text: 'Top 15% of people in the EU' },
+      { scope: 'WORLD', text: 'Top 2% of people in the world' },
     ]);
   });
 
   it('names a World Bank region the way the data names it', () => {
     const lac = rung({ scope: 'CONTINENT', areaCode: 'LCN', areaName: 'Latin America & the Caribbean', percentile: 91.5 });
 
-    expect(describeIt({ standing: [lac] }).positioning.badges[0].text).toBe('Top 8% in Latin America & the Caribbean');
+    expect(describeIt({ standing: [lac] }).positioning.badges[0].text).toBe('Top 8% of people in Latin America & the Caribbean');
   });
 
   it('does not claim more than the published range allows', () => {
-    expect(describeIt({ standing: [rung({ percentile: 90, bound: 'AT_LEAST' })] }).positioning.badges[0].text).toBe('Top 10% or better in Spain');
-    expect(describeIt({ standing: [rung({ percentile: 10, bound: 'AT_MOST' })] }).positioning.badges[0].text).toBe('Below the 10th percentile in Spain');
-    expect(describeIt({ standing: [rung({ percentile: 99.8, bound: 'EXACT' })] }).positioning.badges[0].text).toBe('Top 1% in Spain');
+    expect(describeIt({ standing: [rung({ percentile: 90, bound: 'AT_LEAST' })] }).positioning.badges[0].text).toBe('Top 10% (or better) of people in Spain');
+    expect(describeIt({ standing: [rung({ percentile: 10, bound: 'AT_MOST' })] }).positioning.badges[0].text).toBe('Below the 10th percentile among people in Spain');
+    expect(describeIt({ standing: [rung({ percentile: 99.8, bound: 'EXACT' })] }).positioning.badges[0].text).toBe('Top 1% of people in Spain');
   });
 
   it('shows only the rungs the data can place', () => {
@@ -130,20 +131,32 @@ describe('positioning', () => {
     expect(describeIt({ standing: [DEFAULT_STANDING[0], DEFAULT_STANDING[2]] }).positioning.badges.map((badge) => badge.scope)).toEqual(['COUNTRY', 'WORLD']);
   });
 
-  it('words housing against the typical share, framed by what it says about the person', () => {
+  it('words the rent against what people who pay rent spend, neutrally: it describes, it does not judge', () => {
     const base = { housingMonthlyMinor: 30000, typicalSharePercent: 31, period: '2025', source: 'EUROSTAT' as const };
-    const eu = (dto: object) => ({ ...makePhaseBenchmark().continentHousing!, ...dto });
 
-    expect(describeIt({ housingBurden: { ...base, yourSharePercent: 24, differencePoints: -7, verdict: 'LOWER' } }).positioning.insights[0]).toBe(
-      'Housing takes 24% of your income — below the 31% average in Spain'
+    expect(describeIt({ housingBurden: { ...base, yourSharePercent: 24, differencePoints: -7, verdict: 'LOWER' }, continentHousing: null }).positioning.insights[0]).toBe(
+      'Your rent is 24% of your income. People who pay rent in Spain typically spend 31%.'
     );
-    expect(describeIt({ housingBurden: { ...base, yourSharePercent: 38, differencePoints: 7, verdict: 'HIGHER' } }).positioning.insights[0]).toBe(
-      'Housing takes 38% of your income — above the 31% average in Spain'
+    expect(describeIt({ housingBurden: { ...base, yourSharePercent: 38, differencePoints: 7, verdict: 'HIGHER' }, continentHousing: null }).positioning.insights[0]).toBe(
+      'Your rent is 38% of your income. People who pay rent in Spain typically spend 31%.'
     );
-    expect(describeIt({ housingBurden: { ...base, yourSharePercent: 31.5, differencePoints: 0.5, verdict: 'SIMILAR' } }).positioning.insights[0]).toContain('in line with the 31% average');
-    expect(describeIt({ continentHousing: eu({ yourSharePercent: 12, typicalSharePercent: 18.9, verdict: 'LOWER' }) }).positioning.insights[1]).toBe(
-      'Housing takes 12% of your income — below the 18.9% average in the EU'
-    );
+  });
+
+  it('gives the EU its own line when it says something different from the country', () => {
+    const insights = describeIt().positioning.insights;
+
+    expect(insights[0]).toBe('Your rent is 42.8% of your income. People who pay rent in Spain typically spend 26.7%.');
+    expect(insights[1]).toBe('Your rent is 42.8% of your income. People who pay rent in the EU typically spend 25%.');
+  });
+
+  it('merges the EU line into the country line when both typical shares read the same', () => {
+    const same = { ...makePhaseBenchmark().continentHousing!, typicalSharePercent: 26.7 };
+
+    const { insights } = describeIt({ continentHousing: same }).positioning;
+
+    expect(insights[0]).toBe('Your rent is 42.8% of your income. People who pay rent in Spain and the EU typically spend 26.7%.');
+    expect(insights.filter((line) => line.startsWith('Your rent'))).toHaveLength(1);
+    expect(insights).toHaveLength(2);
   });
 
   it('keeps to three one-line insights and leaves out what is not known', () => {
@@ -175,7 +188,7 @@ describe('positioning', () => {
 
     expect(equivalences).toEqual([
       { countryCode: 'IT', text: 'Holds the purchasing power of €5,800 a month in Italy', tier: null },
-      { countryCode: 'AR', text: expect.stringMatching(/^Holds the purchasing power of .* a month in Argentina$/), tier: 'Top 1% in Argentina' },
+      { countryCode: 'AR', text: expect.stringMatching(/^Holds the purchasing power of .* a month in Argentina$/), tier: 'Top 1% of people in Argentina' },
     ]);
   });
 
@@ -221,7 +234,7 @@ describe('describeRefreshedAt', () => {
     const spanish = describePhaseBenchmark(makePhaseBenchmark({ countryCode: 'ES' }), nameOf, 'es-AR', translatorFor('es-AR'));
     const spanishText = [spanish.country, ...spanish.positioning.badges.map((b) => b.text), ...spanish.positioning.insights].join(' | ');
     expect(spanishText).toContain('España');
-    expect(spanishText).toContain('Top 11% en España');
+    expect(spanishText).toContain('Top 11% de las personas en España');
     expect(spanishText).not.toMatch(/\b(Housing|income)\b/);
   });
 });

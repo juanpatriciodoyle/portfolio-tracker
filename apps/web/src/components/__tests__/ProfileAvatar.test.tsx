@@ -25,7 +25,7 @@ describe('ProfileAvatar', () => {
     render(<ProfileAvatar onOpen={vi.fn()} />);
 
     expect(button()).toHaveClass('profile-entry-button');
-    expect(button()).not.toHaveTextContent(/[A-Z]/);
+    expect(button().querySelector('.profile-entry__mark')).not.toHaveTextContent(/[A-Z]/);
   });
 
   it('keeps the generic icon while the profile loads', () => {

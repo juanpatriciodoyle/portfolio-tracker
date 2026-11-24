@@ -16,6 +16,9 @@ export const CHART_THEME_TOKENS = {
   profitArea: '--chart-area-profit',
 } as const;
 
+/** The text on the chart's axes: the smallest text size of the interface (`--text-xs`, 13px), which a canvas cannot read from the stylesheet. */
+export const CHART_FONT = '13px Inter, system-ui, sans-serif';
+
 export type ChartTheme = Record<keyof typeof CHART_THEME_TOKENS, string>;
 
 interface StyleReader {

@@ -7,9 +7,7 @@ const point = (date: string, value: number, cashflow = 0): ChartDataPoint => ({
   portfolio_value_in_reporting_currency: value,
   cumulative_cost_in_reporting_currency: 0,
   cashflow_in_reporting_currency: cashflow,
-  benchmark_value_in_reporting_currency: 0,
-  cumulative_time_weighted_return_rate: 0,
-  cumulative_benchmark_time_weighted_return_rate: 0,
+  benchmark_value_in_reporting_currency: null,
 });
 
 const HISTORY = [point('2024-01-01', 1000, 1000), point('2024-12-01', 1200), point('2025-01-01', 1300)];
@@ -33,7 +31,7 @@ describe('returnForPeriod', () => {
 describe('periodPhrase', () => {
   it('names every period in plain words', () => {
     expect(periodPhrase('All')).toBe('since you started');
-    expect(periodPhrase('Last month')).toBe('last month');
+    expect(periodPhrase('3M')).toBe('in the past 3 months');
     expect(periodPhrase('Custom')).toBe('in this period');
   });
 });

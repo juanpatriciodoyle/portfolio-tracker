@@ -107,7 +107,7 @@ describe('validatePhaseForm', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors).toEqual({
-      city: 'Which city was it?',
+      city: 'Which city?',
       countryCode: 'Choose a country.',
       startDate: 'Add the day you moved in.',
     });
@@ -224,7 +224,7 @@ describe('phaseFeedback', () => {
 
   it('keeps quiet about empty fields until their step has been tried', () => {
     expect(phaseFeedback(form, TODAY, none).errorOf('city')).toBeUndefined();
-    expect(phaseFeedback(form, TODAY, new Set<PhaseStepId>(['place'])).errorOf('city')).toBe('Which city was it?');
+    expect(phaseFeedback(form, TODAY, new Set<PhaseStepId>(['place'])).errorOf('city')).toBe('Which city?');
   });
 
   it('speaks up at once about something typed that cannot be right', () => {

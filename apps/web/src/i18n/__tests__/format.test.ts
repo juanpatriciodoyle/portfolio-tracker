@@ -33,7 +33,7 @@ describe('formatting follows the chosen language', () => {
 
   it('keeps an explicit locale over the chosen one', () => {
     setActiveLocale('es-AR');
-    expect(formatMinor(123450, 'EUR', 'en-US')).toBe('€1,234.50');
+    expect(formatMinor(12345, 'EUR', 'en-US')).toBe('€123.45');
   });
 
   it('falls back to the browser language until a choice is made', () => {

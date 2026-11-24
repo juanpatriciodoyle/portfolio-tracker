@@ -42,7 +42,7 @@ export function noBasis(overrides: Partial<TimelineEntryDto['costBasisByCategory
 }
 
 export function makeEntry(overrides: Partial<TimelineEntryDto> = {}): TimelineEntryDto {
-  return {
+  const entry: TimelineEntryDto = {
     phaseId: 'p1',
     name: 'Madrid',
     city: 'Madrid',
@@ -71,11 +71,23 @@ export function makeEntry(overrides: Partial<TimelineEntryDto> = {}): TimelineEn
       OTHER: 0,
     },
     costBasisByCategory: noBasis(),
+    declaredCostsByCategoryMinor: {
+      RENT: 120000,
+      ELECTRICITY: 15000,
+      GAS: 0,
+      WATER: 5000,
+      HEATING_COOLING: 0,
+      INTERNET: 5000,
+      PHONE: 0,
+      SUBSCRIPTIONS: 5000,
+      TAXES: 0,
+      OTHER: 0,
+    },
     months: 14,
     totalIncomeMinor: 4480000,
     totalFixedCostsMinor: 2100000,
-    ...overrides,
   };
+  return { ...entry, ...overrides };
 }
 
 export function makeProfile(overrides: Partial<ProfileData> = {}): ProfileData {

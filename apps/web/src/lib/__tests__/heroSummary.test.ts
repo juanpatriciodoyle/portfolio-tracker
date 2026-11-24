@@ -5,8 +5,8 @@ const figures: HeroFigures = {
   netWorth: 559342.51,
   realNetWorth: 480000,
   cashBalance: 64500,
+  moneyPutIn: 340450,
   openMarketValue: 494842.51,
-  openCostBasis: 340450,
   openProfit: 154392.51,
   realOpenProfit: 100000,
   soldProfit: 44900,
@@ -29,11 +29,16 @@ const input: HeroSummaryInput = {
 const sum = (amounts: number[]) => Math.round(amounts.reduce((a, b) => a + b, 0) * 100) / 100;
 
 describe('heroSummary: the total value', () => {
-  it('is the net worth, split into what is invested and what is cash', () => {
-    const { totalValue, invested, cash } = heroSummary(input);
+  it('is the net worth, split into the value of the holdings and cash', () => {
+    const { totalValue, holdingsValue, cash } = heroSummary(input);
     expect(totalValue).toEqual({ title: 'Total value', amount: 559342.51, beforeInflation: null });
-    expect(invested).toBe(494842.51);
+    expect(holdingsValue).toBe(494842.51);
     expect(cash).toBe(64500);
+    expect(holdingsValue + cash).toBeCloseTo(totalValue.amount, 8);
+  });
+
+  it('carries the money put in, which is not the value of anything', () => {
+    expect(heroSummary(input).moneyPutIn).toBe(340450);
   });
 
   it('with inflation on, is the purchasing-power figure and keeps the nominal one beside it', () => {
@@ -46,6 +51,12 @@ describe('heroSummary: the gain', () => {
   it('on the whole history is the total gain', () => {
     const { gain } = heroSummary(input);
     expect(gain).toEqual({ label: 'Total profit', amount: 199171.51, percent: 70.25, phrase: 'since you started' });
+  });
+
+  it('has no percentage before any money was put in: there is nothing to measure it against', () => {
+    const { gain } = heroSummary({ ...input, figures: { ...figures, moneyPutIn: 0, totalGain: 0, totalGainPercent: 0 } });
+    expect(gain.percent).toBeNull();
+    expect(gain.label).toBe('Total profit');
   });
 
   it('for a window is what the window gained, said in plain words', () => {
@@ -68,25 +79,6 @@ describe('heroSummary: the gain', () => {
     const { gain } = heroSummary({ ...input, figures: { ...figures, totalGain: -1200, totalGainPercent: -3.5 } });
     expect(gain.amount).toBe(-1200);
     expect(gain.percent).toBe(-3.5);
-  });
-});
-
-describe('heroSummary: profit right now and profit already made', () => {
-  it('splits the whole-history gain into what the holdings have gained and what selling already locked in', () => {
-    expect(heroSummary(input).gainSplit).toEqual({ stillInvested: 154392.51, sold: 44900 });
-  });
-
-  it('uses the inflation-adjusted figures when inflation is on', () => {
-    expect(heroSummary({ ...input, isRealInflationMode: true }).gainSplit).toEqual({ stillInvested: 100000, sold: 20000 });
-  });
-
-  it('keeps a zero part so "nothing sold yet" can be said instead of hidden', () => {
-    const neverSold = { ...figures, soldProfit: 0, totalGain: 154271.51 };
-    expect(heroSummary({ ...input, figures: neverSold }).gainSplit).toEqual({ stillInvested: 154392.51, sold: 0 });
-  });
-
-  it('has no split for a window: its gain comes from the value history', () => {
-    expect(heroSummary({ ...input, period: 'YTD', periodGain: 5, periodPercent: 1 }).gainSplit).toBeNull();
   });
 });
 
@@ -127,16 +119,6 @@ describe('heroSummary: how the gain adds up', () => {
 });
 
 describe('heroSummary: edge cases', () => {
-  it('flags an account with nothing in it', () => {
-    const empty: HeroFigures = {
-      ...figures,
-      netWorth: 0, realNetWorth: 0, cashBalance: 0, openMarketValue: 0, openCostBasis: 0,
-      openProfit: 0, realOpenProfit: 0, soldProfit: 0, realSoldProfit: 0, totalFees: 0, totalGain: 0, totalGainPercent: 0,
-    };
-    expect(heroSummary({ ...input, figures: empty }).isEmpty).toBe(true);
-    expect(heroSummary(input).isEmpty).toBe(false);
-  });
-
   it('carries the missing-prices flag so the hero can say values are at cost', () => {
     expect(heroSummary({ ...input, figures: { ...figures, pricesAvailable: false } }).pricesAvailable).toBe(false);
   });

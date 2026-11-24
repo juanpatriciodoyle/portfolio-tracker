@@ -1,167 +1,26 @@
-import { useState } from 'react';
-import { useSubmitOnce } from '../hooks/useSubmitOnce';
 import { KeyRound, ShieldCheck } from 'lucide-react';
-import { startRegistration, startAuthentication } from '@simplewebauthn/browser';
 import { useAppConfig } from '../hooks/useAppConfig';
+import { useSignIn } from '../hooks/useSignIn';
 import { isGoogleSignInConfigured } from '../lib/googleConfig';
+import { browserSupportsWebAuthn } from '../lib/passkeys';
 import LanguageSelector from '../i18n/LanguageSelector';
 import { useTranslation } from '../i18n/useTranslation';
-import { serverMessage } from '../lib/serverMessages';
+import type { SignedInUserDto } from '../contracts';
 import GoogleSignIn from './GoogleSignIn';
 
-/** A refusal already worded for the person, as opposed to a raw error from the browser. */
-class Refusal extends Error {}
-
-interface User {
-  id: string;
-  email: string;
-  name?: string;
-  avatarUrl?: string;
-  isAdmin?: boolean;
-}
-
 interface LoginModalProps {
-  onSuccess: (user: User) => void;
+  onSuccess: (user: SignedInUserDto) => void;
 }
 
+/**
+ * The way in. Google is the front door: it creates the account and confirms who the person is. A passkey (Touch ID,
+ * Face ID) is added afterwards, from the account, and signs in on its own, with no email to type. The demo is a private
+ * copy for anyone who only wants to look.
+ */
 export default function LoginModal({ onSuccess }: LoginModalProps) {
-  const words = useTranslation();
-  const { t } = words;
-  const { run, pending: isLoading } = useSubmitOnce();
-  const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation();
+  const { pending: isLoading, error, notice, setError, withGoogleToken, withPasskey, asGuest } = useSignIn(onSuccess);
   const { demoEnabled } = useAppConfig();
-
-  const signInWithGoogleToken = (accessToken: string) =>
-    run(async () => {
-      setError(null);
-
-      try {
-        // Only Google's token goes to the server, which asks Google who it belongs to. What the browser says is never trusted.
-        const res = await fetch('/api/auth/google', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accessToken }),
-        });
-
-        const data = await res.json();
-        if (res.ok && data.success) {
-          try {
-            if (data.token) {
-              localStorage.setItem('auth_token', data.token);
-            }
-            if (data.user?.email) {
-              localStorage.setItem('auth_user_email', data.user.email);
-            }
-          } catch (_) {}
-          onSuccess(data.user);
-        } else {
-          setError(serverMessage(data, words, 'login.googleFailed'));
-        }
-      } catch (err) {
-        setError(t('error.network'));
-      }
-    });
-
-  const handlePasskeySignIn = async () => {
-    await run(async () => {
-      setError(null);
-
-      let storedEmail = 'juan@portfolio.local';
-      try {
-        storedEmail = localStorage.getItem('auth_user_email') || 'juan@portfolio.local';
-      } catch (_) {}
-
-      try {
-        // 1. Get WebAuthn options from server
-        const optRes = await fetch('/api/auth/passkey/generate-options', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: storedEmail }),
-        });
-
-        const optData = await optRes.json();
-        if (!optRes.ok) {
-          throw new Refusal(serverMessage(optData, words, 'login.passkeyChallenge'));
-        }
-
-        // 2. Trigger native browser TouchID / FaceID prompt
-        let credentialResponse;
-        if (optData.isRegistration) {
-          credentialResponse = await startRegistration({ optionsJSON: optData.options });
-        } else {
-          credentialResponse = await startAuthentication({ optionsJSON: optData.options });
-        }
-
-        // 3. Verify signed credential response on server
-        const verifyRes = await fetch('/api/auth/passkey/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: storedEmail,
-            credential: credentialResponse,
-          }),
-        });
-
-        const verifyData = await verifyRes.json();
-        if (verifyRes.ok && verifyData.success) {
-          try {
-            if (verifyData.token) {
-              localStorage.setItem('auth_token', verifyData.token);
-            }
-          } catch (_) {}
-          onSuccess(verifyData.user);
-        } else {
-          setError(serverMessage(verifyData, words, 'login.passkeyVerify'));
-        }
-      } catch (err: unknown) {
-        const failure = err instanceof Error ? err : null;
-        if (failure?.name === 'NotAllowedError') {
-          setError(t('login.passkeyCancelled'));
-        } else if (failure instanceof Refusal) {
-          setError(failure.message);
-        } else if (words.locale === 'en' && failure?.message) {
-          setError(failure.message);
-        } else {
-          setError(t('login.passkeyError'));
-        }
-      }
-    });
-  };
-
-  const handleDemoSignIn = async () => {
-    await run(async () => {
-      setError(null);
-
-      try {
-        const res = await fetch('/api/auth/demo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        const data = await res.json();
-        if (res.ok && data.success) {
-          const demoUser = {
-            ...data.user,
-            name: 'Joe',
-          };
-          try {
-            if (data.token) {
-              localStorage.setItem('auth_token', data.token);
-            }
-            if (demoUser.email) {
-              localStorage.setItem('auth_user_email', demoUser.email);
-            }
-            localStorage.setItem('auth_user', JSON.stringify(demoUser));
-          } catch (_) {}
-          onSuccess(demoUser);
-        } else {
-          setError(serverMessage(data, words, 'login.demoFailed'));
-        }
-      } catch (err) {
-        setError(t('error.network'));
-      }
-    });
-  };
 
   return (
     <div
@@ -198,8 +57,15 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
           {t('login.tagline')}
         </p>
 
+        {notice && !error && (
+          <div role="status" style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-input)', color: 'var(--text-heading)', border: '1px solid var(--border-subtle-color)', fontSize: '13px', marginBottom: '20px', textAlign: 'left' }}>
+            {notice}
+          </div>
+        )}
+
         {error && (
           <div
+            role="alert"
             style={{
               padding: '10px 14px',
               borderRadius: '8px',
@@ -218,7 +84,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {/* Sign in with Google: only where the deployment has a Google client id */}
           {isGoogleSignInConfigured() && (
-            <GoogleSignIn onToken={(accessToken) => void signInWithGoogleToken(accessToken)} onError={() => setError(t('login.googleCancelled'))}>
+            <GoogleSignIn onToken={(accessToken) => void withGoogleToken(accessToken)} onError={() => setError(t('login.googleCancelled'))}>
               {(signIn) => (
               <button
                 onClick={() => {
@@ -268,9 +134,10 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
             </GoogleSignIn>
           )}
 
-          {/* Sign in with Passkey Button */}
+          {/* Sign in with a passkey already saved on this device: it needs no email, and is added from the account once signed in */}
+          {browserSupportsWebAuthn() && (
           <button
-            onClick={handlePasskeySignIn}
+            onClick={() => void withPasskey()}
             disabled={isLoading}
             aria-busy={isLoading}
             style={{
@@ -292,6 +159,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
             <KeyRound size={18} color="var(--color-profit)" />
             {t('login.passkey')}
           </button>
+          )}
         </div>
 
         {/* Third Box: Sneak Peek Demo Account, only when the server has one */}
@@ -306,7 +174,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
         >
           <p
             style={{
-              fontSize: '12px',
+              fontSize: 'var(--text-xs)',
               color: 'var(--text-muted)',
               margin: '0 0 12px 0',
               lineHeight: 1.45,
@@ -317,7 +185,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
 
           <button
             type="button"
-            onClick={handleDemoSignIn}
+            onClick={() => void asGuest()}
             disabled={isLoading}
             aria-busy={isLoading}
             style={{
@@ -347,7 +215,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
               e.currentTarget.style.color = 'var(--text-accent)';
             }}
           >
-            <span>👀</span> {t('login.demoButton')}
+            {t('login.demoButton')}
           </button>
         </div>
         )}
@@ -359,7 +227,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
             justifyContent: 'center',
             gap: '6px',
             marginTop: '22px',
-            fontSize: '12px',
+            fontSize: 'var(--text-xs)',
             color: 'var(--text-muted)',
           }}
         >

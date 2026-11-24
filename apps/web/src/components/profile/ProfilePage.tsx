@@ -1,9 +1,10 @@
 import LanguageSelector from '../../i18n/LanguageSelector';
 import { useTranslation } from '../../i18n/useTranslation';
 import { ArrowLeft, Plus } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CreateBillingRecordRequest, CreateFixedCostRequest, LivingPhaseDto, TimelineEntryDto } from '../../contracts';
 import { useBillingRecords } from '../../hooks/useBillingRecords';
+import { useResumableFlow } from '../../hooks/useStepDraft';
 import { useLivingPhases } from '../../hooks/useLivingPhases';
 import { usePhaseComparison } from '../../hooks/usePhaseComparison';
 import { useProfile } from '../../hooks/useProfile';
@@ -19,11 +20,14 @@ import { vendorHistory } from './vendorHistory';
 import type { BillFormContext } from './billForm';
 import type { BillingView } from './billingView';
 import { findRenewedCost } from './costRenewal';
+import { describeCostAdded } from './costToast';
 import ExpenseWizard from './ExpenseWizard';
 import { MAX_COMPARED_PHASES, MIN_COMPARED_PHASES } from './comparisonTable';
 import PhaseComparison from './PhaseComparison';
 import PhaseComparisonTable from './PhaseComparisonTable';
+import NextStepCard from './NextStepCard';
 import OnboardingWizard from './OnboardingWizard';
+import { onboardingDraftSchema } from './onboardingFlow';
 import PhaseWizard from './PhaseWizard';
 import type { PhasePayload } from './phaseForm';
 import { isProfileEmpty } from './profileDraft';
@@ -32,7 +36,9 @@ import ProfileForm from './ProfileForm';
 import ProfileTabs from './ProfileTabs';
 import { panelId, profileTabsFor, readProfileTab, storeProfileTab, tabId, type ProfileTabId } from '../../lib/profileTab';
 import { useUsageAnalytics } from '../../hooks/useUsageAnalytics';
+import { intlLocale } from '../../i18n/locale';
 import UsageAnalytics from './UsageAnalytics';
+import SkipLink, { MAIN_CONTENT_ID } from '../SkipLink';
 import './profile.css';
 
 interface ProfilePageProps {
@@ -42,7 +48,16 @@ interface ProfilePageProps {
   onSignedOut: () => void;
   /** The admin sees an Analytics tab. The server decides who may read it; this only decides who is shown the tab. */
   isAdmin?: boolean;
+  /** What the account already greets the person with: the first-time flow uses it as their name instead of asking. */
+  accountName?: string;
+  /** Opens Log Transaction on the dashboard; offered once the first home is saved. */
+  onLogTransaction?: () => void;
 }
+
+/** How long the note about a new cost stays on screen. */
+const TOAST_MS = 7000;
+/** The key of the first-time flow's draft and of the note that it is open. */
+const ONBOARDING_KEY = 'onboarding';
 
 type EditorState = { mode: 'create' } | { mode: 'edit'; phaseId: string } | { mode: 'onboarding' } | null;
 
@@ -51,19 +66,26 @@ function latestCurrency(phases: readonly LivingPhaseDto[]): string {
   return [...phases].sort((a, b) => b.startDate.localeCompare(a.startDate))[0]?.currency ?? 'EUR';
 }
 
-export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: ProfilePageProps) {
-  const { t } = useTranslation();
+export default function ProfilePage({ onBack, onSignedOut, isAdmin = false, accountName, onLogTransaction }: ProfilePageProps) {
+  const { t, locale } = useTranslation();
   const phasesApi = useLivingPhases();
   const profileApi = useProfile();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [compareIds, setCompareIds] = useState<string[]>([]);
-  const [editor, setEditor] = useState<EditorState>(null);
+  // A refresh while the first-time flow was open brings it back on the step the person was on; coming back later does not.
+  const onboardingFlow = useResumableFlow(ONBOARDING_KEY, onboardingDraftSchema);
+  const [editor, setEditor] = useState<EditorState>(() => (onboardingFlow.resumable ? { mode: 'onboarding' } : null));
   const [announcement, setAnnouncement] = useState('');
   const [expenseOpen, setExpenseOpen] = useState(false);
+  /** Set once the first home is saved, until it is dismissed: what to do next. */
+  const [firstHomeSaved, setFirstHomeSaved] = useState(false);
+  /** What the last bill or cost did to what is kept each month; shown for a few seconds. */
+  const [toast, setToast] = useState<string | null>(null);
+  /** The added cost waiting for the timeline to reload, so the toast can say what it changed. */
+  const pendingToast = useRef<{ phaseId: string; entries: readonly TimelineEntryDto[]; message: (keptAfter: number | null) => string } | null>(null);
   const [openedTab, setTab] = useState<ProfileTabId>(() => readProfileTab(undefined, isAdmin));
   // A tab this person does not have (remembered from another session) opens as the first one.
   const tab = profileTabsFor(isAdmin).some((candidate) => candidate.id === openedTab) ? openedTab : profileTabsFor(isAdmin)[0].id;
-  // The figures are read only for the admin, and only while their tab is open.
   const openTab = (next: ProfileTabId) => {
     setTab(next);
     storeProfileTab(next);
@@ -113,20 +135,48 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
   // Today comes from the server's clock, the same one that decides which phase is current.
   const today = phasesApi.asOf ?? '';
   const hasCurrentPhase = entries.some((entry) => entry.status === 'current');
-  const profileEmpty = profileApi.status === 'ready' && profileApi.profile !== null && isProfileEmpty(profileApi.profile);
+  // With a home saved there is nothing left to start: what is missing is asked later, from the demographics card.
+  const profileEmpty = profileApi.status === 'ready' && profileApi.profile !== null && isProfileEmpty(profileApi.profile) && phases.length === 0;
   // Until the profile is filled in, one button leads the way into the first home: there is nothing to put in tabs yet.
-  const showTabs = dataReady && !(profileEmpty && phases.length === 0);
-  // The administrator's own account may be empty (a first sign-in): the analytics are still theirs to read, under the first-time button.
-  const usage = useUsageAnalytics(isAdmin && (showTabs ? tab === 'analytics' : dataReady));
+  // The administrator is the exception: their own account may be empty (a first sign-in) and the Analytics tab is still theirs,
+  // so the strip is always there, with the first tab holding the same single button.
+  const showTabs = dataReady && (isAdmin || !(profileEmpty && phases.length === 0));
+  // The figures are read only for the admin, and only while their tab is open.
+  const usage = useUsageAnalytics(isAdmin && showTabs && tab === 'analytics');
 
   // An expense is added from one place: a bill lands in the home its days fall in, what something costs every so often in the home lived in today.
   const expensePhase = defaultExpensePhase(phases, today);
   const expenseContext: BillFormContext = { today: phasesApi.asOf, countryCode: expensePhase?.countryCode ?? null, history };
 
+  /** After a cost is added, says what it is and what it did to what is kept: the timeline reloads, then the toast shows. */
+  const expectToast = (phase: LivingPhaseDto, added: { category: CreateFixedCostRequest['category']; amountMinor: number; cadence: CreateBillingRecordRequest['cadence'] }) => {
+    const keptBefore = entries.find((entry) => entry.phaseId === phase.id)?.savingsRate ?? null;
+    pendingToast.current = {
+      phaseId: phase.id,
+      entries,
+      message: (keptAfter) => describeCostAdded({ ...added, currency: phase.currency, keptBefore, keptAfter }, intlLocale(locale), t),
+    };
+  };
+
+  useEffect(() => {
+    const pending = pendingToast.current;
+    if (!pending || entries === pending.entries) return;
+    pendingToast.current = null;
+    setToast(pending.message(entries.find((entry) => entry.phaseId === pending.phaseId)?.savingsRate ?? null));
+  }, [entries]);
+
+  useEffect(() => {
+    if (toast === null) return;
+    const timer = setTimeout(() => setToast(null), TOAST_MS);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
   const addBill = async (input: CreateBillingRecordRequest) => {
+    const phase = phases.find((candidate) => candidate.id === input.phaseId);
     const result = await billsApi.createBill(input);
     if (result.ok) {
-      announce(t('profile.announce.expenseAdded', { name: phases.find((phase) => phase.id === input.phaseId)?.name ?? t('profile.yourHome') }));
+      announce(t('profile.announce.expenseAdded', { name: phase?.name ?? t('profile.yourHome') }));
+      if (phase) expectToast(phase, input);
     }
     return result;
   };
@@ -137,8 +187,18 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
     const result = renewed ? await phasesApi.updateFixedCost(phase.id, renewed.id, input) : await phasesApi.addFixedCost(phase.id, input);
     if (result.ok) {
       announce(t(renewed ? 'profile.announce.costUpdated' : 'profile.announce.costAdded', { name: phase.name }));
+      expectToast(phase, input);
     }
     return result;
+  };
+
+  const openOnboarding = () => {
+    onboardingFlow.opened();
+    setEditor({ mode: 'onboarding' });
+  };
+  const closeOnboarding = () => {
+    onboardingFlow.closed();
+    setEditor(null);
   };
 
   const retry = () => {
@@ -185,6 +245,7 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
 
   return (
     <div className="profile-page">
+      <SkipLink />
       <header className="profile-page__header">
         <button type="button" className="profile-back" onClick={onBack}>
           <ArrowLeft size={16} aria-hidden="true" /> {t('profile.back')}
@@ -193,7 +254,7 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
         <LanguageSelector />
       </header>
 
-      <main className="profile-page__main">
+      <main className="profile-page__main" id={MAIN_CONTENT_ID} tabIndex={-1}>
         <div className="profile-page__content">
           {status === 'signed-out' && (
             <div className="profile-banner profile-banner--warning" role="alert">
@@ -232,6 +293,15 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
             </p>
           )}
 
+          {firstHomeSaved && showTabs && (
+            <NextStepCard
+              monthlyCostsMinor={(entries.find((entry) => entry.status === 'current') ?? entries[0])?.monthlyFixedCostsMinor ?? null}
+              currency={(entries.find((entry) => entry.status === 'current') ?? entries[0])?.currency ?? 'EUR'}
+              onLogTransaction={onLogTransaction}
+              onDismiss={() => setFirstHomeSaved(false)}
+            />
+          )}
+
           {showTabs ? (
             <>
               <ProfileTabs active={tab} onChange={openTab} isAdmin={isAdmin} />
@@ -263,12 +333,15 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
                   )}
 
                   {phases.length === 0 ? (
+                    // With no profile either, the single first-time card below leads the way: one button, not two.
+                    profileEmpty ? null : (
                     <div className="profile-card profile-empty">
                       <h3 className="profile-empty__title">{t('profile.whereLived')}</h3>
                       <button type="button" className="btn-primary-apply profile-empty__action" onClick={() => setEditor({ mode: 'create' })}>
                         {t('profile.addFirstPhase')}
                       </button>
                     </div>
+                    )
                   ) : (
                     <PhaseTimeline
                       phases={phases}
@@ -290,7 +363,7 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
               {profileApi.status === 'ready' && profileApi.profile && profileEmpty && (
                 <section className="profile-card profile-empty" aria-label={t('profile.aboutYou')}>
                   <h2 className="profile-empty__title">{t('profile.aboutYou')}</h2>
-                  <button type="button" className="btn-primary-apply profile-empty__action" onClick={() => setEditor({ mode: 'onboarding' })}>
+                  <button type="button" className="btn-primary-apply profile-empty__action" onClick={openOnboarding}>
                     {t('profile.tellUs')}
                   </button>
                 </section>
@@ -324,21 +397,13 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
           {profileApi.status === 'ready' && profileApi.profile && profileEmpty && (
             <section className="profile-card profile-empty" aria-label={t('profile.aboutYou')}>
               <h2 className="profile-empty__title">{t('profile.aboutYou')}</h2>
-              <button type="button" className="btn-primary-apply profile-empty__action" onClick={() => setEditor({ mode: 'onboarding' })}>
+              <button type="button" className="btn-primary-apply profile-empty__action" onClick={openOnboarding}>
                 {t('profile.tellUs')}
               </button>
             </section>
           )}
           {profileApi.status === 'ready' && profileApi.profile && !profileEmpty && (
             <ProfileForm profile={profileApi.profile} onSave={profileApi.save} announce={announce} />
-          )}
-          {isAdmin && dataReady && (
-            <section className="profile-card usage-section" aria-labelledby="usage-analytics-heading">
-              <h2 className="profile-section__title" id="usage-analytics-heading">
-                {t('profile.tab.analytics')}
-              </h2>
-              <UsageAnalytics status={usage.status} message={usage.message} analytics={usage.analytics} onRetry={usage.reload} />
-            </section>
           )}
             </>
           )}
@@ -361,15 +426,15 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
       {editor?.mode === 'onboarding' && profileApi.profile && (
         <OnboardingWizard
           profile={profileApi.profile}
-          phases={phases}
-          hasCurrentPhase={hasCurrentPhase}
+          accountName={accountName ?? null}
           defaultCurrency={latestCurrency(phases)}
           today={today}
           onSaveProfile={profileApi.save}
           onCreatePhase={createFirstPhase}
-          onClose={() => setEditor(null)}
+          onClose={closeOnboarding}
           onFinished={() => {
-            setEditor(null);
+            closeOnboarding();
+            setFirstHomeSaved(true);
             announce(t('profile.announce.saved'));
           }}
         />
@@ -384,6 +449,12 @@ export default function ProfilePage({ onBack, onSignedOut, isAdmin = false }: Pr
           onSubmitRate={addRate}
           onClose={() => setExpenseOpen(false)}
         />
+      )}
+
+      {toast && (
+        <p className="profile-toast" role="status">
+          {toast}
+        </p>
       )}
 
       <p className="visually-hidden" role="status" aria-live="polite">

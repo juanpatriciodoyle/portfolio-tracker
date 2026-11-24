@@ -20,6 +20,34 @@ const edit = () => {
   fireEvent.click(screen.getByRole('button', { name: /^(Edit|Add details)$/ }));
 };
 
+describe('ProfileForm: tell us more later', () => {
+  const thin = makeProfile({ fullName: 'Joe', birthYear: null, nationalities: [], taxResidence: null, employmentStatus: null });
+
+  it('invites the details the first-time flow left out, without opening the card first', () => {
+    renderForm(thin);
+
+    expect(screen.getByText(/Tell us more whenever you like/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Add details' })).toBeVisible();
+  });
+
+  it('takes them through the same editor as any change', async () => {
+    const { onSave } = renderForm(thin);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add details' }));
+    fireEvent.change(screen.getByLabelText('Year of birth'), { target: { value: '1990' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ fullName: 'Joe', birthYear: 1990 })));
+  });
+
+  it('stays quiet once there are details: the invitation is for what is still missing', () => {
+    renderForm();
+
+    expect(screen.queryByText(/Tell us more whenever you like/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add details' })).not.toBeInTheDocument();
+  });
+});
+
 describe('ProfileForm summary', () => {
   it('keeps the raw answers out of sight until asked', () => {
     renderForm();

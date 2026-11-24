@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import type { z } from 'zod';
-import { clearDraft, loadDraft, saveDraft } from '../lib/stepDraft';
+import { clearDraft, loadDraft, markClosed, markOpen, saveDraft, wasOpen } from '../lib/stepDraft';
 
 /** The tab's own storage: it survives a refresh and closing the dialog, but not the end of the session. */
-function draftStorage(): Storage | null {
+export function draftStorage(): Storage | null {
   try {
     return globalThis.sessionStorage ?? null;
   } catch {
@@ -47,4 +47,24 @@ export function useStepDraft<S extends z.ZodType>(key: string, schema: S, initia
   const [resumedAtStep] = useState(() => (restored ? Math.min(restored.step, stepCount - 1) : null));
 
   return { values, setValues, step, setStep, resumedAtStep, discard };
+}
+
+/**
+ * Whether a guided flow was open and has a draft to resume when the page was loaded, and how to say it is open or closed.
+ * A refresh while it was open brings it back on the step the person was on; closing it on purpose (Cancel or Finish) does not.
+ */
+export function useResumableFlow<S extends z.ZodType>(key: string, schema: S) {
+  const [resumable] = useState(() => {
+    const storage = draftStorage();
+    return storage !== null && wasOpen(storage, key) && loadDraft(storage, key, schema) !== null;
+  });
+  const opened = useCallback(() => {
+    const storage = draftStorage();
+    if (storage) markOpen(storage, key);
+  }, [key]);
+  const closed = useCallback(() => {
+    const storage = draftStorage();
+    if (storage) markClosed(storage, key);
+  }, [key]);
+  return { resumable, opened, closed };
 }

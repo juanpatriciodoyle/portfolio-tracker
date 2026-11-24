@@ -132,7 +132,7 @@ export default function InflationSettingsModal({
         <div style={{ marginBottom: '20px', padding: '12px 14px', borderRadius: '10px', backgroundColor: 'var(--bg-canvas)', border: '1px solid var(--border-subtle-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{t('inflation.spainTitle')}</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{t('inflation.spainSource')}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>{t('inflation.spainSource')}</div>
           </div>
           <button
             type="button"
@@ -144,7 +144,7 @@ export default function InflationSettingsModal({
               border: '1px solid var(--border-subtle-color)',
               backgroundColor: 'var(--bg-input)',
               color: 'var(--text-heading)',
-              fontSize: '12px',
+              fontSize: 'var(--text-xs)',
               fontWeight: 600,
               cursor: 'pointer',
               display: 'flex',

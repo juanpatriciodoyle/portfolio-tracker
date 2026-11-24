@@ -8,10 +8,10 @@ export interface HeroFigures {
   /** What the net worth is worth in today's purchasing power: each deposit eroded since the day it went in. */
   realNetWorth: number;
   cashBalance: number;
+  /** The money the person put in, minus what they took out. Dividends and the cash a purchase drew on are not part of it. */
+  moneyPutIn: number;
   /** What the open positions are worth today. */
   openMarketValue: number;
-  /** What the open positions cost. */
-  openCostBasis: number;
   /** Gain or loss on what is still held (not sold yet). */
   openProfit: number;
   /** The same, after the inflation lost while each asset was held. */
@@ -47,19 +47,16 @@ export interface GainPart {
 }
 
 export interface HeroSummary {
-  /** Nothing logged yet: the hero invites a first transaction instead of showing zeros as results. */
-  isEmpty: boolean;
   totalValue: { title: string; amount: number; beforeInflation: number | null };
-  invested: number;
+  /** What the things still held are worth today (market value, or cost when no price is known). */
+  holdingsValue: number;
   cash: number;
-  gain: { label: string; amount: number; percent: number; phrase: string };
+  /** The money put in; the hero says it under the total value so value and contribution are never confused. */
+  moneyPutIn: number;
+  /** `percent` is null when there is nothing to measure it against (no money put in yet): the hero then shows no percentage. */
+  gain: { label: string; amount: number; percent: number | null; phrase: string };
   /** The split of the whole-history gain; null for a window, whose gain comes from the value history. */
   gainParts: GainPart[] | null;
-  /**
-   * The two answers to "how much have I made?": what the things still held have gained today, and what selling
-   * already locked in. Null for a window. A part that is zero stays, so "nothing sold yet" can be said.
-   */
-  gainSplit: { stillInvested: number; sold: number } | null;
   pricesAvailable: boolean;
 }
 
@@ -102,21 +99,16 @@ export function heroSummary(input: HeroSummaryInput, t: Translate = translateEng
   const phrase = periodPhrase(period, t) + (wholeHistory && isRealInflationMode ? t('hero.afterInflation') : '');
 
   return {
-    isEmpty: figures.netWorth === 0 && figures.openCostBasis === 0 && figures.cashBalance === 0,
     totalValue: isRealInflationMode
       ? { title: t('hero.totalValueAfterInflation'), amount: figures.realNetWorth, beforeInflation: figures.netWorth }
       : { title: t('hero.totalValue'), amount: figures.netWorth, beforeInflation: null },
-    invested: figures.openMarketValue,
+    holdingsValue: figures.openMarketValue,
     cash: figures.cashBalance,
+    moneyPutIn: figures.moneyPutIn,
     gain: wholeHistory
-      ? { label: t('hero.totalProfit'), amount: figures.totalGain, percent: figures.totalGainPercent, phrase }
+      ? { label: t('hero.totalProfit'), amount: figures.totalGain, percent: figures.moneyPutIn > 0 ? figures.totalGainPercent : null, phrase }
       : { label: t('hero.profit'), amount: periodGain, percent: periodPercent, phrase },
     gainParts: wholeHistory ? gainParts(input, t) : null,
-    gainSplit: wholeHistory
-      ? isRealInflationMode
-        ? { stillInvested: figures.realOpenProfit, sold: figures.realSoldProfit }
-        : { stillInvested: figures.openProfit, sold: figures.soldProfit }
-      : null,
     pricesAvailable: figures.pricesAvailable,
   };
 }

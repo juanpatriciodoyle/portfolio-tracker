@@ -64,7 +64,7 @@ describe('LivingPhaseCard at a glance', () => {
   it('leads with ratios, not raw income and cost figures', () => {
     const { container } = renderCard();
 
-    expect(container.querySelector('[data-ratio="saved"]')).toHaveTextContent('Saved53%');
+    expect(container.querySelector('[data-ratio="saved"]')).toHaveTextContent('Left after fixed costs53%');
     // €1,200 rent + €150 electricity + €50 water of €3,200
     expect(container.querySelector('[data-ratio="housing"]')).toHaveTextContent('Housing44%');
     expect(container.querySelector<HTMLElement>('[data-ratio="saved"] .phase-bar__fill')?.style.width).toBe('53.125%');
@@ -132,7 +132,7 @@ describe('LivingPhaseCard at a glance', () => {
       expect(screen.getByRole('radio', { name: 'Current rate' })).toBeChecked();
       expect(screen.getByRole('radio', { name: 'Phase average' })).not.toBeChecked();
       expect(container.querySelector('.phase-card__leftover')).toHaveTextContent('€2,500 left each month');
-      expect(container.querySelector('[data-ratio="saved"]')).toHaveTextContent('Saved63%');
+      expect(container.querySelector('[data-ratio="saved"]')).toHaveTextContent('Left after fixed costs63%');
     });
 
     it('switches the leftover, the saved share and the housing share to the average month of the stay', () => {
@@ -142,7 +142,7 @@ describe('LivingPhaseCard at a glance', () => {
 
       expect(screen.getByRole('radio', { name: 'Phase average' })).toBeChecked();
       expect(container.querySelector('.phase-card__leftover')).toHaveTextContent('€500 left each month');
-      expect(container.querySelector('[data-ratio="saved"]')).toHaveTextContent('Saved25%');
+      expect(container.querySelector('[data-ratio="saved"]')).toHaveTextContent('Left after fixed costs25%');
       // €1,400 of rent and utilities over an average income of €2,000
       expect(container.querySelector('[data-ratio="housing"]')).toHaveTextContent('Housing70%');
 
@@ -201,12 +201,13 @@ describe('LivingPhaseCard expanding and comparing', () => {
     expect(screen.getByText('Utilities')).toBeInTheDocument();
   });
 
-  it('says how long the person lived there and what they earned and paid', () => {
+  it('says how long the person lived there, and never a total earned or paid: those were extrapolations shown as fact', () => {
     renderCard({ expanded: true });
 
     expect(screen.getByText('Time here').nextElementSibling).toHaveTextContent('1 year 2 months');
-    expect(screen.getByText('Earned').nextElementSibling).toHaveTextContent('€44,800');
-    expect(screen.getByText('Fixed costs paid').nextElementSibling).toHaveTextContent('€21,000');
+    expect(screen.queryByText('Earned')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fixed costs paid')).not.toBeInTheDocument();
+    expect(screen.queryByText('€44,800')).not.toBeInTheDocument();
   });
 
   it('shows no cost rows and no hint when there are no costs', () => {
@@ -332,9 +333,70 @@ describe('LivingPhaseCard phase actions', () => {
   });
 });
 
+describe('LivingPhaseCard trend', () => {
+  const bill = (category: 'INTERNET' | 'GAS', month: string, amountMinor: number) => {
+    const last = new Date(Date.UTC(2026, Number(month.slice(5)), 0)).getUTCDate();
+    return {
+      id: `${category}-${month}`,
+      phaseId: 'p1',
+      category,
+      cadence: 'MONTHLY' as const,
+      periodStart: `${month}-01`,
+      periodEnd: `${month}-${last}`,
+      amountMinor,
+      vendor: 'Vendor',
+      notes: null,
+      currency: 'EUR',
+    };
+  };
+  const billingWith = (records: ReturnType<typeof bill>[]) =>
+    ({ asOf: '2026-11-15', phases: [], recordsFor: () => records, history: [], onAdd: vi.fn(), onUpdate: vi.fn(), onDelete: vi.fn() }) as NonNullable<React.ComponentProps<typeof LivingPhaseCard>['billing']>;
+  const earlier = ['2026-05', '2026-06', '2026-07'];
+  const recent = ['2026-08', '2026-09', '2026-10'];
+
+  it('says the bills rose, by how much since which month, and what most of it is', () => {
+    const records = [...earlier.map((m) => bill('INTERNET', m, 4000)), ...recent.map((m) => bill('INTERNET', m, 7700))];
+    const { container } = renderCard({ billing: billingWith(records) });
+
+    expect(container.querySelector('.phase-card__trend')).toHaveTextContent('Your bills rose €37 a month since August. Internet is most of it.');
+  });
+
+  it('says nothing when the bills hardly moved, or there are too few to say', () => {
+    const steady = [...earlier, ...recent].map((m) => bill('INTERNET', m, 4000));
+    expect(renderCard({ billing: billingWith(steady) }).container.querySelector('.phase-card__trend')).not.toBeInTheDocument();
+    const few = [bill('GAS', '2026-06', 3000), bill('GAS', '2026-09', 9000)];
+    expect(renderCard({ billing: billingWith(few) }).container.querySelector('.phase-card__trend')).not.toBeInTheDocument();
+  });
+
+  it('compares what is kept with the previous home when the bills say nothing new', () => {
+    const previousEntry = makeEntry({ phaseId: 'p0', name: 'Barcelona', savingsRate: 0.4, averageSavingsRate: 0.4 });
+    const { container } = renderCard({ previousEntry });
+
+    expect(container.querySelector('.phase-card__trend')).toHaveTextContent('You keep 53% after fixed costs, up from 40% in Barcelona.');
+  });
+
+  it('follows the figures the card shows: the average of the stay when that view is chosen', () => {
+    const previousEntry = makeEntry({ phaseId: 'p0', name: 'Barcelona', savingsRate: 0.5, averageSavingsRate: 0.3 });
+    const entry = makeEntry({ savingsRate: 0.53125, averageSavingsRate: 0.34, averageMonthlyIncomeMinor: 280000, averageSavingsCapacityMinor: 130000 });
+    const { container } = renderCard({ previousEntry, entry });
+
+    fireEvent.click(screen.getByRole('radio', { name: /Phase average/ }));
+
+    // 34% against 30% is under 5 points: nothing to say.
+    expect(container.querySelector('.phase-card__trend')).not.toBeInTheDocument();
+  });
+
+  it('says nothing without income to take a share of', () => {
+    const previousEntry = makeEntry({ phaseId: 'p0', name: 'Barcelona', savingsRate: 0.4 });
+    const { container } = renderCard({ previousEntry, entry: makeEntry({ monthlyIncomeMinor: 0, savingsRate: null, averageSavingsRate: null }) });
+
+    expect(container.querySelector('.phase-card__trend')).not.toBeInTheDocument();
+  });
+});
+
 describe('LivingPhaseCard income & career', () => {
   const stream = (label: string, amountMinor: number, startDate: string, endDate: string | null = null) => ({ label, amountMinor, startDate, endDate });
-  const asOf = { asOf: '2026-10-31' } as NonNullable<React.ComponentProps<typeof LivingPhaseCard>['billing']>;
+  const asOf = { asOf: '2026-10-31', recordsFor: () => [] } as unknown as NonNullable<React.ComponentProps<typeof LivingPhaseCard>['billing']>;
 
   it('says which job pays today, without opening the card', () => {
     renderCard({ phase: makePhase({ incomeStreams: [stream('Designer', 320000, '2022-09-01')] }), billing: asOf });
@@ -356,10 +418,29 @@ describe('LivingPhaseCard income & career', () => {
     expect(screen.getByText('Designer · €3,200/mo')).toBeInTheDocument();
   });
 
+  it('shows the current job as a visible row with a real "Add job" button, not a tiny link pair', () => {
+    renderCard({ phase: makePhase({ incomeStreams: [stream('Designer', 320000, '2022-09-01')] }), billing: asOf });
+
+    expect(screen.getByText('Designer · €3,200/mo')).toBeVisible();
+    const add = screen.getByRole('button', { name: 'Add job' });
+    expect(add).toBeVisible();
+    expect(add).toHaveClass('profile-action-button');
+    expect(screen.getByRole('button', { name: /Income & Career/ })).not.toHaveTextContent('Add');
+  });
+
+  it('opens the income list with the form to add a job already open', () => {
+    renderCard({ phase: makePhase({ incomeStreams: [stream('Designer', 320000, '2022-09-01')] }), billing: asOf });
+    expect(screen.queryByRole('list', { name: 'Paying now' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add job' }));
+
+    expect(screen.getByRole('button', { name: /Income & Career/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByLabelText(/^Role/)).toBeInTheDocument();
+  });
+
   it('opens the income list from an always-visible trigger, and closes it again', () => {
     renderCard({ phase: makePhase({ incomeStreams: [stream('Designer', 320000, '2022-09-01')] }), billing: asOf });
     const trigger = screen.getByRole('button', { name: /Income & Career/ });
-    expect(trigger).toHaveTextContent('+ Add job or income');
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('list', { name: 'Paying now' })).not.toBeInTheDocument();
 
@@ -369,5 +450,72 @@ describe('LivingPhaseCard income & career', () => {
 
     fireEvent.click(trigger);
     expect(screen.queryByRole('list', { name: 'Paying now' })).not.toBeInTheDocument();
+  });
+});
+
+describe('LivingPhaseCard income views', () => {
+  it('offers the choice between today’s rate and the average only when they say different things', () => {
+    renderCard({ entry: makeEntry({ monthlyIncomeMinor: 340000, averageMonthlyIncomeMinor: 316000 }) });
+
+    expect(screen.getByRole('radio', { name: /Phase average/ })).toBeInTheDocument();
+    expect(screen.queryByText(/pay has been steady/)).not.toBeInTheDocument();
+  });
+
+  it('says the pay has been steady instead of showing a control that changes nothing', () => {
+    renderCard({ entry: makeEntry({ monthlyIncomeMinor: 340000, averageMonthlyIncomeMinor: 340000 }) });
+
+    expect(screen.queryByRole('radio', { name: /Phase average/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Your pay has been steady, so today’s rate is also your average.')).toBeInTheDocument();
+  });
+
+  it('shows neither with no income at all', () => {
+    renderCard({ entry: makeEntry({ monthlyIncomeMinor: 0, averageMonthlyIncomeMinor: 0, savingsRate: null, averageSavingsRate: null }) });
+
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    expect(screen.queryByText(/pay has been steady/)).not.toBeInTheDocument();
+  });
+
+  it('really changes the figures when the average is chosen', () => {
+    const { container } = renderCard({
+      entry: makeEntry({ monthlyIncomeMinor: 340000, averageMonthlyIncomeMinor: 316000, savingsCapacityMinor: 190000, averageSavingsCapacityMinor: 166000 }),
+    });
+    expect(container.querySelector('.phase-card__leftover')).toHaveTextContent('€1,900');
+
+    fireEvent.click(screen.getByRole('radio', { name: /Phase average/ }));
+
+    expect(container.querySelector('.phase-card__leftover')).toHaveTextContent('€1,660');
+  });
+});
+
+describe('LivingPhaseCard bills & costs', () => {
+  const billing = { asOf: '2026-10-31', recordsFor: () => [], history: [], onAdd: vi.fn(), onUpdate: vi.fn(), onDelete: vi.fn() } as unknown as NonNullable<
+    React.ComponentProps<typeof LivingPhaseCard>['billing']
+  >;
+
+  it('has one "Bills & costs" button on the card itself, with the card collapsed', () => {
+    renderCard({ billing, expanded: false });
+
+    expect(screen.getAllByRole('button', { name: 'Bills & costs' })).toHaveLength(1);
+    expect(screen.getByText('Costs €1,500 a month')).toBeInTheDocument();
+  });
+
+  it('is there for a home already left, not only the current one', () => {
+    renderCard({ billing, phase: makePhase({ startDate: '2021-02-01', endDate: '2023-02-28' }), entry: makeEntry({ status: 'past', endDate: '2023-02-28' }) });
+
+    expect(screen.getByRole('button', { name: 'Bills & costs' })).toBeInTheDocument();
+  });
+
+  it('opens the costs and bills of that home', () => {
+    renderCard({ billing });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bills & costs' }));
+
+    expect(within(screen.getByRole('dialog', { name: 'Manage bills and documents' })).getByRole('region', { name: 'Fixed costs each month' })).toHaveTextContent('€1,500');
+  });
+
+  it('is absent where bills are not available', () => {
+    renderCard({ billing: undefined });
+
+    expect(screen.queryByRole('button', { name: 'Bills & costs' })).not.toBeInTheDocument();
   });
 });

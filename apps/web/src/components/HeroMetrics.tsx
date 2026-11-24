@@ -1,11 +1,13 @@
-import React, { useId, useState, type ReactNode } from 'react';
+import React, { useId, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { formatCurrency, formatPercent, type ReportingPeriod } from '../data/sampleChartData';
+import { formatPercent, type ReportingPeriod } from '../data/sampleChartData';
 import { useCountUp } from '../hooks/useCountUp';
+import { HelpTip } from './HelpTip';
 import { dataLabel } from '../i18n/dataLabels';
 import { useTranslation } from '../i18n/useTranslation';
 import { heroSummary, type GainPart, type HeroFigures } from '../lib/heroSummary';
-import { splitCents } from '../lib/money';
+import type { InflationLine } from '../lib/inflationLine';
+import { formatMoney, formatUpTo, splitCents } from '../lib/money';
 
 export type { HeroFigures };
 
@@ -14,8 +16,6 @@ interface HeroMetricsProps {
   period: ReportingPeriod;
   periodGain: number;
   periodPercent: number;
-  /** The dates the selected period covers, ready to read. */
-  periodWindow: string;
   currency: string;
   isRealInflationMode: boolean;
   country: string;
@@ -23,8 +23,11 @@ interface HeroMetricsProps {
   loading?: boolean;
   /** The figures were already known when the screen opened (kept from the last visit): they appear in place, with no count-up. */
   settled?: boolean;
-  /** The period picker: it sits under the figures it changes. */
-  children?: ReactNode;
+  /** What drove the profit, in a sentence or two (null when there is nothing worth saying): it sits under the profit. */
+  story?: string | null;
+  /** The whole-history return before and after inflation (null: not shown); `inflationRate` is the yearly rise it rests on. */
+  inflation?: InflationLine | null;
+  inflationRate?: number;
 }
 
 /** Which step of the arrival an element takes: the stylesheet turns the step into a delay. */
@@ -45,10 +48,7 @@ interface MoneyProps {
 /** An amount that settles into place. Assistive technology reads the final figure, never the ones on the way. */
 function Money({ amount, currency, signed = false, quietCents = false, settled = false }: MoneyProps) {
   const shown = useCountUp(amount, { settled });
-  const format = (value: number) => {
-    const text = formatCurrency(value, currency);
-    return signed ? withSign(value, text) : text;
-  };
+  const format = (value: number) => formatMoney(value, currency, { signed });
   const { whole, cents } = quietCents ? splitCents(format(shown)) : { whole: format(shown), cents: '' };
 
   return (
@@ -63,7 +63,7 @@ function GainBreakdown({ parts, total, currency }: { parts: GainPart[]; total: n
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const panelId = useId();
-  const money = (amount: number) => withSign(amount, formatCurrency(amount, currency));
+  const money = (amount: number) => formatMoney(amount, currency, { signed: true });
 
   return (
     <div className="hero__explain hero__enter" style={stagger(3)}>
@@ -117,32 +117,23 @@ export const HeroMetrics: React.FC<HeroMetricsProps> = ({
   period,
   periodGain,
   periodPercent,
-  periodWindow,
   currency,
   isRealInflationMode,
   country,
   loading = false,
   settled = false,
-  children,
+  story = null,
+  inflation = null,
+  inflationRate,
 }) => {
   const { t } = useTranslation();
   const summary = heroSummary({ figures, period, periodGain, periodPercent, isRealInflationMode }, t);
-  const money = (amount: number) => formatCurrency(amount, currency);
-  const signedMoney = (amount: number) => withSign(amount, money(amount));
+  const money = (amount: number) => formatMoney(amount, currency);
   const { totalValue, gain } = summary;
-  const percentShown = useCountUp(gain.percent, { settled });
+  const percentShown = useCountUp(gain.percent ?? 0, { settled });
 
   const body = () => {
     if (loading) return <HeroSkeleton />;
-    if (summary.isEmpty) {
-      return (
-        <div className="hero__empty hero__enter">
-          <p className="hero__label">{t('hero.totalValue')}</p>
-          <p className="hero__empty-title">{t('hero.empty.title')}</p>
-          <p className="hero__note">{t('hero.empty.note')}</p>
-        </div>
-      );
-    }
     return (
       <>
         <div className="hero__figures">
@@ -152,13 +143,16 @@ export const HeroMetrics: React.FC<HeroMetricsProps> = ({
               <Money amount={totalValue.amount} currency={currency} quietCents settled={settled} />
             </p>
             <p className="hero__meta" title={totalValue.beforeInflation === null ? undefined : t('hero.adjustedFor', { country: dataLabel(t, 'country', country) })}>
-              {totalValue.beforeInflation === null ? t('hero.whatYouOwn') : t('hero.beforeInflation', { amount: money(totalValue.beforeInflation) })}
+              {totalValue.beforeInflation === null
+                ? t('hero.moneyPutIn', { amount: money(summary.moneyPutIn) })
+                : t('hero.beforeInflation', { amount: money(totalValue.beforeInflation) })}
+              {totalValue.beforeInflation === null && <HelpTip term={t('hero.moneyPutIn.term')} text={t('help.moneyPutIn')} />}
             </p>
             {totalValue.beforeInflation === null ? (
               <dl className="hero__split">
                 <div>
                   <dt>{t('hero.invested')}</dt>
-                  <dd>{money(summary.invested)}</dd>
+                  <dd>{money(summary.holdingsValue)}</dd>
                 </div>
                 <div>
                   <dt>{t('hero.cash')}</dt>
@@ -175,34 +169,36 @@ export const HeroMetrics: React.FC<HeroMetricsProps> = ({
             <p className="hero__amount">
               <Money amount={gain.amount} currency={currency} signed quietCents settled={settled} />
             </p>
-            <p className="hero__meta">
-              <span className="hero__percent">{withSign(gain.percent, formatPercent(percentShown, false))}</span> {gain.phrase}
-            </p>
-            {summary.gainSplit ? (
-              <dl className="hero__split">
-                <div>
-                  <dt>{t('hero.stillInvested')}</dt>
-                  <dd className={toneClass(summary.gainSplit.stillInvested)}>{signedMoney(summary.gainSplit.stillInvested)}</dd>
-                </div>
-                <div>
-                  <dt>{t('hero.alreadySold')}</dt>
-                  <dd className={summary.gainSplit.sold === 0 ? undefined : toneClass(summary.gainSplit.sold)}>
-                    {summary.gainSplit.sold === 0 ? t('hero.noneYet') : signedMoney(summary.gainSplit.sold)}
-                  </dd>
-                </div>
-              </dl>
-            ) : (
-              <span />
-            )}
+            <div className="hero__meta-group">
+              <p className="hero__meta">
+                {gain.percent !== null && (
+                  <>
+                    <span className="hero__percent">{withSign(gain.percent, formatPercent(percentShown, false))}</span>{' '}
+                  </>
+                )}
+                {gain.phrase}
+              </p>
+              {inflation && (
+                <p
+                  className="hero__meta hero__meta--quiet"
+                  title={t('hero.inflationNote', { country: dataLabel(t, 'country', country), rate: formatUpTo(inflationRate ?? 0, 1) })}
+                >
+                  {isRealInflationMode
+                    ? t('hero.inflation.on', { before: withSign(inflation.before, formatPercent(inflation.before, false)) })
+                    : t('hero.inflation.both', {
+                        before: withSign(inflation.before, formatPercent(inflation.before, false)),
+                        after: withSign(inflation.after, formatPercent(inflation.after, false)),
+                      })}
+                </p>
+              )}
+            </div>
+            {story ? <p className="hero__story">{story}</p> : <span />}
           </div>
         </div>
 
-        {(period !== 'All' || !summary.pricesAvailable) && (
+        {!summary.pricesAvailable && (
           <div className="hero__context hero__enter" style={stagger(2)}>
-            {period !== 'All' && <p className="hero__note">{periodWindow}</p>}
-            {!summary.pricesAvailable && (
-              <p className="hero__note hero__note--warning">{t('hero.pricesUnavailable')}</p>
-            )}
+            <p className="hero__note hero__note--warning">{t('hero.pricesUnavailable')}</p>
           </div>
         )}
 
@@ -214,11 +210,6 @@ export const HeroMetrics: React.FC<HeroMetricsProps> = ({
   return (
     <section className="hero" aria-label={t('hero.section')} aria-busy={loading}>
       {body()}
-      {children && (
-        <div className="hero__controls hero__enter" style={stagger(4)}>
-          {children}
-        </div>
-      )}
     </section>
   );
 };

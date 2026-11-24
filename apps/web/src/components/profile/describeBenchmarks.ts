@@ -166,16 +166,31 @@ function describePower(
   };
 }
 
-const VERDICT_WORDS = { LOWER: 'benchmark.verdict.LOWER', SIMILAR: 'benchmark.verdict.SIMILAR', HIGHER: 'benchmark.verdict.HIGHER' } as const satisfies Record<string, MessageKey>;
-
-/** "Housing takes 24% of your income — below the 31% average in Spain": the share, and how it sits against the typical one. */
+/**
+ * "Your rent is 38% of your income. People who pay rent in Spain typically spend 31%.": a description, not a judgement.
+ * The comparison is rent against households that pay rent, so a tenant is never set against owners.
+ */
 function housingInsight(dto: NonNullable<PhaseBenchmarkDto['housingBurden']>, where: string, locale: string, t: Translate): string {
-  return t('benchmark.insight.housing', {
-    share: percent(dto.yourSharePercent, locale),
-    verdict: t(VERDICT_WORDS[dto.verdict]),
-    typical: percent(dto.typicalSharePercent, locale),
-    where,
-  });
+  return t('benchmark.insight.housing', { share: percent(dto.yourSharePercent, locale), typical: percent(dto.typicalSharePercent, locale), where });
+}
+
+/** One line for the country and the EU when both typical shares read the same, so nothing is said twice. */
+function housingInsights(dto: PhaseBenchmarkDto, country: string, locale: string, t: Translate): string[] {
+  const { housingBurden, continentHousing } = dto;
+  if (housingBurden && continentHousing && percent(housingBurden.typicalSharePercent, locale) === percent(continentHousing.typicalSharePercent, locale)) {
+    return [
+      t('benchmark.insight.housingBoth', {
+        share: percent(housingBurden.yourSharePercent, locale),
+        typical: percent(housingBurden.typicalSharePercent, locale),
+        country,
+        area: continentHousing.areaName,
+      }),
+    ];
+  }
+  return [
+    ...(housingBurden ? [housingInsight(housingBurden, country, locale, t)] : []),
+    ...(continentHousing ? [housingInsight(continentHousing, continentHousing.areaName, locale, t)] : []),
+  ];
 }
 
 const areaOf = (entry: StandingDto, country: string) => (entry.scope === 'COUNTRY' ? country : (entry.areaName ?? entry.areaCode));
@@ -208,14 +223,11 @@ export function describePhaseBenchmark(
   const purchasingPower = dto.purchasingPower ? describePower(dto.purchasingPower, country, nameOf, locale, t) : null;
   const areaFigures = dto.standing.filter((entry) => entry.scope !== 'COUNTRY').map((entry) => describeAreaFigure(entry, areaOf(entry, country), locale, t));
   const insights = [
-    dto.housingBurden ? housingInsight(dto.housingBurden, country, locale, t) : null,
-    dto.continentHousing ? housingInsight(dto.continentHousing, dto.continentHousing.areaName, locale, t) : null,
-    dto.purchasingPower?.versusNationalAverage != null
-      ? t('benchmark.insight.power', { times: times(dto.purchasingPower.versusNationalAverage, locale), country })
-      : null,
-  ]
-    .filter((line): line is string => line !== null)
-    .slice(0, 3);
+    ...housingInsights(dto, country, locale, t),
+    ...(dto.purchasingPower?.versusNationalAverage != null
+      ? [t('benchmark.insight.power', { times: times(dto.purchasingPower.versusNationalAverage, locale), country })]
+      : []),
+  ].slice(0, 3);
   const sources = [...new Map(dto.standing.map((entry) => [entry.citation.url, entry.citation] as const)).values()].map((citation) => ({
     name: citation.name,
     url: citation.url,

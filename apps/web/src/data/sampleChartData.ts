@@ -1,30 +1,41 @@
+import type { HistoryPoint } from '../contracts';
 import { displayLocale } from '../lib/money';
 
-export interface ChartDataPoint {
-  date_time: string; // ISO or formatted date string
-  portfolio_value_in_reporting_currency: number;
-  cumulative_cost_in_reporting_currency: number;
-  cashflow_in_reporting_currency: number;
-  benchmark_value_in_reporting_currency: number;
-  cumulative_time_weighted_return_rate: number;
-  cumulative_benchmark_time_weighted_return_rate: number;
-}
+/** One real reading of the portfolio (see `GET /api/portfolio/history`): the chart and the period figures are made of these only. */
+export type ChartDataPoint = HistoryPoint;
 
-export type ReportingPeriod =
-  | 'All'
-  | 'YTD'
-  | '1Y'
-  | 'MTD'
-  | '1M'
-  | '1W'
-  | '1D'
-  | 'Last year'
-  | 'Last month'
-  | 'Custom';
+/** The windows the person can look at. All of them are measured from real readings; see `lib/periodAvailability.ts`. */
+export type ReportingPeriod = 'All' | 'YTD' | '1Y' | '3M' | '1M' | 'Custom';
 
 export interface DateRange {
   fromDate: string; // YYYY-MM-DD
   toDate: string; // YYYY-MM-DD
+}
+
+/** The day a window reaching back from `reference` starts on. `null` for the ones that are not a fixed stretch (All, Custom). */
+export function periodStartDate(period: ReportingPeriod, reference: Date): Date | null {
+  switch (period) {
+    case '1M': {
+      const start = new Date(reference);
+      start.setMonth(reference.getMonth() - 1);
+      return start;
+    }
+    case '3M': {
+      const start = new Date(reference);
+      start.setMonth(reference.getMonth() - 3);
+      return start;
+    }
+    case '1Y': {
+      const start = new Date(reference);
+      start.setFullYear(reference.getFullYear() - 1);
+      return start;
+    }
+    case 'YTD':
+      return new Date(reference.getFullYear(), 0, 1);
+    case 'All':
+    case 'Custom':
+      return null;
+  }
 }
 
 /**
@@ -44,76 +55,18 @@ export function filterDataByPeriod(
     return { filteredData: [], startDate: now, endDate: now };
   }
 
-  const latestPoint = data[data.length - 1];
-  const maxDate = new Date(latestPoint.date_time);
-  let minDate = new Date(data[0].date_time);
+  const maxDate = new Date(data[data.length - 1].date_time);
+  let minDate = periodStartDate(period, maxDate) ?? new Date(data[0].date_time);
 
-  switch (period) {
-    case '1D': {
-      minDate = new Date(maxDate);
-      minDate.setDate(maxDate.getDate() - 1);
-      break;
-    }
-    case '1W': {
-      minDate = new Date(maxDate);
-      minDate.setDate(maxDate.getDate() - 7);
-      break;
-    }
-    case '1M': {
-      minDate = new Date(maxDate);
-      minDate.setMonth(maxDate.getMonth() - 1);
-      break;
-    }
-    case 'MTD': {
-      minDate = new Date(maxDate.getFullYear(), maxDate.getMonth(), 1);
-      break;
-    }
-    case '1Y': {
-      minDate = new Date(maxDate);
-      minDate.setFullYear(maxDate.getFullYear() - 1);
-      break;
-    }
-    case 'YTD': {
-      minDate = new Date(maxDate.getFullYear(), 0, 1);
-      break;
-    }
-    case 'Last month': {
-      const lastMonthDate = new Date(maxDate.getFullYear(), maxDate.getMonth() - 1, 1);
-      minDate = lastMonthDate;
-      const endOfLastMonth = new Date(maxDate.getFullYear(), maxDate.getMonth(), 0, 23, 59, 59);
-      const filtered = data.filter((d) => {
-        const ptDate = new Date(d.date_time);
-        return ptDate >= minDate && ptDate <= endOfLastMonth;
-      });
-      return { filteredData: filtered, startDate: minDate, endDate: endOfLastMonth };
-    }
-    case 'Last year': {
-      const prevYear = maxDate.getFullYear() - 1;
-      const startLastYear = new Date(prevYear, 0, 1);
-      const endLastYear = new Date(prevYear, 11, 31, 23, 59, 59);
-      const filtered = data.filter((d) => {
-        const ptDate = new Date(d.date_time);
-        return ptDate >= startLastYear && ptDate <= endLastYear;
-      });
-      return { filteredData: filtered, startDate: startLastYear, endDate: endLastYear };
-    }
-    case 'Custom': {
-      if (customRange?.fromDate && customRange?.toDate) {
-        minDate = new Date(customRange.fromDate);
-        const to = new Date(customRange.toDate);
-        to.setHours(23, 59, 59, 999);
-        const filtered = data.filter((d) => {
-          const ptDate = new Date(d.date_time);
-          return ptDate >= minDate && ptDate <= to;
-        });
-        return { filteredData: filtered, startDate: minDate, endDate: to };
-      }
-      break;
-    }
-    case 'All':
-    default:
-      minDate = new Date(data[0].date_time);
-      break;
+  if (period === 'Custom' && customRange?.fromDate && customRange?.toDate) {
+    minDate = new Date(customRange.fromDate);
+    const to = new Date(customRange.toDate);
+    to.setHours(23, 59, 59, 999);
+    const filtered = data.filter((d) => {
+      const ptDate = new Date(d.date_time);
+      return ptDate >= minDate && ptDate <= to;
+    });
+    return { filteredData: filtered, startDate: minDate, endDate: to };
   }
 
   const filteredData = data.filter((d) => new Date(d.date_time) >= minDate);
@@ -124,11 +77,14 @@ export function filterDataByPeriod(
   };
 }
 
+const CURRENCY_SIGNS: Readonly<Record<string, string>> = { EUR: '€', USD: '$', GBP: '£' };
+
 /**
  * Format currency with locale standard
  */
 export function formatCurrency(value: number, currency = 'EUR', decimals = 2, locale: string = displayLocale()): string {
-  const symbol = currency === 'EUR' ? '€' : currency === 'USD' ? '$' : '£';
+  // A currency without a sign of its own is written with its code: another currency's sign would be a wrong amount.
+  const symbol = CURRENCY_SIGNS[currency] ?? `${currency} `;
   const isNegative = value < 0;
   const absVal = Math.abs(value);
   const formatted = absVal.toLocaleString(locale, {

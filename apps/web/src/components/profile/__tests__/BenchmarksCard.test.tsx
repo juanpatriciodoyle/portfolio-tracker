@@ -27,13 +27,13 @@ describe('BenchmarksCard', () => {
     render(<BenchmarksCard phaseId="p1" view={view({ benchmarks })} />);
 
     expect(screen.getByRole('heading', { name: 'Where you stand' })).toBeInTheDocument();
-    expect(screen.getByText('Top 11% in Spain')).toBeVisible();
-    expect(screen.getByText('Top 15% in the EU')).toBeVisible();
-    expect(screen.getByText('Top 2% in the world')).toBeVisible();
+    expect(screen.getByText('Top 11% of people in Spain')).toBeVisible();
+    expect(screen.getByText('Top 15% of people in the EU')).toBeVisible();
+    expect(screen.getByText('Top 2% of people in the world')).toBeVisible();
     expect(screen.getByRole('list', { name: 'How you compare' })).toBeVisible();
-    expect(screen.getByText('Housing takes 42.8% of your income — above the 18.9% average in the EU')).toBeVisible();
+    expect(screen.getByText('Your rent is 42.8% of your income. People who pay rent in the EU typically spend 25%.')).toBeVisible();
     // The raw figures stay out of sight until the sources are opened.
-    expect(screen.getByText('42.8% housing burden')).not.toBeVisible();
+    expect(screen.getByText('42.8% of your income')).not.toBeVisible();
     expect(screen.getByText('Holds the purchasing power of €5,800 a month in Italy')).toBeVisible();
     expect(screen.getByText('Data sources').closest('details')).not.toHaveAttribute('open');
   });
@@ -43,8 +43,8 @@ describe('BenchmarksCard', () => {
 
     fireEvent.click(screen.getByText('Data sources'));
 
-    expect(screen.getByText('42.8% housing burden')).toBeInTheDocument();
-    expect(screen.getByText(/Rent, utilities and property taxes come to/)).toBeInTheDocument();
+    expect(screen.getByText('42.8% of your income')).toBeInTheDocument();
+    expect(screen.getByText(/Your rent comes to/)).toBeInTheDocument();
     expect(screen.getByText('1.4x purchasing power')).toBeInTheDocument();
     expect(screen.getByText(/compared with people in the world/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /World Bank, Poverty and Inequality Platform/ })).toHaveAttribute('href', 'https://pip.worldbank.org');
@@ -64,7 +64,7 @@ describe('BenchmarksCard', () => {
     expect(screen.queryByText(/^Top .* in Spain$/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('Data sources'));
     expect(screen.getByText(/No income statistics are published for this country/)).toBeInTheDocument();
-    expect(screen.getByText(/No typical housing cost figure/)).toBeInTheDocument();
+    expect(screen.getByText(/Rent is compared only with people who pay rent/)).toBeInTheDocument();
   });
 
   it('asks for an income when the phase has none', () => {
@@ -75,7 +75,7 @@ describe('BenchmarksCard', () => {
     render(<BenchmarksCard phaseId="p1" view={view({ benchmarks: empty })} />);
 
     expect(screen.getByText(/Add a monthly income to this living phase/)).toBeInTheDocument();
-    expect(screen.queryByText(/housing burden/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^42\.8% of your income$/)).not.toBeInTheDocument();
   });
 
   it('shows only the rungs it has, and why the others are missing, inside the data sources', () => {
@@ -83,7 +83,7 @@ describe('BenchmarksCard', () => {
 
     render(<BenchmarksCard phaseId="p1" view={view({ benchmarks: partial })} />);
 
-    expect(screen.getByText('Top 11% in Spain')).toBeVisible();
+    expect(screen.getByText('Top 11% of people in Spain')).toBeVisible();
     expect(screen.queryByText(/in the world/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('Data sources'));
     expect(screen.getByText(/No comparison with your continent is available/)).toBeInTheDocument();

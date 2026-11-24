@@ -15,6 +15,8 @@ interface IncomeSectionProps {
   phase: LivingPhaseDto;
   /** Today, from the server's clock: what is "paying now" and what has "ended". */
   asOf?: string;
+  /** Counts the presses of an "Add job" button outside the list: each one opens the form to add a job. */
+  addRequests?: number;
   onUpdatePhase: (phaseId: string, input: UpdateLivingPhaseRequest) => Promise<MutationResult<unknown>>;
   announce: (message: string) => void;
 }
@@ -26,7 +28,7 @@ const byStart = (a: IncomeStreamDto, b: IncomeStreamDto) =>
   a.startDate.localeCompare(b.startDate) || (a.endDate ?? '').localeCompare(b.endDate ?? '') || a.label.localeCompare(b.label);
 
 /** Every job and source of income during a home. Each is its own line: end one and the others carry on. */
-export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: IncomeSectionProps) {
+export default function IncomeSection({ phase, asOf, addRequests = 0, onUpdatePhase, announce }: IncomeSectionProps) {
   const words = useTranslation();
   const { t } = words;
   const id = useId();
@@ -37,8 +39,15 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
   /** Removing, ending or reviving a job: one at a time, however fast the button is tapped. */
   const { run: runIncomeAction, pending: incomeBusy } = useSubmitOnce();
 
+  // Each new request to add a job (the card's "Add job" button) opens the add form: state adjusted while rendering, not in an effect.
+  const [seenAddRequests, setSeenAddRequests] = useState(0);
+  if (addRequests !== seenAddRequests) {
+    setSeenAddRequests(addRequests);
+    if (addRequests > 0) setEditing({ mode: 'add' });
+  }
+
   const streams = [...phase.incomeStreams].sort(byStart);
-  const groups = groupIncome(streams, asOf);
+  const groups = groupIncome(streams, asOf, phase);
   const populatedGroups = [groups.paying, groups.ended, groups.oneTime].filter((rows) => rows.length > 0).length;
   const gaps = asOf ? incomeGaps({ startDate: phase.startDate, endDate: phase.endDate, streams }, asOf) : [];
 
@@ -97,9 +106,11 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
       if (!result.ok) setRemoveError(describeFailure(result.failure, [], words));
     });
 
-  const renderRow = ({ stream, index }: IncomeRow, isEnded: boolean) => {
-    const when = describeIncomeStream(stream, undefined, t);
-    const endNote = describeIncomeEnd(stream, undefined, t);
+  const renderRow = ({ stream, index, lastDay, endsWithHome }: IncomeRow, isEnded: boolean) => {
+    // A job without an end date in a home that is over stopped the day the home did: show it that way.
+    const shown = { ...stream, endDate: lastDay };
+    const when = describeIncomeStream(shown, undefined, t);
+    const endNote = describeIncomeEnd(shown, undefined, t, endsWithHome);
     const name = `${stream.label} ${when}`;
     const oneTime = stream.kind === 'ONE_TIME';
     return (
@@ -135,7 +146,7 @@ export default function IncomeSection({ phase, asOf, onUpdatePhase, announce }: 
                     <CalendarX size={14} aria-hidden="true" />
                   </button>
                 )}
-                {isEnded && (
+                {isEnded && !endsWithHome && (
                   <button type="button" className="profile-icon-button" aria-label={t('income.bringBackNamed', { name })} title={t('income.bringBack')} disabled={incomeBusy} aria-busy={incomeBusy} onClick={() => bringBack(index)}>
                     <RotateCcw size={14} aria-hidden="true" />
                   </button>

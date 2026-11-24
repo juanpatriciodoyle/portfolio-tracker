@@ -14,12 +14,8 @@ const PHRASES: Record<ReportingPeriod, MessageKey> = {
   All: 'period.phrase.all',
   YTD: 'period.phrase.ytd',
   '1Y': 'period.phrase.1y',
-  MTD: 'period.phrase.mtd',
+  '3M': 'period.phrase.3m',
   '1M': 'period.phrase.1m',
-  '1W': 'period.phrase.1w',
-  '1D': 'period.phrase.1d',
-  'Last year': 'period.phrase.lastYear',
-  'Last month': 'period.phrase.lastMonth',
   Custom: 'period.phrase.custom',
 };
 

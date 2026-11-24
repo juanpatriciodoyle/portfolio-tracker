@@ -22,8 +22,8 @@ export function makePhaseBenchmark(overrides: Partial<PhaseBenchmarkDto> = {}): 
     housingBurden: {
       housingMonthlyMinor: 137100,
       yourSharePercent: 42.8,
-      typicalSharePercent: 16,
-      differencePoints: 26.8,
+      typicalSharePercent: 26.7,
+      differencePoints: 16.1,
       verdict: 'HIGHER',
       period: '2025',
       source: 'EUROSTAT',
@@ -31,8 +31,8 @@ export function makePhaseBenchmark(overrides: Partial<PhaseBenchmarkDto> = {}): 
     continentHousing: {
       housingMonthlyMinor: 137100,
       yourSharePercent: 42.8,
-      typicalSharePercent: 18.9,
-      differencePoints: 23.9,
+      typicalSharePercent: 25,
+      differencePoints: 17.8,
       verdict: 'HIGHER',
       period: '2025',
       source: 'EUROSTAT',

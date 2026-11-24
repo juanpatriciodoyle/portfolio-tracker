@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import TransactionForm from '../TransactionForm';
 
@@ -102,7 +102,7 @@ describe('TransactionForm: the Sold tab only sells what is owned', () => {
 
   const openSold = (positions = held) => {
     render(<TransactionForm positions={positions} />);
-    fireEvent.click(screen.getByRole('button', { name: /Sold/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Sell/ }));
   };
 
   const pick = (symbol: string) => {
@@ -120,16 +120,28 @@ describe('TransactionForm: the Sold tab only sells what is owned', () => {
 
   it('says nothing can be sold, and cannot be confirmed, with no open positions', () => {
     openSold([]);
-    expect(screen.getByText('No open positions available to sell')).toBeInTheDocument();
+    expect(screen.getByText('You do not hold anything you can sell yet')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm' })).toBeDisabled();
   });
 
-  it('fills and locks asset class, sector and region from the holding', () => {
+  it('shows nothing about asset class, sector or region until a holding is picked, then shows them as plain text', () => {
     openSold();
+    expect(screen.queryByLabelText('About what you are selling')).not.toBeInTheDocument();
+    expect(screen.queryByText('Asset Class')).not.toBeInTheDocument();
+
     pick('VUAA');
-    const [assetClass, sector, region] = screen.getAllByRole('combobox').slice(-3) as HTMLSelectElement[];
-    expect([assetClass.value, sector.value, region.value]).toEqual(['ETF', 'Diversified', 'Global']);
-    for (const select of [assetClass, sector, region]) expect(select).toBeDisabled();
+    const facts = within(screen.getByLabelText('About what you are selling'));
+    expect(facts.getByText('ETF')).toBeInTheDocument();
+    expect(facts.getByText('Many industries')).toBeInTheDocument();
+    expect(facts.getByText('Global')).toBeInTheDocument();
+    // Only the holding search is left to type into: nothing to change about what is being sold.
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
+  });
+
+  it('reads an older asset class word as the class on the one list', () => {
+    openSold();
+    pick('AAPL');
+    expect(within(screen.getByLabelText('About what you are selling')).getByText('Stock')).toBeInTheDocument();
   });
 
   it('fills the quantity with everything held when MAX is pressed', () => {

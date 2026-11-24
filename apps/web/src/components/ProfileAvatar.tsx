@@ -18,11 +18,17 @@ export default function ProfileAvatar({ onOpen }: ProfileAvatarProps) {
     <button
       type="button"
       onClick={onOpen}
-      className={initials ? 'profile-avatar' : 'profile-entry-button'}
+      className={`${initials ? 'profile-avatar' : 'profile-entry-button'} profile-entry`}
       aria-label={t('header.profileAndPhases')}
       title={t('header.profile')}
     >
-      {initials ? <span aria-hidden="true">{initials}</span> : <UserRound size={16} />}
+      <span className="profile-entry__mark" aria-hidden="true">
+        {initials ? initials : <UserRound size={16} />}
+      </span>
+      {/* The word sits beside the mark on wide screens; on a phone only the mark stays, and the button keeps its name. */}
+      <span className="profile-entry__label" aria-hidden="true">
+        {t('header.profile')}
+      </span>
     </button>
   );
 }

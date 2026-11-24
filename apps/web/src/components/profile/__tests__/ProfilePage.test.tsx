@@ -89,11 +89,12 @@ function serve(initial: Partial<World> = {}) {
   return world;
 }
 
-function renderPage(isAdmin = false) {
+function renderPage(isAdmin = false, extra: Partial<React.ComponentProps<typeof ProfilePage>> = {}) {
   const onBack = vi.fn();
   const onSignedOut = vi.fn();
-  render(<ProfilePage onBack={onBack} onSignedOut={onSignedOut} isAdmin={isAdmin} />);
-  return { onBack, onSignedOut };
+  const onLogTransaction = vi.fn();
+  render(<ProfilePage onBack={onBack} onSignedOut={onSignedOut} isAdmin={isAdmin} accountName="Joe Doyle" onLogTransaction={onLogTransaction} {...extra} />);
+  return { onBack, onSignedOut, onLogTransaction };
 }
 
 /** Throws until the card is on screen, so `waitFor` can retry while data is still loading. */
@@ -299,7 +300,6 @@ describe('ProfilePage changes', () => {
     fireEvent.change(screen.getByLabelText('Moved out'), { target: { value: '2019-12-31' } });
     clickContinue();
     fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '2100' } });
-    clickContinue();
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
   }
 
@@ -402,9 +402,10 @@ describe('ProfilePage bills', () => {
     await waitFor(() => expect(billLoads()).toBe(1));
     fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Madrid/ }));
 
-    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Manage bills & documents/ }));
+    fireEvent.click(within(cardFor('Madrid')).getByRole('button', { name: /Bills & costs/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Electricity/ }));
 
-    const bills = await screen.findByRole('list', { name: 'Bills received' });
+    const bills = await screen.findByRole('list', { name: 'Bills of Electricity' });
     expect(within(bills).getByText(/Iberdrola/)).toBeInTheDocument();
     expect(within(bills).queryByText(/EDP/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Bills say about/)).not.toBeInTheDocument();
@@ -450,6 +451,28 @@ describe('ProfilePage bills', () => {
     await waitFor(() => expect(billLoads()).toBeGreaterThanOrEqual(2));
     // The monthly costs of the home come from its bills, so the timeline is read again too.
     await waitFor(() => expect(timelineLoads()).toBeGreaterThanOrEqual(2));
+  });
+
+  it('says what a new bill did to what is kept each month, once the timeline has been read again', async () => {
+    const world = serve();
+    renderPage();
+    await screen.findByRole('heading', { name: 'Living phases' });
+    fireEvent.click(screen.getByRole('button', { name: /Add expense/ }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Add an expense' }));
+    fireEvent.click(dialog.getByRole('button', { name: 'Enter it manually' }));
+    const wizard = within(screen.getByRole('dialog', { name: 'Add an expense' }));
+    fireEvent.change(wizard.getByLabelText('Who sent it?'), { target: { value: 'Iberdrola' } });
+    fireEvent.click(wizard.getByRole('radio', { name: 'Electricity' }));
+    fireEvent.click(wizard.getByRole('button', { name: 'Continue' }));
+    fireEvent.change(wizard.getByLabelText('Total on the bill'), { target: { value: '96' } });
+    fireEvent.click(wizard.getByRole('radio', { name: 'Every 2 months' }));
+    fireEvent.click(wizard.getByRole('button', { name: 'Continue' }));
+    // What the server will answer once the bill is in: the share kept goes down.
+    world.entries = [{ ...madridEntry, savingsRate: 0.49 }, lisbonEntry];
+
+    fireEvent.click(wizard.getByRole('button', { name: 'Add expense' }));
+
+    expect(await screen.findByText('Electricity €48/month added. You now keep 49% (was 53%).')).toBeInTheDocument();
   });
 
   it('offers one Add expense for the whole page, and none on the cards', async () => {
@@ -592,22 +615,16 @@ describe('ProfilePage first time', () => {
     expect(screen.getAllByRole('button').filter((button) => button.className.includes('btn-primary-apply'))).toHaveLength(1);
   });
 
-  it('guides from the profile into the first living phase, then saves both', async () => {
+  it('asks three questions, then saves the home and the name the account already has', async () => {
     serve({ profile: emptyProfile, phases: [], entries: [] });
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Tell us about yourself' }));
     expect(screen.getByRole('dialog', { name: 'Tell us about yourself' })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Joe Doyle' } });
-    clickContinue();
-    clickContinue();
-    clickContinue();
     await chooseCountry('Country', 'arg', /Argentina/);
     fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Buenos Aires' } });
     clickContinue();
-    fireEvent.change(screen.getByLabelText('Moved in'), { target: { value: '2024-01-01' } });
-    clickContinue();
-    fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '1500' } });
+    fireEvent.change(screen.getByLabelText('Monthly income after tax (optional)'), { target: { value: '1500' } });
     clickContinue();
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Finish' }));
 
@@ -615,8 +632,62 @@ describe('ProfilePage first time', () => {
     expect(apiCommand).toHaveBeenCalledWith('/api/profile', { method: 'PUT', body: expect.objectContaining({ fullName: 'Joe Doyle' }) });
     const post = apiRequest.mock.calls.find(([, , options]) => options?.method === 'POST');
     expect(post?.[0]).toBe('/api/living-phases');
-    expect(post?.[2]?.body).toMatchObject({ name: '🇦🇷 Buenos Aires', countryCode: 'AR', startDate: '2024-01-01', endDate: null });
+    expect(post?.[2]?.body).toMatchObject({ name: '🇦🇷 Buenos Aires', countryCode: 'AR', currency: 'ARS', startDate: '2026-10-31', endDate: null });
     expect(screen.getByText('Profile saved')).toBeInTheDocument();
+  });
+
+  it('offers what to do next once the first home is saved: log the first transaction', async () => {
+    serve({ profile: emptyProfile, phases: [], entries: [] });
+    const { onLogTransaction } = renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Tell us about yourself' }));
+    await chooseCountry('Country', 'arg', /Argentina/);
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Buenos Aires' } });
+    clickContinue();
+    clickContinue();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Finish' }));
+
+    const next = await screen.findByRole('region', { name: 'Your home is saved' });
+
+    expect(within(next).getByText(/Log your first purchase/)).toBeInTheDocument();
+    fireEvent.click(within(next).getByRole('button', { name: 'Log Transaction' }));
+    expect(onLogTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the first-time flow in the profile card afterwards: the rest is asked later, from the demographics', async () => {
+    serve({ profile: emptyProfile, phases: [madrid], entries: [madridEntry] });
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Demographics & Household Settings' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tell us about yourself' })).not.toBeInTheDocument();
+  });
+
+  it('brings the dialog back, on the same step, after a refresh while it was open', async () => {
+    serve({ profile: emptyProfile, phases: [], entries: [] });
+    const first = render(<ProfilePage onBack={vi.fn()} onSignedOut={vi.fn()} accountName="Joe" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Tell us about yourself' }));
+    await chooseCountry('Country', 'arg', /Argentina/);
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Buenos Aires' } });
+    clickContinue();
+    first.unmount();
+
+    render(<ProfilePage onBack={vi.fn()} onSignedOut={vi.fn()} accountName="Joe" />);
+
+    expect(await screen.findByRole('dialog', { name: 'Tell us about yourself' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'What do you earn each month, after tax?' })).toBeInTheDocument();
+  });
+
+  it('does not open the dialog by itself on a later visit, after it was closed on purpose', async () => {
+    serve({ profile: emptyProfile, phases: [], entries: [] });
+    const first = render(<ProfilePage onBack={vi.fn()} onSignedOut={vi.fn()} accountName="Joe" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Tell us about yourself' }));
+    await chooseCountry('Country', 'arg', /Argentina/);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    first.unmount();
+
+    render(<ProfilePage onBack={vi.fn()} onSignedOut={vi.fn()} accountName="Joe" />);
+
+    expect(await screen.findByRole('button', { name: 'Tell us about yourself' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('keeps a single call to action once the profile is filled in but there is no home yet', async () => {
@@ -684,24 +755,62 @@ describe('ProfilePage analytics tab (admin only)', () => {
 
   describe('an administrator who has nothing yet', () => {
     const emptyProfile = makeProfile({ fullName: null, birthYear: null, nationalities: [], taxResidence: null, employmentStatus: null });
+    const emptyWorld = () => serve({ profile: emptyProfile, phases: [], entries: [] });
 
-    it('still reaches the analytics, under the single first-time button', async () => {
-      serve({ profile: emptyProfile, phases: [], entries: [] });
+    it('still gets a real tab strip, with Analytics as a tab beside the first-time button, never a loose section', async () => {
+      emptyWorld();
       renderPage(true);
 
-      expect(await screen.findByRole('button', { name: 'Tell us about yourself' })).toBeInTheDocument();
-      const analytics = await screen.findByRole('region', { name: 'Analytics' });
-      expect(within(analytics).getByText('Customers')).toBeInTheDocument();
-      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+      expect(await screen.findByRole('tablist', { name: 'Profile sections' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Living Costs & Career' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('tab', { name: 'Analytics' })).toBeInTheDocument();
+      // The regular tab keeps its own empty state: the single first-time button.
+      expect(screen.getByRole('button', { name: 'Tell us about yourself' })).toBeInTheDocument();
+      // No section of its own on the page: the figures only exist inside the tab.
+      expect(screen.queryByRole('heading', { name: 'Analytics' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('img', { name: '48' })).not.toBeInTheDocument();
+      expect(analyticsRequests()).toHaveLength(0);
+    });
+
+    it('opens the Analytics tab and shows the customers there', async () => {
+      emptyWorld();
+      renderPage(true);
+
+      fireEvent.click(await screen.findByRole('tab', { name: 'Analytics' }));
+
+      expect(await screen.findByRole('img', { name: '48' })).toBeInTheDocument();
+      expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'profile-panel-analytics');
+      expect(screen.getByText('Admin area: only administrators see this.')).toBeInTheDocument();
       expect(analyticsRequests()).toHaveLength(1);
     });
 
-    it('does not show it, or ask for it, to anyone else', async () => {
-      serve({ profile: emptyProfile, phases: [], entries: [] });
+    it('opens on a remembered Analytics tab', async () => {
+      sessionStorage.setItem('profile-tab', 'analytics');
+      emptyWorld();
+      renderPage(true);
+
+      expect(await screen.findByRole('img', { name: '48' })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: 'Analytics' })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('shows nobody else a tab, the figures, or a request for them: the single first-time button as before', async () => {
+      emptyWorld();
       renderPage(false);
 
       await screen.findByRole('button', { name: 'Tell us about yourself' });
-      expect(screen.queryByRole('region', { name: 'Analytics' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'Analytics' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Analytics' })).not.toBeInTheDocument();
+      expect(analyticsRequests()).toHaveLength(0);
+    });
+
+    it('falls back for anyone else who had Analytics remembered, with nothing asked', async () => {
+      sessionStorage.setItem('profile-tab', 'analytics');
+      emptyWorld();
+      renderPage(false);
+
+      await screen.findByRole('button', { name: 'Tell us about yourself' });
+      expect(screen.queryByRole('tab')).not.toBeInTheDocument();
       expect(analyticsRequests()).toHaveLength(0);
     });
   });

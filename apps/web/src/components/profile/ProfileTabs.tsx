@@ -1,6 +1,6 @@
-import { useRef, type KeyboardEvent } from 'react';
+import { Fragment, useRef, type KeyboardEvent } from 'react';
 import { useTranslation } from '../../i18n/useTranslation';
-import { panelId, profileTabsFor, tabId, type ProfileTabId } from '../../lib/profileTab';
+import { ANALYTICS_TAB, panelId, profileTabsFor, tabId, type ProfileTabId } from '../../lib/profileTab';
 
 interface ProfileTabsProps {
   active: ProfileTabId;
@@ -28,25 +28,37 @@ export default function ProfileTabs({ active, onChange, isAdmin = false }: Profi
 
   return (
     <div className="profile-tabs" role="tablist" aria-label={t('profile.tabs')}>
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          ref={(element) => {
-            buttons.current[tab.id] = element;
-          }}
-          type="button"
-          role="tab"
-          id={tabId(tab.id)}
-          aria-selected={tab.id === active}
-          aria-controls={panelId(tab.id)}
-          tabIndex={tab.id === active ? 0 : -1}
-          className={`profile-tabs__tab${tab.id === active ? ' is-active' : ''}`}
-          onClick={() => onChange(tab.id)}
-          onKeyDown={handleKeyDown}
-        >
-          {t(tab.label)}
-        </button>
-      ))}
+      {tabs.map((tab) => {
+        const admin = tab.id === ANALYTICS_TAB.id;
+        return (
+          <Fragment key={tab.id}>
+            {/* The admin area is not one of the person's own tabs: it sits after a rule, at the end of the row. */}
+            {admin && <span className="profile-tabs__divider" aria-hidden="true" />}
+            <button
+              ref={(element) => {
+                buttons.current[tab.id] = element;
+              }}
+              type="button"
+              role="tab"
+              id={tabId(tab.id)}
+              aria-selected={tab.id === active}
+              aria-controls={panelId(tab.id)}
+              tabIndex={tab.id === active ? 0 : -1}
+              className={`profile-tabs__tab${admin ? ' profile-tabs__tab--admin' : ''}${tab.id === active ? ' is-active' : ''}`}
+              onClick={() => onChange(tab.id)}
+              onKeyDown={handleKeyDown}
+            >
+              {t(tab.label)}
+              {/* A visual cue only: the tab keeps its plain name for assistive technology, and the panel says it again in words. */}
+              {admin && (
+                <span className="profile-tabs__badge" aria-hidden="true">
+                  {t('profile.tab.adminBadge')}
+                </span>
+              )}
+            </button>
+          </Fragment>
+        );
+      })}
     </div>
   );
 }

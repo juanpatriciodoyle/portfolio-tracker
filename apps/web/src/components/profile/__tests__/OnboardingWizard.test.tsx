@@ -1,10 +1,26 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { makePhase, makeProfile } from '../../../test/fixtures';
+import { makeProfile } from '../../../test/fixtures';
 import { tapTwice } from '../../../test/doubleTap';
 import { chooseCountry, clickContinue } from '../../../test/wizardHelpers';
+import type { BenchmarkPreviewResponse } from '../../../contracts';
 import OnboardingWizard from '../OnboardingWizard';
+
+const preview: BenchmarkPreviewResponse = {
+  countryCode: 'ES',
+  typicalMonthlyIncome: { amountMinor: 169725, currency: 'EUR', basis: 'EQUIVALISED', period: '2025', source: 'EUROSTAT' },
+  incomePercentile: { percentile: 88.7, bound: 'EXACT', period: '2025', source: 'EUROSTAT', basis: 'EQUIVALISED' },
+  rent: { housingMonthlyMinor: 120000, yourSharePercent: 37.5, typicalSharePercent: 26.7, differencePoints: 10.8, verdict: 'HIGHER', period: '2025', source: 'EUROSTAT' },
+  gaps: [],
+};
+const asked = vi.fn();
+vi.mock('../../../hooks/useBenchmarkPreview', () => ({
+  useBenchmarkPreview: (query: unknown) => {
+    asked(query);
+    return query ? preview : null;
+  },
+}));
 
 const ok = { ok: true as const, value: undefined };
 const emptyProfile = makeProfile({ fullName: null, birthYear: null, nationalities: [], taxResidence: null, employmentStatus: null });
@@ -12,8 +28,7 @@ const emptyProfile = makeProfile({ fullName: null, birthYear: null, nationalitie
 function renderWizard(overrides: Partial<React.ComponentProps<typeof OnboardingWizard>> = {}) {
   const props: React.ComponentProps<typeof OnboardingWizard> = {
     profile: emptyProfile,
-    phases: [],
-    hasCurrentPhase: false,
+    accountName: 'Reviewer',
     defaultCurrency: 'EUR',
     today: '2026-10-31',
     onSaveProfile: vi.fn().mockResolvedValue(ok),
@@ -28,183 +43,247 @@ function renderWizard(overrides: Partial<React.ComponentProps<typeof OnboardingW
 
 const heading = () => screen.getByRole('heading', { level: 2 }).textContent;
 const progress = () => screen.getByRole('progressbar').getAttribute('aria-valuetext');
+const finish = () => within(screen.getByRole('dialog')).getByRole('button', { name: 'Finish' });
 
-async function completeAboutYou() {
-  fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Joe Doyle' } });
-  fireEvent.change(screen.getByLabelText('Year of birth (optional)'), { target: { value: '1990' } });
-  clickContinue();
-  const nationalities = screen.getByLabelText('Nationalities (optional)');
-  fireEvent.change(nationalities, { target: { value: 'Argentina, España,' } });
-  await chooseCountry('Tax residence (optional)', 'spa', /Spain/);
-  clickContinue();
-  fireEvent.change(screen.getByLabelText('Work (optional)'), { target: { value: 'EMPLOYEE' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Increase adults in household' }));
-  fireEvent.click(screen.getByRole('button', { name: /^(Continue|Finish)$/ }));
-}
-
-async function completeFirstHome() {
+async function answerWhere() {
   await chooseCountry('Country', 'spa', /Spain/);
   fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Madrid' } });
   clickContinue();
-  fireEvent.change(screen.getByLabelText('Moved in'), { target: { value: '2022-09-01' } });
-  clickContinue();
-  fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '3200' } });
-  clickContinue();
 }
 
-beforeEach(() => sessionStorage.clear());
+beforeEach(() => {
+  sessionStorage.clear();
+  asked.mockClear();
+});
+
+describe('OnboardingWizard: moved in earlier', () => {
+  it('starts the home today and asks nothing about it, only offers the way to say otherwise', () => {
+    renderWizard();
+
+    expect(screen.getByRole('button', { name: 'Moved in earlier?' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Moved in')).not.toBeInTheDocument();
+  });
+
+  it('opens the day on request, never later than today', () => {
+    renderWizard();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Moved in earlier?' }));
+
+    const day = screen.getByLabelText('Moved in');
+    expect(day).toHaveAttribute('type', 'date');
+    expect(day).toHaveAttribute('max', '2026-10-31');
+    expect(day).toHaveValue('2026-10-31');
+  });
+
+  it('saves the home from the day the person gave', async () => {
+    const { props } = renderWizard();
+    await chooseCountry('Country', 'spa', /Spain/);
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Madrid' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Moved in earlier?' }));
+    fireEvent.change(screen.getByLabelText('Moved in'), { target: { value: '2023-03-01' } });
+    clickContinue();
+    clickContinue();
+    fireEvent.click(finish());
+
+    await waitFor(() => expect(props.onCreatePhase).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(props.onCreatePhase).mock.calls[0][0].create.startDate).toBe('2023-03-01');
+  });
+
+  it('says so when the day has not come yet', async () => {
+    renderWizard();
+    await chooseCountry('Country', 'spa', /Spain/);
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Madrid' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Moved in earlier?' }));
+
+    fireEvent.change(screen.getByLabelText('Moved in'), { target: { value: '2026-12-01' } });
+
+    expect(screen.getByText('Moved in cannot be a day in the future.')).toBeInTheDocument();
+  });
+});
 
 describe('OnboardingWizard', () => {
-  it('walks through about you and then the first living phase, as one flow', () => {
+  it('asks three questions, starting with where the person lives', () => {
     renderWizard();
 
     expect(screen.getByRole('dialog', { name: 'Tell us about yourself' })).toBeInTheDocument();
-    expect(heading()).toBe('What should we call you?');
-    expect(progress()).toBe('Step 1 of 7: You');
+    expect(heading()).toBe('Where do you live?');
+    expect(progress()).toBe('Step 1 of 3: Where');
   });
 
-  it('skips the home when there already is one', () => {
-    renderWizard({ phases: [makePhase()] });
-
-    expect(progress()).toBe('Step 1 of 3: You');
-  });
-
-  it('wants a name, so the profile is not empty afterwards', () => {
+  it('needs a country and a city before going on', () => {
     renderWizard();
 
     clickContinue();
 
-    expect(screen.getByText('Tell us what to call you.')).toBeInTheDocument();
-    expect(heading()).toBe('What should we call you?');
+    expect(screen.getByText('Choose a country.')).toBeInTheDocument();
+    expect(screen.getByText('Which city?')).toBeInTheDocument();
+    expect(heading()).toBe('Where do you live?');
   });
 
-  it('checks the year of birth as it is typed', () => {
+  it('asks about income in the currency of the country that was chosen', async () => {
     renderWizard();
-
-    fireEvent.change(screen.getByLabelText('Year of birth (optional)'), { target: { value: '90' } });
-
-    expect(screen.getByText('Use a four-digit year such as 1990.')).toBeInTheDocument();
-  });
-
-  it('lets the optional steps be skipped', () => {
-    renderWizard();
-    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Joe' } });
+    await chooseCountry('Country', 'arg', /Argentina/);
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Buenos Aires' } });
     clickContinue();
 
-    clickContinue();
-
-    expect(heading()).toBe('How do you live day to day?');
+    expect(heading()).toBe('What do you earn each month, after tax?');
+    expect(screen.getByLabelText('Currency')).toHaveValue('ARS');
+    expect(progress()).toBe('Step 2 of 3: Income');
   });
 
-  it('turns typed nationalities into pills', async () => {
+  it('says what it already knows about the country as soon as it is chosen', async () => {
     renderWizard();
-    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Joe' } });
-    clickContinue();
 
-    fireEvent.change(screen.getByLabelText('Nationalities (optional)'), { target: { value: 'Argentina, España,' } });
+    await chooseCountry('Country', 'spa', /Spain/);
 
-    expect(screen.getByRole('list', { name: 'Chosen nationalities' })).toHaveTextContent('🇦🇷 Argentina');
-    expect(screen.getByRole('list', { name: 'Chosen nationalities' })).toHaveTextContent('🇪🇸 Spain');
+    expect(screen.getByText('In Spain, the typical person has about €1,697 a month after tax.')).toBeInTheDocument();
+    expect(screen.getByText('Eurostat · 2025')).toBeInTheDocument();
   });
 
-  it('saves the profile and the home once, and finishes once, when Finish is tapped twice', async () => {
+  it('says where the income sits as it is typed, and nothing before an income is typed', async () => {
+    renderWizard();
+    await answerWhere();
+    expect(screen.queryByText(/live on less than that/)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Monthly income after tax (optional)'), { target: { value: '3200' } });
+
+    expect(screen.getByText('About 89% of people in Spain live on less than that.')).toBeInTheDocument();
+    expect(asked).toHaveBeenLastCalledWith({ countryCode: 'ES', currency: 'EUR', monthlyIncomeMinor: 320000 });
+  });
+
+  it('lets the income be skipped', async () => {
+    renderWizard();
+    await answerWhere();
+
+    clickContinue();
+
+    expect(heading()).toBe('What is your rent?');
+    expect(progress()).toBe('Step 3 of 3: Rent');
+  });
+
+  it('says what the rent is against the income and what people who rent spend', async () => {
+    renderWizard();
+    await answerWhere();
+    fireEvent.change(screen.getByLabelText('Monthly income after tax (optional)'), { target: { value: '3200' } });
+    clickContinue();
+
+    fireEvent.change(screen.getByLabelText('Monthly rent'), { target: { value: '1200' } });
+
+    expect(screen.getByText('That is 37.5% of your income. People who pay rent in Spain typically spend 26.7%.')).toBeInTheDocument();
+    expect(asked).toHaveBeenLastCalledWith({ countryCode: 'ES', currency: 'EUR', monthlyIncomeMinor: 320000, monthlyRentMinor: 120000 });
+  });
+
+  it('checks the rent as it is typed, and puts the rent question aside for someone who pays none', async () => {
+    renderWizard();
+    await answerWhere();
+    clickContinue();
+
+    fireEvent.change(screen.getByLabelText('Monthly rent'), { target: { value: '.' } });
+    expect(screen.getByText('Enter an amount such as 1200, or leave it empty.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/I don.t pay rent/));
+    expect(screen.getByLabelText('Monthly rent')).toBeDisabled();
+    expect(screen.queryByText('Enter an amount such as 1200, or leave it empty.')).not.toBeInTheDocument();
+  });
+
+  it('saves the home the person lives in, with income and rent, and the name the account already has', async () => {
     const { props } = renderWizard();
-    await completeAboutYou();
-    await completeFirstHome();
+    await answerWhere();
+    fireEvent.change(screen.getByLabelText('Monthly income after tax (optional)'), { target: { value: '3200' } });
+    clickContinue();
+    fireEvent.change(screen.getByLabelText('Monthly rent'), { target: { value: '1200' } });
 
-    tapTwice(within(screen.getByRole('dialog')).getByRole('button', { name: 'Finish' }));
+    fireEvent.click(finish());
 
     await waitFor(() => expect(props.onFinished).toHaveBeenCalledTimes(1));
-    expect(props.onSaveProfile).toHaveBeenCalledTimes(1);
-    expect(props.onCreatePhase).toHaveBeenCalledTimes(1);
-  });
-
-  it('saves the profile, then the first home with its bills, and reports that it is done', async () => {
-    const { props } = renderWizard();
-    await completeAboutYou();
-    await completeFirstHome();
-    fireEvent.click(screen.getByRole('button', { name: 'Add a bill' }));
-    fireEvent.click(screen.getByLabelText('Rent'));
-    fireEvent.change(screen.getByLabelText('Amount each time'), { target: { value: '1200' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add cost' }));
-
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Finish' }));
-
-    await waitFor(() => expect(props.onFinished).toHaveBeenCalledTimes(1));
-    expect(props.onSaveProfile).toHaveBeenCalledWith({
-      fullName: 'Joe Doyle',
-      birthYear: 1990,
-      nationalities: ['AR', 'ES'],
-      taxResidence: 'ES',
-      householdAdults: 2,
-      dependentChildren: 0,
-      employmentStatus: 'EMPLOYEE',
-    });
-    expect(props.onCreatePhase).toHaveBeenCalledTimes(1);
+    expect(props.onSaveProfile).toHaveBeenCalledWith({ ...emptyProfile, fullName: 'Reviewer' });
     expect(vi.mocked(props.onCreatePhase).mock.calls[0][0].create).toMatchObject({
       name: '🇪🇸 Madrid',
-      startDate: '2022-09-01',
+      startDate: '2026-10-31',
       endDate: null,
-      incomeStreams: [{ label: 'Salary', amountMinor: 320000, startDate: '2022-09-01', endDate: null }],
+      tenure: 'RENT',
+      incomeStreams: [{ label: 'Salary', amountMinor: 320000, startDate: '2026-10-31', endDate: null }],
       fixedCosts: [expect.objectContaining({ category: 'RENT', amountMinor: 120000 })],
     });
     expect(sessionStorage.getItem('draft:onboarding')).toBeNull();
   });
 
-  it('saves only the profile when a home already exists', async () => {
-    const { props } = renderWizard({ phases: [makePhase()] });
-    await completeAboutYou();
+  it('can be finished with nothing but a place', async () => {
+    const { props } = renderWizard();
+    await answerWhere();
+    clickContinue();
+
+    fireEvent.click(finish());
+
+    await waitFor(() => expect(props.onFinished).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(props.onCreatePhase).mock.calls[0][0].create).toMatchObject({ incomeStreams: [], fixedCosts: [] });
+  });
+
+  it('does not touch the profile when it already has a name, or when the account has none to give', async () => {
+    const named = renderWizard({ profile: makeProfile({ fullName: 'Juan' }) });
+    await answerWhere();
+    clickContinue();
+    fireEvent.click(finish());
+    await waitFor(() => expect(named.props.onFinished).toHaveBeenCalledTimes(1));
+    expect(named.props.onSaveProfile).not.toHaveBeenCalled();
+  });
+
+  it('saves the home and finishes once, even when Finish is tapped twice', async () => {
+    const { props } = renderWizard();
+    await answerWhere();
+    clickContinue();
+
+    tapTwice(finish());
 
     await waitFor(() => expect(props.onFinished).toHaveBeenCalledTimes(1));
     expect(props.onSaveProfile).toHaveBeenCalledTimes(1);
-    expect(props.onCreatePhase).not.toHaveBeenCalled();
+    expect(props.onCreatePhase).toHaveBeenCalledTimes(1);
   });
 
-  it('stays open and says why when the profile cannot be saved', async () => {
-    const onSaveProfile = vi.fn().mockResolvedValue({ ok: false, failure: { kind: 'network', message: 'Could not reach the server.' } });
-    const { props } = renderWizard({ phases: [makePhase()], onSaveProfile });
-
-    await completeAboutYou();
-
-    expect(await screen.findByText('Could not reach the server.')).toBeInTheDocument();
-    expect(props.onFinished).not.toHaveBeenCalled();
-  });
-
-  it('does not save the profile twice when only the home had to be retried', async () => {
+  it('stays open and says why when the home cannot be saved, and does not save the profile twice on a retry', async () => {
     const onCreatePhase = vi
       .fn()
-      .mockResolvedValueOnce({ ok: false, failure: { kind: 'overlap', message: 'overlap', conflictingPhaseIds: [] } })
+      .mockResolvedValueOnce({ ok: false, failure: { kind: 'network', message: 'Could not reach the server.' } })
       .mockResolvedValue(ok);
     const { props } = renderWizard({ onCreatePhase });
-    await completeAboutYou();
-    await completeFirstHome();
+    await answerWhere();
+    clickContinue();
 
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Finish' }));
-    expect(await screen.findByText(/These dates overlap/)).toBeInTheDocument();
-    expect(heading()).toBe('When were you there?');
-    clickContinue();
-    clickContinue();
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Finish' }));
+    fireEvent.click(finish());
+    expect(await screen.findByText('Could not reach the server.')).toBeInTheDocument();
+    expect(props.onFinished).not.toHaveBeenCalled();
+    fireEvent.click(finish());
 
     await waitFor(() => expect(props.onFinished).toHaveBeenCalledTimes(1));
     expect(props.onSaveProfile).toHaveBeenCalledTimes(1);
     expect(onCreatePhase).toHaveBeenCalledTimes(2);
   });
 
+  it('stays open and says why when the profile cannot be saved', async () => {
+    const onSaveProfile = vi.fn().mockResolvedValue({ ok: false, failure: { kind: 'network', message: 'Could not reach the server.' } });
+    const { props } = renderWizard({ onSaveProfile });
+    await answerWhere();
+    clickContinue();
+
+    fireEvent.click(finish());
+
+    expect(await screen.findByText('Could not reach the server.')).toBeInTheDocument();
+    expect(props.onCreatePhase).not.toHaveBeenCalled();
+  });
+
   it('resumes on the step the person closed it on, with their answers', async () => {
     const first = renderWizard();
-    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Joe Doyle' } });
-    clickContinue();
-    fireEvent.change(screen.getByLabelText('Nationalities (optional)'), { target: { value: 'Italy,' } });
+    await answerWhere();
+    fireEvent.change(screen.getByLabelText('Monthly income after tax (optional)'), { target: { value: '3200' } });
     first.unmount();
 
     renderWizard();
 
-    expect(heading()).toBe('Where are you from?');
-    expect(screen.getByRole('list', { name: 'Chosen nationalities' })).toHaveTextContent('Italy');
+    expect(heading()).toBe('What do you earn each month, after tax?');
+    expect(screen.getByLabelText('Monthly income after tax (optional)')).toHaveValue('3200');
     expect(screen.getByText('Picked up where you left off.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
-    expect(screen.getByLabelText('Full name')).toHaveValue('Joe Doyle');
+    expect(screen.getByLabelText('City')).toHaveValue('Madrid');
   });
 
   it('closes from Cancel on the first step', () => {

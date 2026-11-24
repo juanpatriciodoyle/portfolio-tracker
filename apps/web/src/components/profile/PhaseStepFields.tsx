@@ -1,23 +1,20 @@
 import { intlLocale } from '../../i18n/locale';
 import { useTranslation } from '../../i18n/useTranslation';
-import { Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { HOUSING_TENURES, type CreateFixedCostRequest } from "../../contracts";
+import { useMemo } from "react";
+import { HOUSING_TENURES } from "../../contracts";
 import { currencyOptions } from "../../lib/currencies";
 import { clampDateYear, keepDecimal, keepNameCharacters } from "../../lib/inputFilters";
-import { formatMinor } from "../../lib/money";
 import WizardField from "../wizard/WizardField";
 import CarryJobs from "./CarryJobs";
 import type { CarryCandidate, CarryChoice } from "./carryOver";
 import CountrySelect from "./CountrySelect";
-import FixedCostEditor from "./FixedCostEditor";
-import { CADENCE_PHRASES, CATEGORY_LABELS, TENURE_LABELS } from "./labels";
+import { TENURE_LABELS } from "./labels";
 import type { PhaseFormState } from "./phaseForm";
-import type { PhaseFlowStepId } from "./phaseStepCopy";
+import type { PhaseStepId } from "./phaseForm";
 import type { PhaseFormFeedback } from "./usePhaseFormFeedback";
 
 interface PhaseStepFieldsProps {
-  step: PhaseFlowStepId;
+  step: PhaseStepId;
   /** Keeps ids unique when more than one flow is on the page. */
   idPrefix: string;
   form: PhaseFormState;
@@ -28,14 +25,10 @@ interface PhaseStepFieldsProps {
   feedback: PhaseFormFeedback;
   /** Today, as a calendar day: nothing later can be picked. */
   today: string;
-  costs: readonly CreateFixedCostRequest[];
-  onCostsChange: (costs: CreateFixedCostRequest[]) => void;
   /** Asks for a first income. Left out when changing an existing home, whose income is listed on its own. */
   includeIncome?: boolean;
   /** The previous home's jobs that could carry on here, when there are any. */
   carry?: { candidates: readonly CarryCandidate[]; choice: CarryChoice; onChange: (choice: CarryChoice) => void };
-  /** Told whenever the form to add a bill opens or closes: the flow hides its own main button while it is open. */
-  onAddingBillChange?: (adding: boolean) => void;
 }
 
 /** The questions of one step of "Add a living phase". The same steps serve the first-time flow and the phase editor. */
@@ -46,21 +39,11 @@ export default function PhaseStepFields({
   onChange,
   feedback,
   today,
-  costs,
-  onCostsChange,
   includeIncome = true,
   carry,
-  onAddingBillChange,
 }: PhaseStepFieldsProps) {
   const { t, locale } = useTranslation();
   const currencies = useMemo(() => currencyOptions(intlLocale(locale)), [locale]);
-  const [addingBill, setAddingBillState] = useState(false);
-  const setAddingBill = (adding: boolean) => {
-    setAddingBillState(adding);
-    onAddingBillChange?.(adding);
-  };
-  // Leaving the step closes the form, so the flow's main button must come back with it.
-  useEffect(() => () => onAddingBillChange?.(false), [onAddingBillChange]);
   const id = (field: keyof PhaseFormState) => `${idPrefix}-${field}`;
   const describedBy = (field: keyof PhaseFormState) =>
     feedback.errorOf(field) ? `${id(field)}-error` : undefined;
@@ -184,8 +167,8 @@ export default function PhaseStepFields({
     );
   }
 
-  if (step === "money") {
-    return (
+  // The last step: the money.
+  return (
       <>
         <div className="wizard__row">
           <WizardField id={id("currency")} label={t('phaseFields.currency')}>
@@ -252,60 +235,5 @@ export default function PhaseStepFields({
           </select>
         </WizardField>
       </>
-    );
-  }
-
-  return (
-    <div className="wizard__stack">
-      {costs.length > 0 && (
-        <ul className="wizard-list" aria-label={t('phaseFields.billsAdded')}>
-          {costs.map((cost, position) => (
-            <li key={position} className="wizard-list__item">
-              <span>
-                {cost.label ?? t(CATEGORY_LABELS[cost.category])}
-                <span className="wizard-field__hint">
-                  {" "}
-                  · {t(CADENCE_PHRASES[cost.cadence])}
-                </span>
-              </span>
-              <span>
-                {formatMinor(cost.amountMinor, form.currency)}{" "}
-                <button
-                  type="button"
-                  className="profile-icon-button"
-                  aria-label={t('phaseFields.remove', { name: cost.label ?? t(CATEGORY_LABELS[cost.category]) })}
-                  onClick={() =>
-                    onCostsChange(
-                      costs.filter((_, other) => other !== position),
-                    )
-                  }
-                >
-                  <Trash2 size={14} aria-hidden="true" />
-                </button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {addingBill ? (
-        <FixedCostEditor
-          currency={form.currency}
-          onCancel={() => setAddingBill(false)}
-          onSubmit={async (bill) => {
-            onCostsChange([...costs, bill]);
-            setAddingBill(false);
-            return { ok: true, value: undefined };
-          }}
-        />
-      ) : (
-        <button
-          type="button"
-          className="profile-text-button"
-          onClick={() => setAddingBill(true)}
-        >
-          <Plus size={14} aria-hidden="true" /> {t('phaseFields.addBill')}
-        </button>
-      )}
-    </div>
   );
 }

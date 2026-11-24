@@ -6,7 +6,7 @@ import { ApiError } from '../../../lib/apiClient';
 import { makePhase } from '../../../test/fixtures';
 import { tapTwice } from '../../../test/doubleTap';
 import { chooseCountry, clickContinue } from '../../../test/wizardHelpers';
-import { phaseDraftSchema } from '../phaseForm';
+import { initialPhaseForm, phaseDraftSchema } from '../phaseForm';
 import PhaseWizard from '../PhaseWizard';
 
 const ok = { ok: true as const, value: undefined };
@@ -47,7 +47,7 @@ describe('PhaseWizard', () => {
 
     expect(screen.getByRole('dialog', { name: 'Add a living phase' })).toBeInTheDocument();
     expect(heading()).toBe('Where do you live?');
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'Step 1 of 4: Where');
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'Step 1 of 3: Where');
   });
 
   it('never asks for a name', () => {
@@ -81,7 +81,7 @@ describe('PhaseWizard', () => {
     clickContinue();
 
     expect(screen.getByText('Choose a country.')).toBeInTheDocument();
-    expect(screen.getByText('Which city was it?')).toBeInTheDocument();
+    expect(screen.getByText('Which city?')).toBeInTheDocument();
     expect(heading()).toBe('Where do you live?');
   });
 
@@ -109,7 +109,7 @@ describe('PhaseWizard', () => {
 
     clickContinue();
 
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'Step 2 of 4: When');
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'Step 2 of 3: When');
   });
 
   it('goes back without losing answers', async () => {
@@ -146,7 +146,7 @@ describe('PhaseWizard', () => {
 
     fillDates('2020-01-01', '2020-01-02');
     clickContinue();
-    expect(heading()).toBe('What came in each month?');
+    expect(heading()).toBe('How much comes in each month, after tax?');
   });
 
   it('ticks "Still living here" for the first home and locks the move-out date', async () => {
@@ -168,21 +168,14 @@ describe('PhaseWizard', () => {
     expect(screen.getByLabelText('Currency')).toHaveValue('ARS');
   });
 
-  it('adds a phase with its generated name and the bills added along the way', async () => {
+  it('adds a phase with its generated name and its first income', async () => {
     const { props } = renderWizard();
     await fillPlace('Lisbon');
     clickContinue();
     fillDates();
     clickContinue();
     fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '2800' } });
-    clickContinue();
 
-    expect(heading()).toBe('What do you pay every month?');
-    fireEvent.click(screen.getByRole('button', { name: 'Add a bill' }));
-    fireEvent.click(screen.getByLabelText('Rent'));
-    fireEvent.change(screen.getByLabelText('Amount each time'), { target: { value: '950' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add cost' }));
-    expect(screen.getByRole('list', { name: 'Bills added' })).toHaveTextContent('Rent');
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
 
     await waitFor(() => expect(props.onSubmit).toHaveBeenCalledTimes(1));
@@ -194,7 +187,7 @@ describe('PhaseWizard', () => {
       startDate: '2020-01-01',
       endDate: '2022-08-31',
       incomeStreams: [{ label: 'Salary', amountMinor: 280000, startDate: '2020-01-01', endDate: null }],
-      fixedCosts: [expect.objectContaining({ category: 'RENT', cadence: 'MONTHLY', amountMinor: 95000 })],
+      fixedCosts: [],
     });
   });
 
@@ -205,7 +198,6 @@ describe('PhaseWizard', () => {
     fillDates();
     clickContinue();
     expect(screen.getByLabelText('Monthly net income (optional)')).toHaveValue('');
-    clickContinue();
 
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
 
@@ -219,21 +211,19 @@ describe('PhaseWizard', () => {
     clickContinue();
     fillDates();
     clickContinue();
-    clickContinue();
 
     tapTwice(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
 
     await waitFor(() => expect(props.onSubmit).toHaveBeenCalledTimes(1));
   });
 
-  it('can add a phase with no bills at all', async () => {
+  it('asks for no bills: they are added through Add expense, so a new phase starts with none', async () => {
     const { props } = renderWizard();
     await fillPlace();
     clickContinue();
     fillDates();
     clickContinue();
     fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '2800' } });
-    clickContinue();
 
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
 
@@ -250,7 +240,6 @@ describe('PhaseWizard', () => {
     fillDates();
     clickContinue();
     fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '2800' } });
-    clickContinue();
 
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
 
@@ -334,7 +323,6 @@ describe('PhaseWizard drafts', () => {
     fillDates();
     clickContinue();
     fireEvent.change(screen.getByLabelText('Monthly net income (optional)'), { target: { value: '2800' } });
-    clickContinue();
 
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
 
@@ -399,39 +387,27 @@ describe('PhaseWizard drafts', () => {
     });
   });
 
-  describe('the bills step', () => {
-    const toBills = async () => {
+  describe('without a bills step', () => {
+    it('ends on the money step, which finishes the phase', async () => {
       renderWizard();
       await fillPlace();
       clickContinue();
       fillDates();
       clickContinue();
-      clickContinue();
-    };
 
-    it('has no subtitle', async () => {
-      await toBills();
-
-      expect(document.querySelector('.wizard__hint')).toBeNull();
+      expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'Step 3 of 3: Money');
+      expect(screen.getByRole('button', { name: 'Add living phase' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Add a bill/ })).not.toBeInTheDocument();
     });
 
-    it('hides the finish button while a bill is being added, and brings it back after', async () => {
-      await toBills();
-      expect(screen.getByRole('button', { name: 'Add living phase' })).toBeInTheDocument();
+    it('opens an unfinished draft from before, which had a bills step, on the last step', () => {
+      const form = { ...initialPhaseForm(null, { currency: 'EUR', stillLivingHere: false }), city: 'Lisbon', countryCode: 'PT', startDate: '2020-01-01', endDate: '2021-01-01' };
+      sessionStorage.setItem('draft:phase:new', JSON.stringify({ step: 3, values: { form, costs: [{ category: 'RENT' }], carry: { unticked: [], amounts: {} } } }));
 
-      fireEvent.click(screen.getByRole('button', { name: /Add a bill/ }));
-      expect(screen.queryByRole('button', { name: 'Add living phase' })).not.toBeInTheDocument();
+      renderWizard();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-      expect(screen.getByRole('button', { name: 'Add living phase' })).toBeInTheDocument();
-    });
-
-    it('offers every 6 months as a cadence and a neutral provider placeholder', async () => {
-      await toBills();
-      fireEvent.click(screen.getByRole('button', { name: /Add a bill/ }));
-
-      expect(screen.getByRole('radio', { name: 'Every 6 months' })).toBeInTheDocument();
-      expect(screen.getByLabelText('Label (optional)')).toHaveAttribute('placeholder', 'Company / Provider');
+      expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'Step 3 of 3: Money');
+      expect(screen.queryByRole('button', { name: /Add a bill/ })).not.toBeInTheDocument();
     });
   });
 
@@ -454,7 +430,6 @@ describe('PhaseWizard drafts', () => {
       const keep = screen.getByRole('group', { name: 'Keep these jobs?' });
       expect(within(keep).getByLabelText(/Salary/)).toBeChecked();
       expect(within(keep).getByLabelText(/Consulting/)).toBeChecked();
-      clickContinue();
       fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
 
       await waitFor(() => expect(props.onSubmit).toHaveBeenCalled());
@@ -469,7 +444,6 @@ describe('PhaseWizard drafts', () => {
       await toMoneyStep();
 
       fireEvent.click(within(screen.getByRole('group', { name: 'Keep these jobs?' })).getByLabelText(/Consulting/));
-      clickContinue();
       fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
 
       await waitFor(() => expect(props.onSubmit).toHaveBeenCalled());
@@ -482,14 +456,12 @@ describe('PhaseWizard drafts', () => {
 
       const keep = screen.getByRole('group', { name: 'Keep these jobs?' });
       fireEvent.click(within(keep).getByRole('checkbox', { name: /Consulting/ }));
-      clickContinue();
       fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
 
       expect(await screen.findByText(/Enter what Salary pays each month here, or untick it./)).toBeInTheDocument();
       expect(props.onSubmit).not.toHaveBeenCalled();
 
       fireEvent.change(screen.getByLabelText('Salary per month in ARS'), { target: { value: '4500000' } });
-      clickContinue();
       fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add living phase' }));
 
       await waitFor(() => expect(props.onSubmit).toHaveBeenCalled());

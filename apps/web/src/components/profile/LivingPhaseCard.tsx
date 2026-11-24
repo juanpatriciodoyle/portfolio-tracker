@@ -1,7 +1,7 @@
 import { useTranslation } from '../../i18n/useTranslation';
-import { ChevronDown, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useId, useState } from 'react';
-import type { LivingPhaseDto, TimelineEntryDto, UpdateFixedCostRequest, UpdateLivingPhaseRequest } from '../../contracts';
+import { incomeReferenceDay, type LivingPhaseDto, type TimelineEntryDto, type UpdateFixedCostRequest, type UpdateLivingPhaseRequest } from '../../contracts';
 import type { MutationResult } from '../../lib/apiErrors';
 import { formatCalendarDate, formatMinor, formatPercent, formatPhaseRange } from '../../lib/money';
 import { phaseAddress } from '../../lib/phaseName';
@@ -11,15 +11,20 @@ import { describeFailure } from './failureMessage';
 import { STATUS_LABELS } from './labels';
 import IncomeSection from './IncomeSection';
 import { summarizeActiveIncome } from './incomeSummary';
+import PhaseBills from './PhaseBills';
 import PhaseDetails from './PhaseDetails';
 import IncomeViewToggle from './IncomeViewToggle';
-import { burnRateMinor, housingBurden, incomeFigures, type IncomeView } from './phaseRatios';
+import { burnRateMinor, housingBurden, incomeFigures, incomeViewsDiffer, type IncomeView } from './phaseRatios';
+import { costTrend, describeTrend, savingsTrend, type PhaseTrend } from './phaseTrend';
+import { intlLocale } from '../../i18n/locale';
 import { useSubmitOnce } from '../../hooks/useSubmitOnce';
 
 interface LivingPhaseCardProps {
   phase: LivingPhaseDto;
   /** The computed month-by-month picture; absent only for a moment after a change. */
   entry: TimelineEntryDto | undefined;
+  /** The home lived in just before this one, to say how what is kept changed since. */
+  previousEntry?: TimelineEntryDto;
   expanded: boolean;
   compareSelected: boolean;
   onToggleExpanded: () => void;
@@ -38,6 +43,7 @@ interface LivingPhaseCardProps {
 export default function LivingPhaseCard({
   phase,
   entry,
+  previousEntry,
   expanded,
   compareSelected,
   onToggleExpanded,
@@ -51,24 +57,37 @@ export default function LivingPhaseCard({
   announce,
 }: LivingPhaseCardProps) {
   const words = useTranslation();
-  const { t } = words;
+  const { t, locale } = words;
   const id = useId();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const { run: runDelete, pending: deleting } = useSubmitOnce();
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [incomeView, setIncomeView] = useState<IncomeView>('current');
   const [incomeOpen, setIncomeOpen] = useState(false);
+  const [billsOpen, setBillsOpen] = useState(false);
+  /** Each press of "Add job" opens the income list with the form to add one. */
+  const [addJobPresses, setAddJobPresses] = useState(0);
 
   const status = entry?.status;
   const address = phaseAddress(phase);
-  const figures = entry ? incomeFigures(entry, incomeView) : null;
+  const viewsDiffer = entry ? incomeViewsDiffer(entry) : false;
+  const shownView: IncomeView = viewsDiffer ? incomeView : 'current';
+  const figures = entry ? incomeFigures(entry, shownView) : null;
   const housing = entry && figures ? housingBurden({ monthlyIncomeMinor: figures.incomeMinor, fixedCostsByCategoryMinor: entry.fixedCostsByCategoryMinor }) : null;
   const savingsRate = figures?.savingsRate ?? null;
   const burn = figures ? burnRateMinor(figures) : null;
   // The income that counts is the one paying on today; a past home shows its last day, one still ahead its first.
-  const today = billing?.asOf ?? phase.endDate ?? phase.startDate;
-  const incomeDay = phase.endDate !== null && phase.endDate < today ? phase.endDate : today < phase.startDate ? phase.startDate : today;
-  const incomeSummary = summarizeActiveIncome(phase.incomeStreams, incomeDay, (amountMinor) => formatMinor(amountMinor, phase.currency), (day) => formatCalendarDate(day), t);
+  const incomeDay = incomeReferenceDay(phase, billing?.asOf ?? phase.endDate ?? phase.startDate);
+  const incomeSummary = summarizeActiveIncome(phase.incomeStreams, incomeDay, (amountMinor) => formatMinor(amountMinor, phase.currency), (day) => formatCalendarDate(day), t, { past: status === 'past' });
+
+  const records = billing?.recordsFor(phase.id);
+  const asOf = billing?.asOf ?? null;
+  const previousSavingsRate = previousEntry ? incomeFigures(previousEntry, shownView).savingsRate : null;
+  // What changed, in one line: the bills say it best; failing that, what is kept against the previous home.
+  const previousName = previousEntry?.name ?? null;
+  const costs = records && asOf ? costTrend(records, asOf, phase.currency) : null;
+  const kept = savingsTrend(savingsRate, previousSavingsRate);
+  const trend: PhaseTrend | null = costs ?? (kept && previousName !== null ? { ...kept, previousName } : null);
 
   const confirmDelete = () =>
     runDelete(async () => {
@@ -114,7 +133,15 @@ export default function LivingPhaseCard({
 
       {entry && figures && (
         <div className="phase-card__metrics">
-          <IncomeViewToggle phaseId={phase.id} value={incomeView} onChange={setIncomeView} />
+          {viewsDiffer ? (
+            <IncomeViewToggle phaseId={phase.id} value={incomeView} onChange={setIncomeView} />
+          ) : (
+            entry.monthlyIncomeMinor > 0 && (
+              <p className="phase-card__steady" data-income="steady">
+                {t('card.steadyIncome')}
+              </p>
+            )
+          )}
           <p className={`phase-card__leftover ${figures.savingsCapacityMinor >= 0 ? 'is-positive' : 'is-negative'}`}>
             <strong>{formatMinor(Math.abs(figures.savingsCapacityMinor), entry.currency)}</strong>{' '}
             {figures.savingsCapacityMinor >= 0 ? t('card.left') : t('card.short')}
@@ -151,6 +178,11 @@ export default function LivingPhaseCard({
               )}
             </div>
           )}
+          {trend && (
+            <p className="phase-card__trend" data-trend={'changeMinor' in trend ? 'costs' : 'savings'}>
+              {describeTrend(trend, entry.currency, intlLocale(locale), t)}
+            </p>
+          )}
         </div>
       )}
 
@@ -158,19 +190,43 @@ export default function LivingPhaseCard({
         <p className="phase-card__career-summary" data-summary="income">
           {incomeSummary}
         </p>
-        <button
-          type="button"
-          className="profile-text-button phase-card__career-trigger"
-          aria-expanded={incomeOpen}
-          aria-controls={`${id}-income`}
-          onClick={() => setIncomeOpen((open) => !open)}
-        >
-          {t('card.incomeCareer')}<span className="phase-card__career-add">{t('card.addJob')}</span>
-        </button>
+        <div className="phase-card__career-actions">
+          <button
+            type="button"
+            className="profile-text-button phase-card__career-trigger"
+            aria-expanded={incomeOpen}
+            aria-controls={`${id}-income`}
+            onClick={() => setIncomeOpen((open) => !open)}
+          >
+            {t('card.incomeCareer')}
+          </button>
+          <button
+            type="button"
+            className="profile-action-button profile-action-button--outline phase-card__add-job"
+            onClick={() => {
+              setIncomeOpen(true);
+              setAddJobPresses((presses) => presses + 1);
+            }}
+          >
+            <Plus size={14} aria-hidden="true" /> {t('card.addJob')}
+          </button>
+        </div>
       </div>
+      {billing && (
+        <div className="phase-card__bills">
+          {entry && <p className="phase-card__bills-summary">{t('card.costsLine', { amount: formatMinor(entry.monthlyFixedCostsMinor, entry.currency) })}</p>}
+          <button
+            type="button"
+            className="profile-action-button profile-action-button--outline phase-card__bills-button"
+            onClick={() => setBillsOpen(true)}
+          >
+            <FileText size={14} aria-hidden="true" /> {t('card.billsAndCosts')}
+          </button>
+        </div>
+      )}
       {incomeOpen && (
         <div id={`${id}-income`} className="phase-card__income">
-          <IncomeSection phase={phase} asOf={billing?.asOf ?? undefined} onUpdatePhase={onUpdatePhase} announce={announce} />
+          <IncomeSection phase={phase} asOf={billing?.asOf ?? undefined} addRequests={addJobPresses} onUpdatePhase={onUpdatePhase} announce={announce} />
         </div>
       )}
 
@@ -221,6 +277,7 @@ export default function LivingPhaseCard({
           )}
         </div>
       </div>
+      {billing && <PhaseBills phase={phase} entry={entry} billing={billing} open={billsOpen} onClose={() => setBillsOpen(false)} announce={announce} />}
     </article>
   );
 }
