@@ -108,7 +108,7 @@ export const shell = {
   'error.demoBusy': 'The demo is busy right now. Try again in a few minutes.',
   'error.notAGuest': 'Only a demo session can be ended this way. Your own data was not touched.',
   'error.guestEnded': 'Your demo session has ended. Start a new one to keep exploring.',
-  'error.captchaFailed': 'The security check was not completed. Tick the box and try again.',
+  'error.captchaFailed': 'The security check was not completed. Try again.',
   'error.captchaUnavailable': 'The security check could not be confirmed right now. Try again in a moment.',
   'error.passkeyFailed': 'The passkey could not be verified. Try again, or sign in with Google.',
   'error.duplicateBill': 'This bill is already recorded',

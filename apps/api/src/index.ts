@@ -106,7 +106,7 @@ const auth = new AuthService({
   allowRegistration: config.allowRegistration,
   now: () => new Date(),
 });
-// The human check before the two ways of creating an account (Google, the demo): only where hCaptcha is configured.
+// The human check before a Google sign-in (the way accounts are created): only where hCaptcha is configured. The demo is not guarded.
 const captcha = config.hcaptcha ? new HCaptchaVerifier(config.hcaptcha.secret, config.hcaptcha.siteKey) : undefined;
 const signInAttempts = new SlidingWindowRateLimiter({ limit: 20, windowMs: 10 * 60 * 1000, now: Date.now });
 app.use('/api', createAuthRouter(auth, { limiter: signInAttempts, captcha }));
@@ -130,7 +130,7 @@ const guests = new GuestService({
   issueToken: generateToken,
   now: () => new Date(),
 });
-app.use('/api', config.enableDemo ? createDemoRouter(guests, { limiter: signInAttempts, captcha }) : createDisabledDemoRouter());
+app.use('/api', config.enableDemo ? createDemoRouter(guests, { limiter: signInAttempts }) : createDisabledDemoRouter());
 
 app.use('/api', apiNotFound);
 app.use(apiErrorHandler(log));

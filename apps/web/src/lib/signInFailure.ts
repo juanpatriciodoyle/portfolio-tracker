@@ -1,5 +1,6 @@
 import { ApiContractError, ApiError } from './apiClient';
 import type { MessageKey } from '../i18n/catalogs';
+import { HumanCheckIncompleteError } from './humanCheck';
 import { serverMessage, type Words } from './serverMessages';
 
 /**
@@ -8,6 +9,7 @@ import { serverMessage, type Words } from './serverMessages';
  */
 export function signInFailureMessage(error: unknown, words: Words, fallback: MessageKey): string {
   const { t } = words;
+  if (error instanceof HumanCheckIncompleteError) return t('error.captchaFailed');
   if (error instanceof ApiError) return serverMessage(error.body, words, fallback);
   if (error instanceof Error && (error.name === 'NotAllowedError' || error.name === 'AbortError')) return t('login.passkeyCancelled');
   if (error instanceof ApiContractError) return t('error.contract');

@@ -4,7 +4,7 @@ import type { CaptchaVerifier } from '../application/ports';
 import { refuse } from './auth';
 
 /**
- * The human check in front of the endpoints that create accounts. With no verifier (not configured) it does nothing.
+ * The human check in front of Google sign-in (the one way an account is created; the demo is never checked). With no verifier (not configured) it does nothing.
  * With one, the request must carry a `captchaToken` hCaptcha confirms: missing, wrong, used before or a check we
  * cannot make all refuse, and nothing behind it runs. It sits after the rate limit, so a flood is limited first.
  */

@@ -1,40 +1,44 @@
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { HumanCheckIncompleteError, type HumanCheckHandle } from '../../lib/humanCheck';
 import { useHumanCheck } from '../useHumanCheck';
 
+const handleWith = (execute: HumanCheckHandle['execute']): HumanCheckHandle => ({ execute, reset: vi.fn() });
+
 describe('useHumanCheck', () => {
-  it('asks for nothing when the server has no check: no widget, no answer needed', () => {
+  it('asks for nothing when the server has no check: solve answers undefined at once', async () => {
     const { result } = renderHook(() => useHumanCheck(null));
-    expect(result.current.required).toBe(false);
-    expect(result.current.widget).toBeNull();
-    expect(result.current.token).toBeNull();
+    expect(result.current.siteKey).toBeNull();
+    await expect(result.current.solve()).resolves.toBeUndefined();
   });
 
-  it('is required, with no answer yet, when there is a site key', () => {
+  it('runs the check through the handle and gives its answer', async () => {
     const { result } = renderHook(() => useHumanCheck('site-key'));
-    expect(result.current.required).toBe(true);
-    expect(result.current.token).toBeNull();
-    expect(result.current.widget?.siteKey).toBe('site-key');
+    act(() => result.current.attach(handleWith(async () => 'answer-1')));
+    await expect(result.current.solve()).resolves.toBe('answer-1');
   });
 
-  it('keeps the answer the widget reports, and drops it when it expires', () => {
+  it('refuses to go on when the check is not on screen or was not completed', async () => {
     const { result } = renderHook(() => useHumanCheck('site-key'));
+    await expect(result.current.solve()).rejects.toBeInstanceOf(HumanCheckIncompleteError);
 
-    act(() => result.current.widget!.onToken('answer-1'));
-    expect(result.current.token).toBe('answer-1');
-
-    act(() => result.current.widget!.onExpire());
-    expect(result.current.token).toBeNull();
+    act(() =>
+      result.current.attach(
+        handleWith(async () => {
+          throw new HumanCheckIncompleteError();
+        })
+      )
+    );
+    await expect(result.current.solve()).rejects.toBeInstanceOf(HumanCheckIncompleteError);
   });
 
-  it('starts over after an attempt: the answer is forgotten and the widget is told to reset', () => {
+  it('starts the widget over on reset, and is harmless when there is none', () => {
     const { result } = renderHook(() => useHumanCheck('site-key'));
-    act(() => result.current.widget!.onToken('answer-1'));
-    const before = result.current.widget!.resetCount;
+    expect(() => result.current.reset()).not.toThrow();
 
-    act(() => result.current.reset());
-
-    expect(result.current.token).toBeNull();
-    expect(result.current.widget!.resetCount).toBe(before + 1);
+    const handle = handleWith(async () => 'x');
+    act(() => result.current.attach(handle));
+    result.current.reset();
+    expect(handle.reset).toHaveBeenCalledTimes(1);
   });
 });

@@ -110,7 +110,7 @@ export const shell: Translated<typeof english> = {
   'error.demoBusy': 'La demo está llena en este momento. Probá de nuevo en unos minutos.',
   'error.notAGuest': 'Solo se puede terminar así una sesión de demo. Tus datos no se tocaron.',
   'error.guestEnded': 'Tu sesión de demo terminó. Empezá una nueva para seguir explorando.',
-  'error.captchaFailed': 'No se completó la verificación de seguridad. Marcá la casilla y probá de nuevo.',
+  'error.captchaFailed': 'No se completó la verificación de seguridad. Probá de nuevo.',
   'error.captchaUnavailable': 'No se pudo confirmar la verificación de seguridad en este momento. Probá de nuevo en un momento.',
   'error.passkeyFailed': 'No se pudo verificar la passkey. Probá de nuevo o ingresá con Google.',
   'error.duplicateBill': 'Esta factura ya está registrada.',

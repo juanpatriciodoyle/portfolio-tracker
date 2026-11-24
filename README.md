@@ -15,11 +15,11 @@
 
 | | |
 |---|---|
-| 📈 **Two honest numbers** | *Total value* and *Total profit*, plus one plain sentence on what drove the profit, before and after inflation. |
+| 📈 **Honest numbers** | *Total value* and *Total profit*, plus one plain sentence on what drove the profit, before and after inflation. |
 | 🧾 **A ledger you can trust** | A buy counts as money you put in, a sale adds to cash, and `value - money put in = profit` always holds. Edit or delete any transaction and the whole ledger is re-checked. |
 | 🕰️ **Real history only** | A daily snapshot draws the value line. Nothing is replayed or guessed, so a period shows up only once there is data behind it. |
 | 🏠 **Life context** | Homes, income, bills read from PDFs, a "second salary" target, and where you stand against public statistics (Eurostat, World Bank, INDEC). |
-| 🌎 **EN + es-AR** | One glossary, enforced by a test. |
+| 🌎 **EN + ES** | One glossary, enforced by a test. |
 
 ## How it fits together
 
@@ -59,13 +59,14 @@ sequenceDiagram
   participant You
   participant App
   participant API
-  You->>App: tick the human check
+  You->>App: continue with Google (popup)
+  App->>App: invisible human check
   App->>API: Google token + hCaptcha token
   API->>API: rate limit, then hCaptcha, then Google
   API-->>App: session (30 days)
 ```
 
-- 🤖 **Human check (hCaptcha)** before Google sign-in and the demo, verified on the server. It fails closed and stays off unless both keys are set.
+- 🤖 **Human check (hCaptcha)** after the Google click (invisible; the demo is never checked), verified on the server. It fails closed and stays off unless both keys are set.
 - 🔑 **No passwords.** Google tokens are checked against this app's client id; accounts are found by an HMAC of the email, never the email itself. Passkeys are optional.
 - 🔒 **Encrypted profile.** Income, homes, bills and goals are encrypted per field. Transactions and snapshots follow in the next phase.
 - 🧪 **Throwaway demo.** Every visitor gets a separate account, erased on sign-out and after an hour.

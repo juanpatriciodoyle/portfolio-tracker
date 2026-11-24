@@ -24,20 +24,17 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
   const { pending: isLoading, error, notice, setError, withGoogleToken, withPasskey, asGuest } = useSignIn(onSuccess);
   const { demoEnabled, captchaSiteKey } = useAppConfig();
   const googleOffered = isGoogleSignInConfigured();
-  // The check guards the two ways of creating an account; with neither on offer there is nothing to guard.
-  const check = useHumanCheck(googleOffered || demoEnabled === true ? (captchaSiteKey ?? null) : null);
-  const waitingForCheck = check.required && check.token === null;
+  // The check guards only Google sign-in, and runs after Google's popup has answered: nothing is drawn up front.
+  const { siteKey: checkSiteKey, attach: attachCheck, solve: solveCheck, reset: resetCheck } = useHumanCheck(googleOffered ? (captchaSiteKey ?? null) : null);
 
-  /** The answer works once: send it, and start the box over whatever came of the attempt. */
-  const withCheck = async (action: (captchaToken: string | undefined) => Promise<unknown> | undefined) => {
-    const captchaToken = check.token ?? undefined;
+  /** The answer works once: whatever came of the attempt, start the check over. */
+  const googleWithCheck = async (accessToken: string) => {
     try {
-      await action(captchaToken);
+      await withGoogleToken(accessToken, solveCheck);
     } finally {
-      check.reset();
+      resetCheck();
     }
   };
-  const waitingStyle = waitingForCheck ? { opacity: 0.5, cursor: 'not-allowed' } : {};
 
   return (
     <div
@@ -98,23 +95,22 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
           </div>
         )}
 
-        {check.widget && <HumanCheck {...check.widget} />}
+        {checkSiteKey !== null && <HumanCheck ref={attachCheck} siteKey={checkSiteKey} />}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {/* Sign in with Google: only where the deployment has a Google client id */}
           {googleOffered && (
-            <GoogleSignIn onToken={(accessToken) => void withCheck((captchaToken) => withGoogleToken(accessToken, captchaToken))} onError={() => setError(t('login.googleCancelled'))}>
+            <GoogleSignIn onToken={(accessToken) => void googleWithCheck(accessToken)} onError={() => setError(t('login.googleCancelled'))}>
               {(signIn) => (
               <button
                 onClick={() => {
-                  if (isLoading || waitingForCheck) return;
+                  if (isLoading) return;
                   setError(null);
                   signIn();
                 }}
-                disabled={isLoading || waitingForCheck}
+                disabled={isLoading}
                 aria-busy={isLoading}
                 style={{
-                  ...waitingStyle,
                   width: '100%',
                   padding: '14px',
                   borderRadius: '10px',
@@ -205,11 +201,10 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
 
           <button
             type="button"
-            onClick={() => void withCheck((captchaToken) => asGuest(captchaToken))}
-            disabled={isLoading || waitingForCheck}
+            onClick={() => void asGuest()}
+            disabled={isLoading}
             aria-busy={isLoading}
             style={{
-              ...waitingStyle,
               width: '100%',
               padding: '14px',
               borderRadius: '10px',
@@ -226,7 +221,6 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
               transition: 'all 0.2s ease',
             }}
             onMouseEnter={(e) => {
-              if (waitingForCheck) return;
               e.currentTarget.style.background = 'var(--gradient-accent-soft-hover)';
               e.currentTarget.style.borderColor = 'var(--accent-blue-light)';
               e.currentTarget.style.color = 'var(--text-accent-hover)';

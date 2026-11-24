@@ -30,7 +30,7 @@ export const signInErrorCodeSchema = z.enum(SIGN_IN_ERROR_CODES);
 export type SignInErrorCode = z.infer<typeof signInErrorCodeSchema>;
 
 /**
- * The answer of the human check (hCaptcha) that `POST /api/auth/google` and `POST /api/auth/demo` carry when the
+ * The answer of the human check (hCaptcha) that `POST /api/auth/google` carries when the
  * server has the check switched on (`GET /api/config` says so). Optional here because the server decides whether it is needed.
  */
 export const captchaTokenSchema = z.string().min(1).max(8192);
