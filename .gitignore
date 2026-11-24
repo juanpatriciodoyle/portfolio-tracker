@@ -10,3 +10,10 @@ dist
 # Encrypted database backups and anything that holds a key
 /backups/
 *.key
+
+# Local working notes, screenshots and tool caches
+/UX-REVIEW.md
+/UX-DECISIONS.md
+/ux-shots/
+/.playwright-mcp/
+/.impeccable/
