@@ -74,6 +74,8 @@ services:
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
       ENABLE_DEMO: ${ENABLE_DEMO:-false}
+      HCAPTCHA_SITEKEY: ${HCAPTCHA_SITEKEY:-}
+      HCAPTCHA_SECRET: ${HCAPTCHA_SECRET:-}
       TRUST_PROXY: ${TRUST_PROXY:-1}
     depends_on:
       migrate: { condition: service_completed_successfully }

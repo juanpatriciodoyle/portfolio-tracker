@@ -1,5 +1,6 @@
 import { KeyRound, ShieldCheck } from 'lucide-react';
 import { useAppConfig } from '../hooks/useAppConfig';
+import { useHumanCheck } from '../hooks/useHumanCheck';
 import { useSignIn } from '../hooks/useSignIn';
 import { isGoogleSignInConfigured } from '../lib/googleConfig';
 import { browserSupportsWebAuthn } from '../lib/passkeys';
@@ -7,6 +8,7 @@ import LanguageSelector from '../i18n/LanguageSelector';
 import { useTranslation } from '../i18n/useTranslation';
 import type { SignedInUserDto } from '../contracts';
 import GoogleSignIn from './GoogleSignIn';
+import HumanCheck from './HumanCheck';
 
 interface LoginModalProps {
   onSuccess: (user: SignedInUserDto) => void;
@@ -20,7 +22,22 @@ interface LoginModalProps {
 export default function LoginModal({ onSuccess }: LoginModalProps) {
   const { t } = useTranslation();
   const { pending: isLoading, error, notice, setError, withGoogleToken, withPasskey, asGuest } = useSignIn(onSuccess);
-  const { demoEnabled } = useAppConfig();
+  const { demoEnabled, captchaSiteKey } = useAppConfig();
+  const googleOffered = isGoogleSignInConfigured();
+  // The check guards the two ways of creating an account; with neither on offer there is nothing to guard.
+  const check = useHumanCheck(googleOffered || demoEnabled === true ? (captchaSiteKey ?? null) : null);
+  const waitingForCheck = check.required && check.token === null;
+
+  /** The answer works once: send it, and start the box over whatever came of the attempt. */
+  const withCheck = async (action: (captchaToken: string | undefined) => Promise<unknown> | undefined) => {
+    const captchaToken = check.token ?? undefined;
+    try {
+      await action(captchaToken);
+    } finally {
+      check.reset();
+    }
+  };
+  const waitingStyle = waitingForCheck ? { opacity: 0.5, cursor: 'not-allowed' } : {};
 
   return (
     <div
@@ -81,20 +98,23 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
           </div>
         )}
 
+        {check.widget && <HumanCheck {...check.widget} />}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {/* Sign in with Google: only where the deployment has a Google client id */}
-          {isGoogleSignInConfigured() && (
-            <GoogleSignIn onToken={(accessToken) => void withGoogleToken(accessToken)} onError={() => setError(t('login.googleCancelled'))}>
+          {googleOffered && (
+            <GoogleSignIn onToken={(accessToken) => void withCheck((captchaToken) => withGoogleToken(accessToken, captchaToken))} onError={() => setError(t('login.googleCancelled'))}>
               {(signIn) => (
               <button
                 onClick={() => {
-                  if (isLoading) return;
+                  if (isLoading || waitingForCheck) return;
                   setError(null);
                   signIn();
                 }}
-                disabled={isLoading}
+                disabled={isLoading || waitingForCheck}
                 aria-busy={isLoading}
                 style={{
+                  ...waitingStyle,
                   width: '100%',
                   padding: '14px',
                   borderRadius: '10px',
@@ -185,10 +205,11 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
 
           <button
             type="button"
-            onClick={() => void asGuest()}
-            disabled={isLoading}
+            onClick={() => void withCheck((captchaToken) => asGuest(captchaToken))}
+            disabled={isLoading || waitingForCheck}
             aria-busy={isLoading}
             style={{
+              ...waitingStyle,
               width: '100%',
               padding: '14px',
               borderRadius: '10px',
@@ -205,6 +226,7 @@ export default function LoginModal({ onSuccess }: LoginModalProps) {
               transition: 'all 0.2s ease',
             }}
             onMouseEnter={(e) => {
+              if (waitingForCheck) return;
               e.currentTarget.style.background = 'var(--gradient-accent-soft-hover)';
               e.currentTarget.style.borderColor = 'var(--accent-blue-light)';
               e.currentTarget.style.color = 'var(--text-accent-hover)';

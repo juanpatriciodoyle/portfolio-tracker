@@ -10,6 +10,7 @@ import { generateToken } from '../lib/auth';
 import { NEW_USER_DEFAULTS } from '../domain/newUser';
 import { createAuthRouter } from '../routes/auth';
 import { createMarketRouter } from '../routes/market';
+import { FakeCaptcha } from './support/fakeCaptcha';
 import { InMemoryUserRepository } from './support/inMemoryUsers';
 
 interface Options {
@@ -19,11 +20,12 @@ interface Options {
   passkeys?: Partial<PasskeyAuthenticator>;
   attemptsAllowed?: number;
   issued?: string[];
+  captcha?: FakeCaptcha;
 }
 
 const ana: VerifiedGoogleIdentity = { email: 'ana@example.com', name: 'Ana', googleId: 'g-1', avatarUrl: 'https://img/a.png' };
 
-function buildAuth({ allowRegistration = true, users = new InMemoryUserRepository(), verifyGoogle, passkeys, attemptsAllowed = 1000, issued = [] }: Options = {}) {
+function buildAuth({ allowRegistration = true, users = new InMemoryUserRepository(), verifyGoogle, passkeys, attemptsAllowed = 1000, issued = [], captcha }: Options = {}) {
   const service = new AuthService({
     users,
     googleIdentities: { verify: verifyGoogle ?? (async () => ana) },
@@ -46,7 +48,7 @@ function buildAuth({ allowRegistration = true, users = new InMemoryUserRepositor
   const app = express();
   app.use(express.json());
   const limiter = new SlidingWindowRateLimiter({ limit: attemptsAllowed, windowMs: 10 * 60 * 1000, now: () => 0 });
-  app.use('/api', createAuthRouter(service, { limiter }));
+  app.use('/api', createAuthRouter(service, { limiter, captcha }));
   return app;
 }
 
@@ -415,5 +417,74 @@ describe('closed registration', () => {
 
     expect(response.status).toBe(403);
     expect(response.body).toEqual({ error: 'New accounts are closed right now. Ask the owner of this app for access.', code: 'REGISTRATION_CLOSED' });
+  });
+});
+
+describe('POST /api/auth/google with the human check on', () => {
+  const google = (app: express.Express) => request(app).post('/api/auth/google');
+
+  it('refuses a request with no check answer, before Google is asked anything', async () => {
+    let verifications = 0;
+    const app = buildAuth({ captcha: new FakeCaptcha(), verifyGoogle: async () => (verifications += 1, ana) });
+
+    const response = await google(app).send({ accessToken: 'access-token' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('CAPTCHA_FAILED');
+    expect(response.body.token).toBeUndefined();
+    expect(verifications).toBe(0);
+  });
+
+  it('refuses a forged or reused answer', async () => {
+    const app = buildAuth({ captcha: new FakeCaptcha() });
+
+    const forged = await google(app).send({ accessToken: 'access-token', captchaToken: 'forged' });
+    const first = await google(app).send({ accessToken: 'access-token', captchaToken: 'good-token' });
+    const reused = await google(app).send({ accessToken: 'access-token', captchaToken: 'good-token' });
+
+    expect([forged.status, first.status, reused.status]).toEqual([400, 200, 400]);
+    expect(forged.body.code).toBe('CAPTCHA_FAILED');
+    expect(reused.body.code).toBe('CAPTCHA_FAILED');
+  });
+
+  it('answers 503 CAPTCHA_UNAVAILABLE when the check cannot be made, and signs nobody in', async () => {
+    const response = await google(buildAuth({ captcha: new FakeCaptcha([], true) })).send({ accessToken: 'access-token', captchaToken: 'good-token' });
+
+    expect(response.status).toBe(503);
+    expect(response.body.code).toBe('CAPTCHA_UNAVAILABLE');
+  });
+
+  it('passes the visitor address on, and ignores a token that is not text', async () => {
+    const captcha = new FakeCaptcha();
+    const app = buildAuth({ captcha });
+
+    await google(app).send({ accessToken: 'access-token', captchaToken: 'good-token' });
+    const malformed = await google(app).send({ accessToken: 'access-token', captchaToken: { $ne: 1 } });
+
+    expect(captcha.asked[0].remoteIp).toBeTruthy();
+    expect(malformed.body.code).toBe('CAPTCHA_FAILED');
+  });
+
+  it('keeps the rate limit first: past the allowance the answer is 429 and the check is not asked', async () => {
+    const captcha = new FakeCaptcha(['a', 'b']);
+    const app = buildAuth({ captcha, attemptsAllowed: 1 });
+
+    await google(app).send({ accessToken: 'access-token', captchaToken: 'a' });
+    const limited = await google(app).send({ accessToken: 'access-token', captchaToken: 'b' });
+
+    expect(limited.status).toBe(429);
+    expect(captcha.asked).toHaveLength(1);
+  });
+
+  it('leaves a passkey sign-in alone', async () => {
+    const response = await request(buildAuth({ captcha: new FakeCaptcha() })).post('/api/auth/passkey/sign-in/options');
+    expect(response.status).toBe(200);
+  });
+});
+
+describe('POST /api/auth/google with no human check configured', () => {
+  it('does not ask for an answer', async () => {
+    const response = await request(buildAuth()).post('/api/auth/google').send({ accessToken: 'access-token' });
+    expect(response.status).toBe(200);
   });
 });

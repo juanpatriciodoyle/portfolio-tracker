@@ -21,6 +21,8 @@ export interface AppConfig {
   /** "Try the demo": a private demo account for every visit. Off by default in production unless set. */
   readonly enableDemo: boolean;
   readonly benchmarkRefresh: boolean;
+  /** The human check (hCaptcha) before Google sign-in and the demo. Absent: no check, no widget. */
+  readonly hcaptcha: { readonly secret: string; readonly siteKey: string } | undefined;
 }
 
 /** The setting is missing or wrong. `problems` name the variables and say what is expected, never what was found. */
@@ -53,6 +55,8 @@ const settings = z.object({
   ALLOW_REGISTRATION: switchValue,
   ENABLE_DEMO: switchValue.optional(),
   BENCHMARK_REFRESH: z.string().optional(),
+  HCAPTCHA_SECRET: z.string().optional(),
+  HCAPTCHA_SITEKEY: z.string().optional(),
 });
 
 const NAMES = Object.keys(settings.shape);
@@ -80,6 +84,10 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
     const value = raw[name];
     if (value === undefined) problems.push(`${name}: is required`);
     else if (production && value.length < MIN_SECRET_LENGTH) problems.push(`${name}: must be at least ${MIN_SECRET_LENGTH} characters (openssl rand -base64 48)`);
+  }
+  // The human check needs both halves, or it would silently run unprotected (or refuse everyone).
+  if ((raw.HCAPTCHA_SECRET === undefined) !== (raw.HCAPTCHA_SITEKEY === undefined)) {
+    problems.push(`${raw.HCAPTCHA_SECRET === undefined ? 'HCAPTCHA_SECRET' : 'HCAPTCHA_SITEKEY'}: is required when ${raw.HCAPTCHA_SECRET === undefined ? 'HCAPTCHA_SITEKEY' : 'HCAPTCHA_SECRET'} is set (both or neither)`);
   }
   if (production) {
     for (const name of ['DATABASE_URL', 'PROFILE_ENCRYPTION_KEY', 'RP_ID', 'ORIGIN'] as const) {
@@ -116,5 +124,6 @@ export function loadConfig(env: Readonly<Record<string, string | undefined>>): A
     allowRegistration: values.ALLOW_REGISTRATION,
     enableDemo: values.ENABLE_DEMO ?? !production,
     benchmarkRefresh: values.BENCHMARK_REFRESH !== 'off',
+    hcaptcha: values.HCAPTCHA_SECRET !== undefined && values.HCAPTCHA_SITEKEY !== undefined ? { secret: values.HCAPTCHA_SECRET, siteKey: values.HCAPTCHA_SITEKEY } : undefined,
   };
 }

@@ -2,21 +2,25 @@ import { Router } from 'express';
 import type { GuestService } from '../application/guestService';
 import { SignInRejectedError } from '../application/errors';
 import type { SlidingWindowRateLimiter } from '../application/limits';
+import type { CaptchaVerifier } from '../application/ports';
 import type { ApiErrorResponse } from '../contracts';
 import { errorName, log } from '../lib/logger';
 import { createThrottle, refuse } from './auth';
+import { captchaGate } from './captcha';
 import { requireUser, respondWithError, userIdOf } from './http';
 
 export interface DemoRouterOptions {
   /** The same allowance per address as every other way of signing in. */
   readonly limiter: SlidingWindowRateLimiter;
+  /** The human check before an account is created; absent when the server does not ask for one. */
+  readonly captcha?: CaptchaVerifier;
 }
 
-export function createDemoRouter(guests: GuestService, { limiter }: DemoRouterOptions): Router {
+export function createDemoRouter(guests: GuestService, { limiter, captcha }: DemoRouterOptions): Router {
   const router = Router();
 
   // Every visit starts in an account of its own, so nobody ever sees or changes what another visitor did.
-  router.post('/auth/demo', createThrottle(limiter), async (_req, res) => {
+  router.post('/auth/demo', createThrottle(limiter), captchaGate(captcha ?? null), async (_req, res) => {
     try {
       res.status(200).json({ success: true, ...(await guests.begin()) });
     } catch (error) {

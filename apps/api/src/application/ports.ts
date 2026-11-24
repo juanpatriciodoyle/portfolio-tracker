@@ -447,3 +447,14 @@ export interface InflationRates {
   /** The percentage prices rose in `country` between two dates. */
   between(country: string, from: Date, to: Date): Promise<number>;
 }
+
+/** What a human check made of an answer: passed, not passed (missing, wrong, used twice, expired) or could not be told. */
+export type CaptchaOutcome = 'passed' | 'refused' | 'unavailable';
+
+/**
+ * Port: asks the human-check service whether an answer is genuine. It never throws: when the service cannot be
+ * reached or answers nonsense the outcome is `unavailable`, and the caller refuses (fail closed).
+ */
+export interface CaptchaVerifier {
+  verify(token: string, remoteIp: string | undefined): Promise<CaptchaOutcome>;
+}

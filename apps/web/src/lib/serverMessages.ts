@@ -32,6 +32,8 @@ const SIGN_IN_MESSAGES = {
   DEMO_BUSY: 'error.demoBusy',
   NOT_A_GUEST: 'error.notAGuest',
   GUEST_SESSION_ENDED: 'error.guestEnded',
+  CAPTCHA_FAILED: 'error.captchaFailed',
+  CAPTCHA_UNAVAILABLE: 'error.captchaUnavailable',
 } as const satisfies Record<SignInErrorCode, MessageKey>;
 
 /** Answers the server marks with a machine-readable `code`. */

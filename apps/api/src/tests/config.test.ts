@@ -158,3 +158,28 @@ describe('loadConfig: switches', () => {
     expect(problemsOf({ ...production, NODE_ENV: 'staging' })).toEqual([expect.stringContaining('NODE_ENV')]);
   });
 });
+
+describe('loadConfig: human check (hCaptcha)', () => {
+  const TEST_SITEKEY = '10000000-ffff-ffff-ffff-000000000001';
+  const TEST_SECRET = '0x0000000000000000000000000000000000000000';
+
+  it('is off when neither setting is given, empty values included', () => {
+    expect(loadConfig(production).hcaptcha).toBeUndefined();
+    expect(loadConfig({ ...development, HCAPTCHA_SECRET: '', HCAPTCHA_SITEKEY: '' }).hcaptcha).toBeUndefined();
+  });
+
+  it('is on when both are given', () => {
+    expect(loadConfig({ ...production, HCAPTCHA_SECRET: TEST_SECRET, HCAPTCHA_SITEKEY: TEST_SITEKEY }).hcaptcha).toEqual({ secret: TEST_SECRET, siteKey: TEST_SITEKEY });
+  });
+
+  it.each([
+    ['HCAPTCHA_SECRET', { HCAPTCHA_SITEKEY: TEST_SITEKEY }, 'HCAPTCHA_SECRET'],
+    ['HCAPTCHA_SITEKEY', { HCAPTCHA_SECRET: TEST_SECRET }, 'HCAPTCHA_SITEKEY'],
+  ])('refuses to start with only one of the pair, naming the one that is missing (%s)', (_name, given, missing) => {
+    for (const base of [development, production]) {
+      const problems = problemsOf({ ...base, ...given });
+      expect(problems).toEqual([expect.stringContaining(missing)]);
+      expect(problems.join(' ')).not.toContain(TEST_SECRET);
+    }
+  });
+});

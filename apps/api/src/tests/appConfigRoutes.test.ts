@@ -9,9 +9,9 @@ import { createDemoRouter, createDisabledDemoRouter } from '../routes/demo';
 import { InMemoryGuestAccounts } from './support/inMemoryGuestAccounts';
 
 describe('GET /api/config', () => {
-  const appWith = (demoEnabled: boolean) => {
+  const appWith = (demoEnabled: boolean, captchaSiteKey: string | null = null) => {
     const app = express();
-    app.use('/api', createAppConfigRouter({ demoEnabled }));
+    app.use('/api', createAppConfigRouter({ demoEnabled, captchaSiteKey }));
     return app;
   };
 
@@ -19,12 +19,17 @@ describe('GET /api/config', () => {
     const response = await request(appWith(demoEnabled)).get('/api/config');
 
     expect(response.status).toBe(200);
-    expect(appConfigResponse.parse(response.body)).toEqual({ demoEnabled });
+    expect(appConfigResponse.parse(response.body)).toEqual({ demoEnabled, captchaSiteKey: null });
   });
 
   it('is public: it needs no sign-in, and says nothing else', async () => {
     const response = await request(appWith(true)).get('/api/config');
-    expect(Object.keys(response.body)).toEqual(['demoEnabled']);
+    expect(Object.keys(response.body).sort()).toEqual(['captchaSiteKey', 'demoEnabled']);
+  });
+
+  it('gives the web app the public site key of the human check when it is on, and null when it is off', async () => {
+    const on = await request(appWith(true, '10000000-ffff-ffff-ffff-000000000001')).get('/api/config');
+    expect(appConfigResponse.parse(on.body).captchaSiteKey).toBe('10000000-ffff-ffff-ffff-000000000001');
   });
 });
 

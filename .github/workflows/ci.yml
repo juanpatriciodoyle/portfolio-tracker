@@ -150,4 +150,5 @@ jobs:
       - name: The images contain what they should (the API has its build, nginx accepts its configuration)
         run: |
           docker run --rm --entrypoint node portfolio-api:ci -e "require('fs').accessSync('dist/index.js'); console.log('api image has its build')"
-          docker run --rm --entrypoint sh portfolio-web:ci -c "nginx -t"
+          # nginx resolves the "api" host when it reads its config; outside Compose that name does not exist, so give it one
+          docker run --rm --add-host api:127.0.0.1 --entrypoint sh portfolio-web:ci -c "nginx -t"

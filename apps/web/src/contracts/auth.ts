@@ -24,9 +24,18 @@ export const SIGN_IN_ERROR_CODES = [
   'DEMO_BUSY',
   'NOT_A_GUEST',
   'GUEST_SESSION_ENDED',
+  'CAPTCHA_FAILED',
+  'CAPTCHA_UNAVAILABLE',
 ] as const;
 export const signInErrorCodeSchema = z.enum(SIGN_IN_ERROR_CODES);
 export type SignInErrorCode = z.infer<typeof signInErrorCodeSchema>;
+
+/**
+ * The answer of the human check (hCaptcha) that `POST /api/auth/google` and `POST /api/auth/demo` carry when the
+ * server has the check switched on (`GET /api/config` says so). Optional here because the server decides whether it is needed.
+ */
+export const captchaTokenSchema = z.string().min(1).max(8192);
+export const captchaBodySchema = z.object({ captchaToken: captchaTokenSchema.optional() });
 
 /** Who signed in, as the web app shows them. The email is only ever what Google confirmed in this very sign-in: a passkey sign-in has none. */
 export const signedInUserSchema = z.object({

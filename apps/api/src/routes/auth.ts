@@ -3,8 +3,10 @@ import { z } from 'zod';
 import type { AuthService } from '../application/authService';
 import { SignInRejectedError, type SignInRejection } from '../application/errors';
 import type { SlidingWindowRateLimiter } from '../application/limits';
+import type { CaptchaVerifier } from '../application/ports';
 import type { ApiErrorResponse } from '../contracts';
 import { errorName, log } from '../lib/logger';
+import { captchaGate } from './captcha';
 import { requireUser, respondWithError, userIdOf } from './http';
 
 /** How each refusal is answered. The code travels in the body, next to the English sentence. */
@@ -27,6 +29,8 @@ export const REJECTION_STATUS: Record<SignInRejection, number> = {
   DEMO_BUSY: 503,
   NOT_A_GUEST: 403,
   GUEST_SESSION_ENDED: 401,
+  CAPTCHA_FAILED: 400,
+  CAPTCHA_UNAVAILABLE: 503,
 };
 
 /** Answers a refusal: its status, its sentence and its code. */
@@ -50,6 +54,8 @@ const passkeyRegisterBody = z.object({ credential: passkeyCredential });
 export interface AuthRouterOptions {
   /** Attempts allowed per address across every sign-in endpoint. */
   readonly limiter: SlidingWindowRateLimiter;
+  /** The human check before a Google sign-in; absent when the server does not ask for one. */
+  readonly captcha?: CaptchaVerifier;
 }
 
 /** The limit every way of signing in shares (Google, passkeys, the demo): the same allowance per address. */
@@ -66,7 +72,7 @@ export function createThrottle(limiter: SlidingWindowRateLimiter) {
  * Passwordless sign-in. Google creates and opens accounts; a passkey is added afterwards by someone who is signed in,
  * and then signs in on its own. Every success answers the session the web app stores; every refusal carries a code.
  */
-export function createAuthRouter(auth: AuthService, { limiter }: AuthRouterOptions): Router {
+export function createAuthRouter(auth: AuthService, { limiter, captcha }: AuthRouterOptions): Router {
   const router = Router();
   const throttle = createThrottle(limiter);
 
@@ -78,7 +84,7 @@ export function createAuthRouter(auth: AuthService, { limiter }: AuthRouterOptio
     refuse(res, fallback);
   };
 
-  router.post('/auth/google', throttle, async (req, res) => {
+  router.post('/auth/google', throttle, captchaGate(captcha ?? null), async (req, res) => {
     const body = googleSignInBody.safeParse(req.body);
     if (!body.success) return refuse(res, 'GOOGLE_TOKEN_NEEDED');
     try {

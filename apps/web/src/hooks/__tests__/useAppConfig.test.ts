@@ -22,7 +22,7 @@ describe('useAppConfig', () => {
   });
 
   it.each([true, false])('says what the server said about the sneak peek (%s)', async (demoEnabled) => {
-    apiRequest.mockResolvedValue({ demoEnabled });
+    apiRequest.mockResolvedValue({ demoEnabled, captchaSiteKey: null });
     const { result } = renderHook(() => useAppConfig());
 
     await waitFor(() => expect(result.current.demoEnabled).toBe(demoEnabled));
@@ -36,5 +36,16 @@ describe('useAppConfig', () => {
     await waitFor(() => expect(apiRequest).toHaveBeenCalled());
     await Promise.resolve();
     expect(result.current.demoEnabled).toBeNull();
+  });
+
+  it('gives the public key of the human check when the server asks for one, and none when it does not', async () => {
+    apiRequest.mockResolvedValueOnce({ demoEnabled: true, captchaSiteKey: 'site-key' });
+    const on = renderHook(() => useAppConfig());
+    await waitFor(() => expect(on.result.current.captchaSiteKey).toBe('site-key'));
+
+    apiRequest.mockResolvedValueOnce({ demoEnabled: true, captchaSiteKey: null });
+    const off = renderHook(() => useAppConfig());
+    await waitFor(() => expect(off.result.current.demoEnabled).toBe(true));
+    expect(off.result.current.captchaSiteKey).toBeNull();
   });
 });

@@ -50,6 +50,8 @@ const SIGN_IN_MESSAGES: Record<SignInErrorCode, string> = {
   DEMO_BUSY: 'The demo is busy right now. Try again in a few minutes.',
   NOT_A_GUEST: 'Only a demo session can be ended this way. Your own data was not touched.',
   GUEST_SESSION_ENDED: 'Your demo session has ended. Start a new one to keep exploring.',
+  CAPTCHA_FAILED: 'The human check was not passed. Complete it and try again.',
+  CAPTCHA_UNAVAILABLE: 'The human check could not be verified right now. Try again in a moment.',
 };
 
 export type SignInRejection = SignInErrorCode;

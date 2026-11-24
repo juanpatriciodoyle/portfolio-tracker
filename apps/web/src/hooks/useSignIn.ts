@@ -55,9 +55,9 @@ export function useSignIn(onSuccess: (user: SignedInUserDto) => void) {
     notice,
     setError,
     /** Only Google's token goes to the server, which asks Google who it belongs to. What the browser says is never trusted. */
-    withGoogleToken: (accessToken: string) =>
+    withGoogleToken: (accessToken: string, captchaToken?: string) =>
       attempt(async () => {
-        const response = await apiRequest('/api/auth/google', signInResponseSchema, { method: 'POST', body: { accessToken } });
+        const response = await apiRequest('/api/auth/google', signInResponseSchema, { method: 'POST', body: { accessToken, ...(captchaToken ? { captchaToken } : {}) } });
         finish(response, { remember: true });
       }, 'login.googleFailed'),
     withPasskey: () =>
@@ -65,9 +65,9 @@ export function useSignIn(onSuccess: (user: SignedInUserDto) => void) {
         const response = await signInWithPasskey();
         finish({ ...response, user: withRememberedDetails(response.user) }, { remember: false });
       }, 'login.passkeyVerify'),
-    asGuest: () =>
+    asGuest: (captchaToken?: string) =>
       attempt(async () => {
-        const response = await apiRequest('/api/auth/demo', signInResponseSchema, { method: 'POST', body: {} });
+        const response = await apiRequest('/api/auth/demo', signInResponseSchema, { method: 'POST', body: captchaToken ? { captchaToken } : {} });
         finish(response, { remember: false });
       }, 'login.demoFailed'),
   };

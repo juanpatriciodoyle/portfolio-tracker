@@ -18,6 +18,7 @@ import { GuestService } from './application/guestService';
 import { UsageAnalyticsService } from './application/usageAnalyticsService';
 import { SlidingWindowRateLimiter } from './application/limits';
 import { MarketSearchService } from './application/marketSearchService';
+import { HCaptchaVerifier } from './infrastructure/hcaptchaVerifier';
 import { GoogleIdentityVerifier } from './infrastructure/googleIdentityVerifier';
 import { PrismaUsageStatistics } from './infrastructure/prismaUsageStatistics';
 import { PrismaUserRepository } from './infrastructure/prismaUserRepository';
@@ -73,7 +74,7 @@ app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use('/api', createHealthRouter({ checkDatabase: async () => void (await db.$queryRaw`SELECT 1`) }));
 
 // What the sign-in screen needs to know before anyone is signed in.
-app.use('/api', createAppConfigRouter({ demoEnabled: config.enableDemo }));
+app.use('/api', createAppConfigRouter({ demoEnabled: config.enableDemo, captchaSiteKey: config.hcaptcha?.siteKey ?? null }));
 
 // A demo guest's session is only as good as the guest's account: erased (signed out, or the hour is over) means the token stops working at once.
 const guestAccounts = new PrismaGuestAccounts(db);
@@ -105,8 +106,10 @@ const auth = new AuthService({
   allowRegistration: config.allowRegistration,
   now: () => new Date(),
 });
+// The human check before the two ways of creating an account (Google, the demo): only where hCaptcha is configured.
+const captcha = config.hcaptcha ? new HCaptchaVerifier(config.hcaptcha.secret, config.hcaptcha.siteKey) : undefined;
 const signInAttempts = new SlidingWindowRateLimiter({ limit: 20, windowMs: 10 * 60 * 1000, now: Date.now });
-app.use('/api', createAuthRouter(auth, { limiter: signInAttempts }));
+app.use('/api', createAuthRouter(auth, { limiter: signInAttempts, captcha }));
 
 // How many customers use the app: the administrator only.
 app.use('/api', createAdminAnalyticsRouter(new UsageAnalyticsService({ users, admins, statistics: new PrismaUsageStatistics(db), now: () => new Date() })));
@@ -127,7 +130,7 @@ const guests = new GuestService({
   issueToken: generateToken,
   now: () => new Date(),
 });
-app.use('/api', config.enableDemo ? createDemoRouter(guests, { limiter: signInAttempts }) : createDisabledDemoRouter());
+app.use('/api', config.enableDemo ? createDemoRouter(guests, { limiter: signInAttempts, captcha }) : createDisabledDemoRouter());
 
 app.use('/api', apiNotFound);
 app.use(apiErrorHandler(log));
@@ -135,7 +138,7 @@ app.use(apiErrorHandler(log));
 const stoppers: Array<() => void> = [];
 
 const server = app.listen(config.port, () => {
-  log.info('server_started', { port: config.port, env: config.nodeEnv, registration: config.allowRegistration ? 'open' : 'closed', demo: config.enableDemo });
+  log.info('server_started', { port: config.port, env: config.nodeEnv, registration: config.allowRegistration ? 'open' : 'closed', demo: config.enableDemo, captcha: config.hcaptcha ? 'on' : 'off' });
   void prepare();
 });
 

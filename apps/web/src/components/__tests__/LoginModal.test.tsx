@@ -21,7 +21,16 @@ const googleConfig = vi.hoisted(() => ({ configured: true }));
 vi.mock('../../lib/googleConfig', () => ({ GOOGLE_CLIENT_ID: 'test-client', isGoogleSignInConfigured: () => googleConfig.configured }));
 
 // What the server says about the demo; each test sets it.
-const appConfig = vi.hoisted(() => ({ demoEnabled: true as boolean | null }));
+const appConfig = vi.hoisted(() => ({ demoEnabled: true as boolean | null, captchaSiteKey: null as string | null }));
+
+// The human check: the real widget is the vendor's, so here it is a button that plays "the person passed".
+vi.mock('../HumanCheck', async () => {
+  const { createElement } = await import('react');
+  return {
+    default: ({ onToken, resetCount }: { onToken: (t: string) => void; resetCount: number }) =>
+      createElement('button', { onClick: () => onToken(`answer-${resetCount}`) }, 'I am human'),
+  };
+});
 vi.mock('../../hooks/useAppConfig', () => ({ useAppConfig: () => appConfig }));
 
 // The browser's passkey prompt, and whether this browser has one.
@@ -45,6 +54,7 @@ const answers = (...replies: Array<{ status?: number; body: unknown }>) => {
 
 beforeEach(() => {
   appConfig.demoEnabled = true;
+  appConfig.captchaSiteKey = null;
   googleConfig.configured = true;
   google.options = null;
   passkeys.supported = true;
@@ -272,5 +282,70 @@ describe('LoginModal: sign-in with a passkey', () => {
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('No account has this passkey'));
     expect(onSuccess).not.toHaveBeenCalled();
+  });
+});
+
+describe('LoginModal: the human check', () => {
+  it('shows no widget and asks for nothing when the server has no check', async () => {
+    const onSuccess = vi.fn();
+    const fetchMock = answers({ body: { success: true, token: 't', user: JOE } });
+    render(<LoginModal onSuccess={onSuccess} />);
+
+    expect(screen.queryByText('I am human')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try the demo' }));
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith(JOE));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({});
+  });
+
+  it('keeps the demo and Google closed until the box is ticked, and leaves the passkey open', () => {
+    appConfig.captchaSiteKey = 'site-key';
+    render(<LoginModal onSuccess={vi.fn()} />);
+
+    expect(screen.getByText('I am human')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try the demo' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Sign in with a passkey' })).toBeEnabled();
+
+    fireEvent.click(screen.getByText('I am human'));
+
+    expect(screen.getByRole('button', { name: 'Try the demo' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeEnabled();
+  });
+
+  it('sends the answer with the demo request, then starts the box over', async () => {
+    appConfig.captchaSiteKey = 'site-key';
+    const fetchMock = answers({ status: 503, body: { error: 'x', code: 'DEMO_BUSY' } });
+    render(<LoginModal onSuccess={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('I am human'));
+    fireEvent.click(screen.getByRole('button', { name: 'Try the demo' }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ captchaToken: 'answer-0' });
+    // The answer was used up, even though the attempt failed: the buttons close again until the box is ticked once more.
+    expect(screen.getByRole('button', { name: 'Try the demo' })).toBeDisabled();
+  });
+
+  it('sends the answer with Google’s token, and says in words a refused check', async () => {
+    appConfig.captchaSiteKey = 'site-key';
+    const fetchMock = answers({ status: 400, body: { error: 'The human check was not passed.', code: 'CAPTCHA_FAILED' } });
+    render(<LoginModal onSuccess={vi.fn()} />);
+
+    fireEvent.click(screen.getByText('I am human'));
+    await google.options!.onSuccess({ access_token: 'google-access-token' });
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ accessToken: 'google-access-token', captchaToken: 'answer-0' });
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
+  });
+
+  it('shows no widget when there is nothing to guard (no Google, no demo)', () => {
+    appConfig.captchaSiteKey = 'site-key';
+    appConfig.demoEnabled = false;
+    googleConfig.configured = false;
+    render(<LoginModal onSuccess={vi.fn()} />);
+
+    expect(screen.queryByText('I am human')).not.toBeInTheDocument();
   });
 });
